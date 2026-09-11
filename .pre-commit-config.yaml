@@ -1,0 +1,66 @@
+# Pre-commit configuration.
+#
+# Hooks are split into two groups:
+#   1. Generic file hygiene, from the official pre-commit-hooks repo.
+#   2. Python tooling via `uv run`, so ruff and mypy use exactly the versions
+#      locked in the project rather than a separate pinned copy.
+#
+# Install the git hooks once the repository is a git repo:
+#   make hooks-install
+#
+# Run every hook against every file:
+#   make hooks-run
+
+default_install_hook_types: [pre-commit, pre-push]
+
+repos:
+  # 1. Generic file hygiene
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+        args: ["--maxkb=2048"]
+      - id: check-ast
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml
+      - id: debug-statements
+      - id: detect-private-key
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+      - id: name-tests-test
+        args: ["--pytest-test-first"]
+      - id: trailing-whitespace
+
+  # 2. Python linting, formatting and type checking
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --fix
+        language: system
+        types: [python]
+        require_serial: true
+
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types: [python]
+        require_serial: true
+
+      - id: mypy
+        name: mypy
+        entry: uv run mypy
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      - id: pytest
+        name: pytest
+        entry: uv run pytest
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
