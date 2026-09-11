@@ -1,0 +1,27 @@
+# Minimal dbt project definition.
+#
+# The model folders are domain-first, then data level, for example:
+#   models/events/staging, models/events/marts
+#   models/matches/staging, models/matches/marts
+#   models/players/staging, models/players/marts
+#
+# No models exist yet. This file makes the project discoverable so
+# `dbt debug` can verify the warehouse connection.
+
+name: "tt_stats"
+version: "1.0.0"
+config-version: 2
+
+profile: "tt_stats"
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+
+target-path: "target"
+clean-targets: ["target", "dbt_packages", "logs"]
+
+models:
+  tt_stats:
+    +materialized: table

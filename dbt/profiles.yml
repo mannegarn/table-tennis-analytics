@@ -1,0 +1,25 @@
+# dbt connection profile for the local warehouse.
+#
+# Reads the same environment variables as the Python application, so there is a
+# single source of truth for connection details. No secrets are stored here.
+#
+# Usage:
+#   uv run dbt debug  --project-dir dbt --profiles-dir dbt
+#   uv run dbt run    --project-dir dbt --profiles-dir dbt
+#
+# The Makefile exports the .env file before invoking dbt, so the env_var
+# lookups below resolve automatically.
+
+tt_stats:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('POSTGRES_HOST', 'localhost') }}"
+      port: "{{ env_var('POSTGRES_PORT', '5432') | int }}"
+      user: "{{ env_var('POSTGRES_USER', 'tt') }}"
+      password: "{{ env_var('POSTGRES_PASSWORD') }}"
+      dbname: "{{ env_var('POSTGRES_DB', 'tt_stats') }}"
+      schema: public
+      threads: 4
+      keepalives_idle: 0
