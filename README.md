@@ -124,10 +124,12 @@ Domain first, then data level.
 ```
 src/tt_stats/core/        shared config, database, logging, clients
 src/tt_stats/events/      scrape and land events
-src/tt_stats/matches/     scrape and land match entries, details and logs
+src/tt_stats/matches/     scrape and land match entries and details
 src/tt_stats/players/     scrape and land player details and playstyle
-dbt/models/<domain>/      staging and marts models per domain
-db/init/                  one-time SQL run on first database start
+db/init/                  one-time SQL on first database start
+db/migrations/            versioned tables, unpack SQL, views, control tables
+dbt/models/<domain>/      marts models per domain, reading _unpacked tables
+docs/adr/                 architecture decision records
 notebooks/                Polars analytics
 app/                      Streamlit dashboard
 airflow/dags/             orchestration (later)
@@ -135,18 +137,24 @@ airflow/dags/             orchestration (later)
 
 ## Data layers
 
-Raw payloads land in PostgreSQL as JSONB. dbt builds every layer after that.
-A single schema is used deliberately; the level lives in the table name.
+Raw payloads land in PostgreSQL as JSONB. SQL unpacks them into columns at land
+time, in the same transaction. dbt builds every layer after that. A single schema
+is used deliberately; the level lives in the table name.
 
-| Level | Naming | Example |
-| --- | --- | --- |
-| Raw | `<entity>_raw` | `events_by_year_raw` |
-| Staging | `<entity>_staging` | `events_staging` |
-| Marts | `<entity>_marts` | `events_marts` |
+| Level | Naming | Example | Owner |
+| --- | --- | --- | --- |
+| Raw | `<entity>_raw` | `events_by_year_raw` | ingestion |
+| Unpacked | `<entity>_unpacked` | `events_unpacked` | ingestion, in SQL |
+| Marts | `<entity>_marts` | `events_marts` | dbt |
+| Control | `ingest_*` | `ingest_runs` | ingestion |
 
 Container tables describe the request grain, for example
-`match_entries_payloads_raw` is one row per event. From staging onward, names
+`match_entries_payloads_raw` is one row per event. From unpacking onward, names
 describe the entity.
+
+Scrape eligibility is derived, never stored: the existence of a row marks it as
+fetched, and the pending work queues are read-only views. Ingestion never reads
+dbt output, so a broken or unrun dbt model cannot stop data collection.
 
 ## dbt
 

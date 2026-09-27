@@ -1,6 +1,6 @@
--- Bootstrap script for the local development warehouse.
+-- bootstrap local postgres database
 --
--- Runs once, on first container start, as the superuser inside POSTGRES_DB.
+-- Runs once when container starts as superuser inside POSTGRES_DB.
 -- Files here execute in filename order against the database named by
 -- POSTGRES_DB, so this file must stay environment-agnostic.
 --
@@ -14,8 +14,8 @@ BEGIN
 END
 $$;
 
--- add text similiarty extension if needed for fuzzy matching / name reconciliation.
+--  add text similiarty extension if needed for fuzzy matching / name reconciliation later?
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
--- Ensure the default schema exists # 
+-- Ensure default schema exists #
 CREATE SCHEMA IF NOT EXISTS public;
