@@ -15,6 +15,7 @@ dependencies = [
 
 [project.scripts]
 tt-db-check = "tt_stats.core.db:main"
+tt-log-demo = "tt_stats.core.logging_demo:main"
 
 [dependency-groups]
 dev = [
@@ -60,6 +61,7 @@ select = [
     "PTH", # flake8-use-pathlib
     "RUF", # ruff-specific
     "PT",  # flake8-pytest-style
+    "T20", # flake8-print: no print statements, use the logger
 ]
 
 [tool.ruff.lint.isort]

@@ -11,7 +11,7 @@ COMPOSE := docker compose
 
 .DEFAULT_GOAL := help
 
-.PHONY: help setup db-up db-down db-reset db-logs db-psql db-check test test-integration dbt-debug lint format typecheck check hooks-install hooks-run
+.PHONY: help setup db-up db-down db-reset db-logs db-psql db-check log-demo test test-integration dbt-debug lint format typecheck check hooks-install hooks-run
 
 help: ## Show available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -39,6 +39,9 @@ db-psql: ## Open a psql shell against the warehouse
 
 db-check: ## Verify the Python to PostgreSQL connection
 	uv run tt-db-check
+
+log-demo: ## Show the logging output formats: console, JSON and levels
+	uv run tt-log-demo
 
 test: ## Run the test suite
 	uv run pytest

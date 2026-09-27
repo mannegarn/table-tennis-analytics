@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     request_timeout_seconds: float = 40.0
     chunk_size: int = 200
 
+    # Logging. Read by configure_logging() at process entry points.
+    log_level: str = "INFO"
+    log_json: bool = False
+
     @property
     def dsn(self) -> str:
         """Return the PostgreSQL connection string."""
@@ -54,5 +58,9 @@ def get_settings() -> Settings:
 
     Cached so repeated calls do not re-read the environment, and so tests can
     clear the cache when they patch the environment.
+
+    Fields come from the process environment and ``.env``, which is why no
+    arguments are passed. The pydantic mypy plugin understands this; pyright
+    does not, hence the targeted ignore below.
     """
-    return Settings()
+    return Settings()  # pyright: ignore[reportCallIssue]

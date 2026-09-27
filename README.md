@@ -66,6 +66,7 @@ uv run tt-db-check
 | `make db-logs` | Tail PostgreSQL logs |
 | `make db-psql` | Open a `psql` shell |
 | `make db-check` | Verify the Python to PostgreSQL connection |
+| `make log-demo` | Show the logging output formats: console, JSON and levels |
 | `make test` | Run the test suite |
 | `make test-integration` | Run only integration tests |
 | `make dbt-debug` | Verify dbt can reach the warehouse |
