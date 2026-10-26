@@ -1,6 +1,7 @@
 """Application settings loaded from the environment and a local .env file."""
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -32,10 +33,27 @@ class Settings(BaseSettings):
     # which is handy for deployed environments that inject a single URL.
     database_url: str | None = None
 
-    # Ingestion knobs shared by the collectors.
-    max_concurrent_requests: int = 50
+    # Ingestion knobs shared by the collectors. Concurrency stays low so the
+    # pipeline remains a polite client rather than a load test.
+    max_concurrent_requests: int = 6
     request_timeout_seconds: float = 40.0
     chunk_size: int = 200
+    max_retry_attempts: int = 5
+    retry_wait_min_seconds: float = 2.0
+    retry_wait_max_seconds: float = 16.0
+    request_jitter_seconds: float = 0.01
+
+    # WTT API client.
+    wtt_api_key: str = "S_WTT_882jjh7basdj91834783mds8j2jsd81"
+    user_agent: str = (
+        "Mozilla/5.0 (Linux; Android 11.0; Surface Duo) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/140.0.0.0 Mobile Safari/537.36"
+    )
+    verify_ssl: bool = True
+
+    # Local landing area for raw payloads before they reach PostgreSQL.
+    data_dir: Path = Path("data")
 
     # Logging. Read by configure_logging() at process entry points.
     log_level: str = "INFO"

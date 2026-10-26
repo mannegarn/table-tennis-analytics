@@ -54,6 +54,29 @@ uv run tt-db-check
 - `make test` runs the suite; the integration test skips automatically when the database is down.
 - `make test-integration` runs the database integration tests explicitly.
 
+## Events scrape (file-only first step)
+
+The events calendar is fetched and saved as files before any table exists. This
+proves the endpoint, headers, retry policy and payload shape, and it gives the
+unpack work a committed fixture to test against.
+
+```sh
+make events-scrape                 # 2021 through 2026
+make events-scrape YEARS="2023"    # one year
+make events-inspect                # counts, tiers and duplicate EventIds
+```
+
+Each year writes two files under `data/raw/events/`:
+
+- `events_<year>.json` - the payload exactly as returned.
+- `events_<year>.meta.json` - HTTP status, `Count`, `Original_Count`, row
+  count, SHA-256 and any error.
+
+`data/` is git-ignored. The 2023 payload is also copied to
+`tests/fixtures/events_2023.json` so the contract test runs offline. PostgreSQL
+landing is the next increment; until then this command does not touch the
+database.
+
 ## Command surface
 
 | Command | Purpose |
@@ -67,6 +90,8 @@ uv run tt-db-check
 | `make db-psql` | Open a `psql` shell |
 | `make db-check` | Verify the Python to PostgreSQL connection |
 | `make log-demo` | Show the logging output formats: console, JSON and levels |
+| `make events-scrape` | Fetch WTT event calendars into `data/raw/events` |
+| `make events-inspect` | Report counts, tiers and duplicate EventIds |
 | `make test` | Run the test suite |
 | `make test-integration` | Run only integration tests |
 | `make dbt-debug` | Verify dbt can reach the warehouse |

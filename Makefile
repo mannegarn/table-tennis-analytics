@@ -8,10 +8,11 @@ ifneq (,$(wildcard ./.env))
 endif
 
 COMPOSE := docker compose
+YEARS ?= 2021 2022 2023 2024 2025 2026
 
 .DEFAULT_GOAL := help
 
-.PHONY: help setup db-up db-down db-reset db-logs db-psql db-check log-demo test test-integration dbt-debug lint format typecheck check hooks-install hooks-run
+.PHONY: help setup db-up db-down db-reset db-logs db-psql db-check log-demo events-scrape events-inspect test test-integration dbt-debug lint format typecheck check hooks-install hooks-run
 
 help: ## Show available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -42,6 +43,12 @@ db-check: ## Verify the Python to PostgreSQL connection
 
 log-demo: ## Show the logging output formats: console, JSON and levels
 	uv run tt-log-demo
+
+events-scrape: ## Fetch WTT event calendars into data/raw/events
+	uv run tt-events-scrape --years $(YEARS)
+
+events-inspect: ## Inspect saved event payloads for counts, tiers and duplicates
+	uv run tt-events-inspect
 
 test: ## Run the test suite
 	uv run pytest

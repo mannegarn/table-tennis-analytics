@@ -16,6 +16,8 @@ dependencies = [
 [project.scripts]
 tt-db-check = "tt_stats.core.db:main"
 tt-log-demo = "tt_stats.core.logging_demo:main"
+tt-events-scrape = "tt_stats.events.collect.events_by_year:main"
+tt-events-inspect = "tt_stats.events.collect.inspect_payloads:main"
 
 [dependency-groups]
 dev = [
@@ -38,8 +40,9 @@ packages = ["src/tt_stats"]
 pythonpath = ["src"]
 testpaths = ["tests"]
 addopts = "-q"
+asyncio_mode = "auto"
 markers = [
-    "integration: requires a running PostgreSQL instance",
+    "integration: requires a running PostgreSQL instance or the live WTT API",
 ]
 
 [tool.ruff]
