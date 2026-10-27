@@ -9,6 +9,7 @@ import argparse
 import asyncio
 import hashlib
 import json
+import logging
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
@@ -22,6 +23,11 @@ from tt_stats.core.clients.wtt_api import (
 )
 from tt_stats.core.config import get_settings
 from tt_stats.core.logging_config import configure_logging, get_logger
+from tt_stats.core.progress import (
+    NullProgress,
+    ProgressReporter,
+    make_progress,
+)
 
 logger = get_logger(__name__)
 
@@ -123,6 +129,7 @@ async def collect_events_by_year(
     *,
     client: WttClient,
     output_dir: Path,
+    progress: ProgressReporter | None = None,
 ) -> list[YearPayloadSummary]:
     """Fetch every requested year, saving payloads and metadata as it goes.
 
@@ -131,9 +138,20 @@ async def collect_events_by_year(
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     summaries: list[YearPayloadSummary] = []
+    reporter = progress or NullProgress()
 
-    for year in years:
-        summaries.append(await _collect_one(year, client=client, output_dir=output_dir))
+    try:
+        for year in years:
+            summary = await _collect_one(
+                year,
+                client=client,
+                output_dir=output_dir,
+                log_summary=reporter.logs_records,
+            )
+            summaries.append(summary)
+            reporter.advance(_progress_message(summary))
+    finally:
+        reporter.close()
 
     return summaries
 
@@ -143,6 +161,7 @@ async def _collect_one(
     *,
     client: WttClient,
     output_dir: Path,
+    log_summary: bool = True,
 ) -> YearPayloadSummary:
     fetched_at = datetime.now(tz=UTC)
 
@@ -155,6 +174,7 @@ async def _collect_one(
             output_dir=output_dir,
             status_code=error.status_code,
             message=str(error),
+            log_summary=log_summary,
         )
     except WttPayloadError as error:
         return _failed_summary(
@@ -163,6 +183,7 @@ async def _collect_one(
             output_dir=output_dir,
             status_code=None,
             message=str(error),
+            log_summary=log_summary,
         )
 
     payload_path = output_dir / f"events_{year}.json"
@@ -201,7 +222,8 @@ async def _collect_one(
         error=error_message,
     )
     _write_meta(output_dir, summary)
-    _log_summary(summary)
+    if log_summary:
+        _log_summary(summary)
     return summary
 
 
@@ -212,6 +234,7 @@ def _failed_summary(
     output_dir: Path,
     status_code: int | None,
     message: str,
+    log_summary: bool,
 ) -> YearPayloadSummary:
     summary = YearPayloadSummary(
         year=year,
@@ -225,7 +248,8 @@ def _failed_summary(
         error=message,
     )
     _write_meta(output_dir, summary)
-    _log_summary(summary)
+    if log_summary:
+        _log_summary(summary)
     return summary
 
 
@@ -235,6 +259,12 @@ def _write_meta(output_dir: Path, summary: YearPayloadSummary) -> None:
         json.dumps(asdict(summary), indent=2, default=str) + "\n",
         encoding="utf-8",
     )
+
+
+def _progress_message(summary: YearPayloadSummary) -> str:
+    state = "failed" if summary.error else "ok"
+    api = f"  api={summary.api_count}" if summary.api_count is not None else ""
+    return f"year={summary.year}  rows={summary.row_count}{api}  {state}"
 
 
 def _log_summary(summary: YearPayloadSummary) -> None:
@@ -264,9 +294,18 @@ def _as_int(value: object) -> int | None:
     return None
 
 
-async def _run(years: Sequence[int], output_dir: Path) -> list[YearPayloadSummary]:
+async def _run(
+    years: Sequence[int],
+    output_dir: Path,
+    progress: ProgressReporter,
+) -> list[YearPayloadSummary]:
     async with WttClient() as client:
-        return await collect_events_by_year(years, client=client, output_dir=output_dir)
+        return await collect_events_by_year(
+            years,
+            client=client,
+            output_dir=output_dir,
+            progress=progress,
+        )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -287,11 +326,29 @@ def main(argv: Sequence[str] | None = None) -> int:
         type=Path,
         default=None,
     )
+    parser.add_argument(
+        "--no-progress",
+        action="store_true",
+        help="Disable the terminal progress bar.",
+    )
     args = parser.parse_args(argv)
 
     settings = get_settings()
     output_dir = args.output_dir or (settings.data_dir / "raw" / "events")
-    results = asyncio.run(_run(args.years, output_dir))
+    if not settings.log_json and settings.log_level.upper() != "DEBUG":
+        # One line per HTTP request drowns out the progress display.
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+        logging.getLogger("httpcore").setLevel(logging.WARNING)
+    progress = make_progress(
+        len(args.years),
+        enabled=not args.no_progress,
+        json_output=settings.log_json,
+    )
+    logger.info(
+        "events_scrape_start",
+        extra={"years": len(args.years), "output_dir": str(output_dir)},
+    )
+    results = asyncio.run(_run(args.years, output_dir, progress))
 
     failed = [result for result in results if result.error]
     logger.info(

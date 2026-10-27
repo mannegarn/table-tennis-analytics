@@ -19,6 +19,22 @@ from tt_stats.events.collect.events_by_year import (
 )
 
 
+class RecordingProgress:
+    """Capture progress messages without drawing anything."""
+
+    logs_records = False
+
+    def __init__(self) -> None:
+        self.messages: list[str] = []
+        self.closed = False
+
+    def advance(self, message: str) -> None:
+        self.messages.append(message)
+
+    def close(self) -> None:
+        self.closed = True
+
+
 def _settings(**overrides: Any) -> Settings:
     values: dict[str, Any] = {
         "postgres_password": "test",
@@ -119,6 +135,31 @@ async def test_collect_writes_payload_and_meta(tmp_path: Path) -> None:
     assert meta["row_count"] == 2
 
 
+async def test_collect_reports_progress_for_every_year(tmp_path: Path) -> None:
+    payload = _payload([_row(1)])
+
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=payload)
+
+    progress = RecordingProgress()
+
+    async with WttClient(
+        settings=_settings(), transport=httpx.MockTransport(handler)
+    ) as client:
+        await collect_events_by_year(
+            [2023, 2024],
+            client=client,
+            output_dir=tmp_path,
+            progress=progress,
+        )
+
+    assert progress.messages == [
+        "year=2023  rows=1  api=1  ok",
+        "year=2024  rows=1  api=1  ok",
+    ]
+    assert progress.closed is True
+
+
 async def test_count_mismatch_is_an_error_but_the_payload_is_kept(
     tmp_path: Path,
 ) -> None:
@@ -145,17 +186,23 @@ async def test_http_failure_writes_meta_with_the_status(tmp_path: Path) -> None:
     async def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(503, json={"error": "unavailable"})
 
+    progress = RecordingProgress()
+
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
         results = await collect_events_by_year(
-            [2023], client=client, output_dir=tmp_path
+            [2023],
+            client=client,
+            output_dir=tmp_path,
+            progress=progress,
         )
 
     result = results[0]
     assert result.error is not None
     assert result.status_code == 503
     assert result.payload_path is None
+    assert progress.messages == ["year=2023  rows=0  failed"]
 
     meta = json.loads((tmp_path / "events_2023.meta.json").read_text())
     assert meta["status_code"] == 503

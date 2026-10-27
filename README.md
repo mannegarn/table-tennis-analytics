@@ -72,6 +72,24 @@ Each year writes two files under `data/raw/events/`:
 - `events_<year>.meta.json` - HTTP status, `Count`, `Original_Count`, row
   count, SHA-256 and any error.
 
+In a terminal the scrape draws a `tqdm` progress bar that overwrites its line.
+Piped output and `--no-progress` print one plain line per year instead.
+`LOG_JSON=true` emits one JSON object per event. Per-year log lines are
+suppressed while the display is active; the `.meta.json` files keep the detail.
+
+```sh
+uv run tt-events-scrape --years 2021 2022 2023 --no-progress
+```
+
+The run starts with `events_scrape_start` and ends with
+`events_scrape_complete`, so the beginning and end are always explicit.
+
+Keep a timestamped run log:
+
+```sh
+make events-scrape 2>&1 | tee "data/raw/events/run_$(date +%Y%m%dT%H%M%S).log"
+```
+
 `data/` is git-ignored. The 2023 payload is also copied to
 `tests/fixtures/events_2023.json` so the contract test runs offline. PostgreSQL
 landing is the next increment; until then this command does not touch the
