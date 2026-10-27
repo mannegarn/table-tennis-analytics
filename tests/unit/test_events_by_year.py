@@ -1,8 +1,7 @@
 """Unit tests for the events-by-year collector. No network, no database."""
 
-import hashlib
-import json
-from pathlib import Path
+from collections.abc import Mapping
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -12,7 +11,9 @@ from tt_stats.core.clients.wtt_api import WttClient
 from tt_stats.core.config import Settings
 from tt_stats.events.collect.events_by_year import (
     PayloadShapeError,
+    YearPayloadSummary,
     collect_events_by_year,
+    default_years,
     extract_counts,
     extract_rows,
     validate_rows,
@@ -23,13 +24,21 @@ class RecordingProgress:
     """Capture progress messages without drawing anything."""
 
     logs_records = False
+    prints_summary = True
 
     def __init__(self) -> None:
         self.messages: list[str] = []
+        self.start_context: dict[str, str] = {}
         self.closed = False
+
+    def start(self, title: str, context: Mapping[str, str]) -> None:
+        self.start_context = dict(context)
 
     def advance(self, message: str) -> None:
         self.messages.append(message)
+
+    def finish(self, title: str, context: Mapping[str, str]) -> None:
+        pass
 
     def close(self) -> None:
         self.closed = True
@@ -104,7 +113,16 @@ def test_validate_rows_reports_missing_keys() -> None:
     assert "EventId" in problems[0]
 
 
-async def test_collect_writes_payload_and_meta(tmp_path: Path) -> None:
+def test_default_years_runs_from_2021_to_the_current_year() -> None:
+    years = default_years()
+    current_year = datetime.now(tz=UTC).year
+
+    assert years[0] == 2021
+    assert years[-1] == current_year
+    assert years == list(range(2021, current_year + 1))
+
+
+async def test_collect_returns_a_summary() -> None:
     payload = _payload([_row(1), _row(2)])
 
     async def handler(_request: httpx.Request) -> httpx.Response:
@@ -113,9 +131,7 @@ async def test_collect_writes_payload_and_meta(tmp_path: Path) -> None:
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
-        results = await collect_events_by_year(
-            [2023], client=client, output_dir=tmp_path
-        )
+        results = await collect_events_by_year([2023], client=client)
 
     result = results[0]
     assert result.error is None
@@ -123,19 +139,11 @@ async def test_collect_writes_payload_and_meta(tmp_path: Path) -> None:
     assert result.row_count == 2
     assert result.api_count == 2
     assert result.original_count == 2
-    assert result.payload_path == tmp_path / "events_2023.json"
-    assert result.payload_path is not None
-    assert hashlib.sha256(result.payload_path.read_bytes()).hexdigest() == (
-        result.payload_sha256
-    )
-
-    meta = json.loads((tmp_path / "events_2023.meta.json").read_text())
-    assert meta["year"] == 2023
-    assert meta["status_code"] == 200
-    assert meta["row_count"] == 2
+    assert result.payload_sha256 is not None
+    assert len(result.payload_sha256) == 64
 
 
-async def test_collect_reports_progress_for_every_year(tmp_path: Path) -> None:
+async def test_collect_reports_progress_for_every_year() -> None:
     payload = _payload([_row(1)])
 
     async def handler(_request: httpx.Request) -> httpx.Response:
@@ -149,20 +157,62 @@ async def test_collect_reports_progress_for_every_year(tmp_path: Path) -> None:
         await collect_events_by_year(
             [2023, 2024],
             client=client,
-            output_dir=tmp_path,
             progress=progress,
         )
 
+    assert progress.start_context["Output"] == "ingest.events_by_year_raw"
     assert progress.messages == [
-        "year=2023  rows=1  api=1  ok",
-        "year=2024  rows=1  api=1  ok",
+        "year=2023 | saved=1 | api=1 | ok",
+        "year=2024 | saved=1 | api=1 | ok",
     ]
     assert progress.closed is True
 
 
-async def test_count_mismatch_is_an_error_but_the_payload_is_kept(
-    tmp_path: Path,
-) -> None:
+async def test_collect_lands_successful_years() -> None:
+    payload = _payload([_row(1)])
+    landed: list[tuple[int, int]] = []
+
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=payload)
+
+    def land(summary: YearPayloadSummary, data: object) -> None:
+        landed.append((summary.year, summary.row_count))
+
+    async with WttClient(
+        settings=_settings(), transport=httpx.MockTransport(handler)
+    ) as client:
+        results = await collect_events_by_year(
+            [2023],
+            client=client,
+            land=land,
+        )
+
+    assert results[0].error is None
+    assert landed == [(2023, 1)]
+
+
+async def test_landing_failure_marks_the_year_failed() -> None:
+    payload = _payload([_row(1)])
+
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=payload)
+
+    def land(summary: YearPayloadSummary, data: object) -> None:
+        raise RuntimeError("db down")
+
+    async with WttClient(
+        settings=_settings(), transport=httpx.MockTransport(handler)
+    ) as client:
+        results = await collect_events_by_year(
+            [2023],
+            client=client,
+            land=land,
+        )
+
+    assert results[0].error == "landing failed: db down"
+
+
+async def test_count_mismatch_is_an_error() -> None:
     payload = _payload([_row(1)], count=2)
 
     async def handler(_request: httpx.Request) -> httpx.Response:
@@ -171,18 +221,14 @@ async def test_count_mismatch_is_an_error_but_the_payload_is_kept(
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
-        results = await collect_events_by_year(
-            [2023], client=client, output_dir=tmp_path
-        )
+        results = await collect_events_by_year([2023], client=client)
 
     result = results[0]
     assert result.error is not None
     assert "count mismatch" in result.error
-    assert result.payload_path is not None
-    assert result.payload_path.exists()
 
 
-async def test_http_failure_writes_meta_with_the_status(tmp_path: Path) -> None:
+async def test_http_failure_returns_a_failed_summary() -> None:
     async def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(503, json={"error": "unavailable"})
 
@@ -194,16 +240,10 @@ async def test_http_failure_writes_meta_with_the_status(tmp_path: Path) -> None:
         results = await collect_events_by_year(
             [2023],
             client=client,
-            output_dir=tmp_path,
             progress=progress,
         )
 
     result = results[0]
     assert result.error is not None
     assert result.status_code == 503
-    assert result.payload_path is None
-    assert progress.messages == ["year=2023  rows=0  failed"]
-
-    meta = json.loads((tmp_path / "events_2023.meta.json").read_text())
-    assert meta["status_code"] == 503
-    assert meta["error"]
+    assert progress.messages == ["year=2023 | saved=0 | failed"]

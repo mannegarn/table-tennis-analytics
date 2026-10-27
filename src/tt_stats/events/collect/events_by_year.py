@@ -1,19 +1,17 @@
-"""Fetch and save one WTT event-calendar payload per year.
+"""Fetch, validate and land one WTT event-calendar payload per year.
 
-This is deliberately file-only. It proves the endpoint, headers, retry policy
-and payload shape before any table exists. The saved payload is the source of
-truth that later unpack work will be tested against.
+The payload is saved to disk as a local debug copy and upserted into
+``ingest.events_by_year_raw`` in the same run. The raw table is the source of
+truth; the file is there so a failed or changed response can be inspected.
 """
 
 import argparse
 import asyncio
 import hashlib
-import json
 import logging
-from collections.abc import Sequence
-from dataclasses import asdict, dataclass
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any, cast
 
 from tt_stats.core.clients.wtt_api import (
@@ -28,11 +26,20 @@ from tt_stats.core.progress import (
     ProgressReporter,
     make_progress,
 )
+from tt_stats.events.land import land_events_by_year
 
 logger = get_logger(__name__)
 
-DEFAULT_YEARS = tuple(range(2021, 2027))
+DEFAULT_START_YEAR = 2021
 DATE_FORMAT = "%Y-%m-%dT%H:%M:%S"
+
+
+# Default range: 2021 through the current year. Change this when the backfill
+# window or the "current year only" policy changes.
+def default_years() -> list[int]:
+    return list(range(DEFAULT_START_YEAR, datetime.now(tz=UTC).year + 1))
+
+
 REQUIRED_EVENT_KEYS = (
     "EventId",
     "EventName",
@@ -50,6 +57,9 @@ class PayloadShapeError(ValueError):
     """The response does not match the documented event-calendar envelope."""
 
 
+LandingFn = Callable[["YearPayloadSummary", Any], None]
+
+
 @dataclass(frozen=True, slots=True)
 class YearPayloadSummary:
     """What happened for one year, including the evidence for a failure."""
@@ -61,8 +71,25 @@ class YearPayloadSummary:
     row_count: int
     payload_sha256: str | None
     fetched_at: datetime
-    payload_path: Path | None
     error: str | None
+
+
+def _envelope(payload: object) -> dict[str, Any]:
+    """Return ``payload[0]`` as a JSON object.
+
+    Raises:
+        PayloadShapeError: If the payload is empty or ``payload[0]`` is not an
+            object.
+    """
+    if not isinstance(payload, list) or not payload:
+        raise PayloadShapeError("payload must be a non-empty list")
+
+    items = cast("list[object]", payload)
+    first = items[0]
+    if not isinstance(first, dict):
+        raise PayloadShapeError("payload[0] must be an object")
+
+    return cast("dict[str, Any]", first)
 
 
 def extract_rows(payload: object) -> list[dict[str, Any]]:
@@ -71,33 +98,22 @@ def extract_rows(payload: object) -> list[dict[str, Any]]:
     Raises:
         PayloadShapeError: If the envelope or any row has the wrong shape.
     """
-    if not isinstance(payload, list) or not payload:
-        raise PayloadShapeError("payload must be a non-empty list")
-
-    envelope = payload[0]
-    if not isinstance(envelope, dict):
-        raise PayloadShapeError("payload[0] must be an object")
-
-    rows = envelope.get("rows")
-    if not isinstance(rows, list) or not rows:
+    raw_rows: object = _envelope(payload).get("rows")
+    if not isinstance(raw_rows, list) or not raw_rows:
         raise PayloadShapeError("'rows' must be a non-empty list")
 
-    for index, row in enumerate(rows):
+    rows: list[dict[str, Any]] = []
+    for index, row in enumerate(cast("list[object]", raw_rows)):
         if not isinstance(row, dict):
             raise PayloadShapeError(f"row {index} is not an object")
+        rows.append(cast("dict[str, Any]", row))
 
-    return cast("list[dict[str, Any]]", rows)
+    return rows
 
 
 def extract_counts(payload: object) -> tuple[int | None, int | None]:
     """Return ``(Count, Original_Count)`` as integers when available."""
-    if not isinstance(payload, list) or not payload:
-        raise PayloadShapeError("payload must be a non-empty list")
-
-    envelope = payload[0]
-    if not isinstance(envelope, dict):
-        raise PayloadShapeError("payload[0] must be an object")
-
+    envelope = _envelope(payload)
     return _as_int(envelope.get("Count")), _as_int(envelope.get("Original_Count"))
 
 
@@ -128,30 +144,43 @@ async def collect_events_by_year(
     years: Sequence[int],
     *,
     client: WttClient,
-    output_dir: Path,
     progress: ProgressReporter | None = None,
+    land: LandingFn | None = None,
 ) -> list[YearPayloadSummary]:
-    """Fetch every requested year, saving payloads and metadata as it goes.
+    """Fetch and land every requested year.
 
     One failed year does not stop the others. The caller decides what a
     non-empty error list means for the run.
     """
-    output_dir.mkdir(parents=True, exist_ok=True)
     summaries: list[YearPayloadSummary] = []
     reporter = progress or NullProgress()
 
+    reporter.start(
+        "Starting events scrape",
+        {
+            "Total Years": str(len(years)),
+            "Output": "ingest.events_by_year_raw",
+        },
+    )
     try:
+        # Intentionally sequential: one request per year, a small fixed list.
+        # The match fan-out is where concurrency and chunking belong.
         for year in years:
             summary = await _collect_one(
                 year,
                 client=client,
-                output_dir=output_dir,
                 log_summary=reporter.logs_records,
+                land=land,
             )
             summaries.append(summary)
             reporter.advance(_progress_message(summary))
     finally:
         reporter.close()
+        failed = sum(1 for summary in summaries if summary.error)
+        reporter.finish(
+            "Events scrape complete",
+            {"Total Years": str(len(summaries)), "Failed": str(failed)},
+        )
 
     return summaries
 
@@ -160,8 +189,8 @@ async def _collect_one(
     year: int,
     *,
     client: WttClient,
-    output_dir: Path,
     log_summary: bool = True,
+    land: LandingFn | None = None,
 ) -> YearPayloadSummary:
     fetched_at = datetime.now(tz=UTC)
 
@@ -171,7 +200,6 @@ async def _collect_one(
         return _failed_summary(
             year=year,
             fetched_at=fetched_at,
-            output_dir=output_dir,
             status_code=error.status_code,
             message=str(error),
             log_summary=log_summary,
@@ -180,14 +208,11 @@ async def _collect_one(
         return _failed_summary(
             year=year,
             fetched_at=fetched_at,
-            output_dir=output_dir,
             status_code=None,
             message=str(error),
             log_summary=log_summary,
         )
 
-    payload_path = output_dir / f"events_{year}.json"
-    payload_path.write_bytes(response.content)
     digest = hashlib.sha256(response.content).hexdigest()
 
     api_count: int | None = None
@@ -218,10 +243,18 @@ async def _collect_one(
         row_count=row_count,
         payload_sha256=digest,
         fetched_at=fetched_at,
-        payload_path=payload_path,
         error=error_message,
     )
-    _write_meta(output_dir, summary)
+
+    if summary.error is None and land is not None:
+        try:
+            land(summary, response.data)
+        except Exception as error:
+            summary = replace(
+                summary,
+                error=f"landing failed: {error}",
+            )
+
     if log_summary:
         _log_summary(summary)
     return summary
@@ -231,7 +264,6 @@ def _failed_summary(
     *,
     year: int,
     fetched_at: datetime,
-    output_dir: Path,
     status_code: int | None,
     message: str,
     log_summary: bool,
@@ -244,31 +276,21 @@ def _failed_summary(
         row_count=0,
         payload_sha256=None,
         fetched_at=fetched_at,
-        payload_path=None,
         error=message,
     )
-    _write_meta(output_dir, summary)
     if log_summary:
         _log_summary(summary)
     return summary
 
 
-def _write_meta(output_dir: Path, summary: YearPayloadSummary) -> None:
-    meta_path = output_dir / f"events_{summary.year}.meta.json"
-    meta_path.write_text(
-        json.dumps(asdict(summary), indent=2, default=str) + "\n",
-        encoding="utf-8",
-    )
-
-
 def _progress_message(summary: YearPayloadSummary) -> str:
     state = "failed" if summary.error else "ok"
-    api = f"  api={summary.api_count}" if summary.api_count is not None else ""
-    return f"year={summary.year}  rows={summary.row_count}{api}  {state}"
+    api = f" | api={summary.api_count}" if summary.api_count is not None else ""
+    return f"year={summary.year} | saved={summary.row_count}{api} | {state}"
 
 
 def _log_summary(summary: YearPayloadSummary) -> None:
-    extra = {
+    extra: dict[str, Any] = {
         "year": summary.year,
         "status": summary.status_code,
         "rows": summary.row_count,
@@ -276,7 +298,10 @@ def _log_summary(summary: YearPayloadSummary) -> None:
         "original_count": summary.original_count,
     }
     if summary.error:
-        logger.error("events_year_incomplete", extra={**extra, "error": summary.error})
+        logger.error(
+            "events_year_incomplete",
+            extra={**extra, "error": summary.error},
+        )
     else:
         logger.info("events_year_saved", extra=extra)
 
@@ -296,15 +321,14 @@ def _as_int(value: object) -> int | None:
 
 async def _run(
     years: Sequence[int],
-    output_dir: Path,
     progress: ProgressReporter,
 ) -> list[YearPayloadSummary]:
     async with WttClient() as client:
         return await collect_events_by_year(
             years,
             client=client,
-            output_dir=output_dir,
             progress=progress,
+            land=land_events_by_year,
         )
 
 
@@ -313,52 +337,42 @@ def main(argv: Sequence[str] | None = None) -> int:
     configure_logging()
 
     parser = argparse.ArgumentParser(
-        description="Fetch WTT event calendars into data/raw/events."
+        description="Fetch WTT event calendars into ingest.events_by_year_raw."
     )
     parser.add_argument(
         "--years",
         nargs="+",
         type=int,
-        default=list(DEFAULT_YEARS),
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=Path,
         default=None,
     )
-    parser.add_argument(
-        "--no-progress",
-        action="store_true",
-        help="Disable the terminal progress bar.",
-    )
     args = parser.parse_args(argv)
+    years = args.years if args.years is not None else default_years()
 
     settings = get_settings()
-    output_dir = args.output_dir or (settings.data_dir / "raw" / "events")
     if not settings.log_json and settings.log_level.upper() != "DEBUG":
         # One line per HTTP request drowns out the progress display.
         logging.getLogger("httpx").setLevel(logging.WARNING)
         logging.getLogger("httpcore").setLevel(logging.WARNING)
     progress = make_progress(
-        len(args.years),
-        enabled=not args.no_progress,
+        len(years),
         json_output=settings.log_json,
     )
-    logger.info(
-        "events_scrape_start",
-        extra={"years": len(args.years), "output_dir": str(output_dir)},
-    )
-    results = asyncio.run(_run(args.years, output_dir, progress))
+    if not progress.prints_summary:
+        logger.info(
+            "Starting events scrape",
+            extra={"years": len(years)},
+        )
+    results = asyncio.run(_run(years, progress))
 
     failed = [result for result in results if result.error]
-    logger.info(
-        "events_scrape_complete",
-        extra={
-            "years": len(results),
-            "failed": len(failed),
-            "output_dir": str(output_dir),
-        },
-    )
+    if not progress.prints_summary:
+        logger.info(
+            "Events scrape complete",
+            extra={
+                "years": len(results),
+                "failed": len(failed),
+            },
+        )
     return 0 if not failed else 1
 
 

@@ -17,5 +17,7 @@ $$;
 --  add text similiarty extension if needed for fuzzy matching / name reconciliation later?
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
--- Ensure default schema exists #
+-- Ensure the schemas exist before migrations run.
 CREATE SCHEMA IF NOT EXISTS public;
+CREATE SCHEMA IF NOT EXISTS ingest;
+CREATE SCHEMA IF NOT EXISTS analytics;

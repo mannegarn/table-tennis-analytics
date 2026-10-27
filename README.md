@@ -32,8 +32,9 @@ integration is switched off.
 ## Setup
 
 ```sh
-make setup   # creates .env from .env.example, then runs uv sync
-make db-up   # starts PostgreSQL in the background
+make setup       # creates .env from .env.example, then runs uv sync
+make db-up       # starts PostgreSQL in the background
+make db-migrate  # creates the ingest and analytics schemas and tables
 make db-check
 ```
 
@@ -43,46 +44,54 @@ The same steps done manually:
 cp .env.example .env
 uv sync
 docker compose up -d
+uv run tt-db-migrate
 uv run tt-db-check
 ```
 
 ## Verification
 
 - `uv run tt-db-check` prints `Connected to PostgreSQL: PostgreSQL 16.4 ...`
-- `make db-psql` opens a shell; run `\l` to list databases or `\d` to list tables.
+- `make db-migrate` applies `db/migrations` and records versions in
+  `ingest.schema_version`. Re-running it is a no-op.
+- `make db-psql` opens a shell; run `\dt ingest.*` to list ingestion tables.
 - `make dbt-debug` ends with `All checks passed!`
 - `make test` runs the suite; the integration test skips automatically when the database is down.
 - `make test-integration` runs the database integration tests explicitly.
 
-## Events scrape (file-only first step)
+## Events scrape
 
-The events calendar is fetched and saved as files before any table exists. This
-proves the endpoint, headers, retry policy and payload shape, and it gives the
-unpack work a committed fixture to test against.
+The events calendar is fetched and upserted into
+`ingest.events_by_year_raw`. Each year is one row and one transaction. No
+payload files are written. A landing failure marks that year as failed and
+makes the command exit non-zero.
 
 ```sh
-make events-scrape                 # 2021 through 2026
+make events-scrape                 # 2021 through the current year
 make events-scrape YEARS="2023"    # one year
-make events-inspect                # counts, tiers and duplicate EventIds
 ```
 
-Each year writes two files under `data/raw/events/`:
+Each row stores the JSONB payload plus the fetch metadata: HTTP status,
+`Count`, `Original_Count`, row count, SHA-256 and `fetched_at`.
 
-- `events_<year>.json` - the payload exactly as returned.
-- `events_<year>.meta.json` - HTTP status, `Count`, `Original_Count`, row
-  count, SHA-256 and any error.
+A terminal uses one compact `tqdm` bar that updates in place, so a long scrape
+does not print one line per item. `LOG_JSON=true` emits one JSON object per
+event, and piped output keeps the per-year records. Per-year log lines are
+suppressed while the bar is active; the database row keeps the detail.
 
-In a terminal the scrape draws a `tqdm` progress bar that overwrites its line.
-Piped output and `--no-progress` print one plain line per year instead.
-`LOG_JSON=true` emits one JSON object per event. Per-year log lines are
-suppressed while the display is active; the `.meta.json` files keep the detail.
+```text
+Starting events scrape
+  Total Years:  6
+  Output:       ingest.events_by_year_raw
 
-```sh
-uv run tt-events-scrape --years 2021 2022 2023 --no-progress
+Events calendar: 6/6 [##########] year=2026 | saved=174 | api=174 | ok
+
+Events scrape complete
+  Total Years:  6
+  Failed:       0
 ```
 
-The run starts with `events_scrape_start` and ends with
-`events_scrape_complete`, so the beginning and end are always explicit.
+The run starts with `Starting events scrape` and ends with
+`Events scrape complete`, so the beginning and end are always explicit.
 
 Keep a timestamped run log:
 
@@ -90,10 +99,10 @@ Keep a timestamped run log:
 make events-scrape 2>&1 | tee "data/raw/events/run_$(date +%Y%m%dT%H%M%S).log"
 ```
 
-`data/` is git-ignored. The 2023 payload is also copied to
-`tests/fixtures/events_2023.json` so the contract test runs offline. PostgreSQL
-landing is the next increment; until then this command does not touch the
-database.
+The 2023 payload is committed at `tests/fixtures/events_2023.json` for the
+offline contract test. Run `make db-migrate` first; the scrape writes only to
+the database. `data/` remains git-ignored for legacy captures, logs and scratch
+files.
 
 ## Command surface
 
@@ -107,9 +116,9 @@ database.
 | `make db-logs` | Tail PostgreSQL logs |
 | `make db-psql` | Open a `psql` shell |
 | `make db-check` | Verify the Python to PostgreSQL connection |
+| `make db-migrate` | Apply versioned SQL migrations |
 | `make log-demo` | Show the logging output formats: console, JSON and levels |
-| `make events-scrape` | Fetch WTT event calendars into `data/raw/events` |
-| `make events-inspect` | Report counts, tiers and duplicate EventIds |
+| `make events-scrape` | Fetch event calendars and land them in `ingest.events_by_year_raw` |
 | `make test` | Run the test suite |
 | `make test-integration` | Run only integration tests |
 | `make dbt-debug` | Verify dbt can reach the warehouse |
@@ -181,16 +190,16 @@ airflow/dags/             orchestration (later)
 
 ## Data layers
 
-Raw payloads land in PostgreSQL as JSONB. SQL unpacks them into columns at land
-time, in the same transaction. dbt builds every layer after that. A single schema
-is used deliberately; the level lives in the table name.
+Raw payloads land in the `ingest` schema as JSONB. SQL unpacks them into columns
+at land time, in the same transaction. dbt reads ingestion tables as sources
+and writes every model to `analytics`.
 
-| Level | Naming | Example | Owner |
-| --- | --- | --- | --- |
-| Raw | `<entity>_raw` | `events_by_year_raw` | ingestion |
-| Unpacked | `<entity>_unpacked` | `events_unpacked` | ingestion, in SQL |
-| Marts | `<entity>_marts` | `events_marts` | dbt |
-| Control | `ingest_*` | `ingest_runs` | ingestion |
+| Level | Schema | Naming | Example | Owner |
+| --- | --- | --- | --- | --- |
+| Raw | `ingest` | `<entity>_raw` | `ingest.events_by_year_raw` | ingestion |
+| Unpacked | `ingest` | `<entity>_unpacked` | `ingest.events_unpacked` | ingestion, in SQL |
+| Marts | `analytics` | `<entity>_marts` | `analytics.events_marts` | dbt |
+| Control | `ingest` | `ingest_*` | `ingest.ingest_runs` | ingestion |
 
 Container tables describe the request grain, for example
 `match_entries_payloads_raw` is one row per event. From unpacking onward, names
@@ -204,8 +213,9 @@ dbt output, so a broken or unrun dbt model cannot stop data collection.
 
 `dbt/dbt_project.yml` defines the project and the domain-first model paths
 (`models/<domain>/staging`, `models/<domain>/marts`). `dbt/profiles.yml` points
-at the same PostgreSQL instance using the environment variables above. No
-models exist yet; this is only the wiring.
+at the same PostgreSQL instance and writes models to the `analytics` schema.
+Ingestion tables in `ingest` are declared as dbt sources, not models. No models
+exist yet; this is only the wiring.
 
 ## Troubleshooting
 

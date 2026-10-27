@@ -20,6 +20,6 @@ tt_stats:
       user: "{{ env_var('POSTGRES_USER', 'tt') }}"
       password: "{{ env_var('POSTGRES_PASSWORD') }}"
       dbname: "{{ env_var('POSTGRES_DB', 'tt_stats') }}"
-      schema: public
+      schema: analytics
       threads: 4
       keepalives_idle: 0

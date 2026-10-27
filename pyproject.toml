@@ -9,15 +9,16 @@ dependencies = [
     "polars>=1.0",
     "psycopg[binary]>=3.2",
     "pydantic-settings>=2.6",
+    "pytest-coverage>=0.0",
     "tenacity>=9.0",
     "tqdm>=4.66",
 ]
 
 [project.scripts]
 tt-db-check = "tt_stats.core.db:main"
+tt-db-migrate = "tt_stats.core.migrations:main"
 tt-log-demo = "tt_stats.core.logging_demo:main"
 tt-events-scrape = "tt_stats.events.collect.events_by_year:main"
-tt-events-inspect = "tt_stats.events.collect.inspect_payloads:main"
 
 [dependency-groups]
 dev = [
