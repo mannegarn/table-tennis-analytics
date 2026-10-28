@@ -12,7 +12,7 @@ YEARS ?=
 
 .DEFAULT_GOAL := help
 
-.PHONY: help setup db-up db-down db-reset db-logs db-psql db-check db-migrate log-demo events-scrape test test-integration dbt-debug lint format typecheck check hooks-install hooks-run
+.PHONY: help setup db-up db-down db-reset db-logs db-psql db-check db-migrate log-demo events-scrape events-unpack test test-integration dbt-debug lint format typecheck check hooks-install hooks-run
 
 help: ## Show available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -49,6 +49,9 @@ log-demo: ## Show the logging output formats: console, JSON and levels
 
 events-scrape: ## Fetch event calendars and land them in ingest.events_by_year_raw
 	uv run tt-events-scrape $(if $(YEARS),--years $(YEARS),)
+
+events-unpack: ## Unpack landed calendars into ingest.events_unpacked
+	uv run tt-events-unpack $(if $(YEARS),--years $(YEARS),)
 
 test: ## Run the test suite
 	uv run pytest

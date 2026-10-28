@@ -1,0 +1,61 @@
+-- Unpack one year of the WTT event calendar into ingest.events_unpacked.
+--
+-- Executed by tt_stats.events.land.unpack.unpack_events_year(), inside the same
+-- transaction as the raw insert. Also used by `make events-unpack` to backfill
+-- years that are already landed.
+--
+-- CONTRACT
+--   * Exactly one statement. psycopg executes this with parameters, so a
+--     multi-statement script will fail.
+--   * Exactly one placeholder: %s, the calendar year to unpack.
+--   * Pure DML. No CREATE, ALTER or DROP: this is not a migration and it runs
+--     on every landing.
+--   * Idempotent. Running it twice for the same year must leave one row per
+--     event, not two.
+--   * Source is the raw row already in the table, not a Python object, so the
+--     columns provably match what was stored.
+--
+-- SOURCE SHAPE
+--   ingest.events_by_year_raw.payload is JSONB:
+--     [ { "rows": [ {EventId, EventName, StartDateTime, EndDateTime, ...} ] } ]
+--   The events live at payload -> 0 -> 'rows'. Not payload -> 'rows'.
+--
+-- TARGET SHAPE (migration 003)
+--   event_id     bigint PRIMARY KEY     <- EventId
+--   event_name   text NOT NULL          <- EventName
+--   start_date   date NOT NULL          <- StartDateTime, cut to a date
+--   end_date     date NOT NULL          <- EndDateTime, cut to a date
+--   source_year  smallint NOT NULL      <- the year parameter, or r.year
+--   refreshed_at timestamptz NOT NULL   <- now(), on insert AND on conflict
+--
+-- GOTCHAS, in the order they will bite
+--   1. DISTINCT ON (event_id) is mandatory. 2021 repeats events verbatim, and
+--      ON CONFLICT DO UPDATE cannot affect the same row twice in one statement.
+--      Pair it with ORDER BY event_id or DISTINCT ON errors out on its own.
+--   2. EventId is a JSON number, so cast it explicitly to bigint.
+--   3. Dates arrive as '2023-03-07T00:00:00'. Cast the text to date. Do not
+--      cast to timestamptz: that invents a timezone the API never sent.
+--   4. No WHERE clause on tier, type, name or country. Structure only
+--      (ADR 0003); filtering belongs in dbt.
+--   5. ON CONFLICT (event_id) DO UPDATE must set all four mutable columns plus
+--      refreshed_at, or a re-fetch leaves stale values that look fresh.
+--   6. source_year is a fact, not identity: if an event moves to another year's
+--      calendar, the upsert rewrites it in place. That is correct.
+--   7. A constraint violation rolls back the raw insert too, because both
+--      statements share one transaction. Fail loudly, do not sanitise.
+--
+-- NOTES
+--   * The raw table has no row for a year that never landed, so the statement
+--     must produce zero rows rather than raise when the year is absent.
+--   * `refreshed_at` should be now(), not EXCLUDED.refreshed_at, so it marks
+--     when the unpack ran.
+--   * Keep the CASTs explicit. Silent text-to-number coercion hides payload
+--     changes, and ADR 0003 wants a field rename to fail loudly.
+--
+-- REMEMBER: this file is deliberately comments-only until the statement below
+-- is written. The loader treats a comments-only file as "not implemented yet",
+-- logs `unpack_not_implemented`, and lets the raw landing continue. Unit and
+-- integration tests skip themselves until there is an executable statement, so
+-- the suite stays green and flips on the moment you write it.
+
+-- WRITE THE STATEMENT BELOW THIS LINE.

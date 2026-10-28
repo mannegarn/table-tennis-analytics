@@ -1,4 +1,10 @@
-"""Land one successfully fetched year into ingest.events_by_year_raw."""
+"""Land one successfully fetched year into the raw and unpacked tables.
+
+Both writes share one transaction: the payload is upserted and the same
+transaction then runs the unpack statement from ``sql/unpack_events.sql``. A
+failed unpack therefore rolls back the raw row as well, so a year is never
+half-landed (ADR 0003).
+"""
 
 from __future__ import annotations
 
@@ -7,6 +13,10 @@ from typing import TYPE_CHECKING, Any
 from psycopg.types.json import Jsonb
 
 from tt_stats.core.db import get_connection
+from tt_stats.core.logging_config import get_logger
+from tt_stats.events.land.unpack import unpack_events_year
+
+logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from tt_stats.events.collect.events_by_year import YearPayloadSummary
@@ -18,8 +28,11 @@ def land_events_by_year(
 ) -> None:
     """Upsert one year's payload and fetch metadata in a single transaction.
 
-    Failed fetches are not landed here. They belong in ``ingest_runs`` later,
-    so a bad response can never overwrite a good payload.
+    The unpack statement runs in the same transaction, after the insert, so the
+    columns can always be rebuilt from the raw row that produced them.
+
+    Failed fetches are not landed here. They belong in ``ingest_runs``, so a bad
+    response can never overwrite a good payload.
     """
     if summary.error is not None:
         raise ValueError(f"cannot land a failed year: {summary.error}")
@@ -61,3 +74,13 @@ def land_events_by_year(
                 summary.fetched_at,
             ),
         )
+        unpacked = unpack_events_year(connection, summary.year)
+
+    logger.info(
+        "events_year_landed",
+        extra={
+            "year": summary.year,
+            "rows": summary.row_count,
+            "unpacked": unpacked,
+        },
+    )

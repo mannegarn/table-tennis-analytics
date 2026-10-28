@@ -2,6 +2,12 @@
 
 Migrations are ingestion-owned DDL. They are not dbt models: dbt reads the
 resulting tables through ``sources.yml``.
+
+The directory is resolved in this order: an explicit argument, then
+``MIGRATIONS_DIR`` from the environment, then the repository's own
+``db/migrations``. The default keeps a plain checkout working with no
+configuration, while the environment variable covers containers and wheel
+installs where the repository layout is absent.
 """
 
 import hashlib
@@ -10,12 +16,31 @@ from pathlib import Path
 
 from psycopg import sql
 
+from tt_stats.core.config import get_settings, project_root
 from tt_stats.core.db import get_connection
 from tt_stats.core.logging_config import configure_logging, get_logger
 
 logger = get_logger(__name__)
 
-MIGRATIONS_DIR = Path(__file__).resolve().parents[3] / "db" / "migrations"
+DEFAULT_MIGRATIONS_DIR = project_root() / "db" / "migrations"
+
+
+def resolve_migrations_dir(directory: Path | None = None) -> Path:
+    """Return the migration directory to use.
+
+    Args:
+        directory: Explicit override, normally from a command line or a test.
+
+    Raises:
+        ValidationError: If no directory is given and Settings cannot be built,
+            for example because the database password is unset.
+    """
+    if directory is not None:
+        return directory
+
+    configured = get_settings().migrations_dir
+    return configured or DEFAULT_MIGRATIONS_DIR
+
 
 SCHEMA_VERSION_DDL = """
 CREATE SCHEMA IF NOT EXISTS ingest;
@@ -37,9 +62,10 @@ class Migration:
 
 
 def discover_migrations(
-    directory: Path = MIGRATIONS_DIR,
+    directory: Path | None = None,
 ) -> list[Migration]:
     """Return migrations in filename order, with a SHA-256 each."""
+    directory = resolve_migrations_dir(directory)
     if not directory.exists():
         raise FileNotFoundError(f"Migrations directory not found: {directory}")
 
@@ -53,7 +79,7 @@ def discover_migrations(
     ]
 
 
-def apply_migrations(directory: Path = MIGRATIONS_DIR) -> list[str]:
+def apply_migrations(directory: Path | None = None) -> list[str]:
     """Apply every migration not yet recorded, returning their versions.
 
     Each migration runs in its own transaction. A checksum change on an

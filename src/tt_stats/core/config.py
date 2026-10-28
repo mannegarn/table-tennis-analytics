@@ -3,7 +3,19 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def project_root() -> Path:
+    """Return the repository root for a source or editable checkout.
+
+    This file lives at ``<root>/src/tt_stats/core/config.py``, so three parents
+    up from it is the checkout root. That assumption does not hold for a wheel
+    install, which is why every setting derived from this path can also be set
+    explicitly through the environment.
+    """
+    return Path(__file__).resolve().parents[3]
 
 
 class Settings(BaseSettings):
@@ -52,12 +64,28 @@ class Settings(BaseSettings):
     )
     verify_ssl: bool = True
 
-    # Local landing area for raw payloads before they reach PostgreSQL.
-    data_dir: Path = Path("data")
+    # Local scratch area for captures, logs and notebooks. Defaults to the
+    # repository's ``data/`` directory rather than the current working
+    # directory, so running a command from elsewhere cannot scatter files.
+    data_dir: Path = Field(default_factory=lambda: project_root() / "data")
+
+    # Numbered SQL migrations. Left unset by default so pure discovery does not
+    # require a fully populated Settings object; ``migrations.resolve_migrations_dir``
+    # falls back to the repository's ``db/migrations``.
+    migrations_dir: Path | None = None
 
     # Logging. Read by configure_logging() at process entry points.
     log_level: str = "INFO"
     log_json: bool = False
+
+    # Durable log file. Console output always happens; the file handler is the
+    # record that survives a closed terminal. It defaults to the repository's
+    # ``logs/`` directory for the same reason ``data_dir`` does. Rotation is
+    # size based so an unattended backfill cannot fill the disk.
+    log_to_file: bool = True
+    logs_dir: Path = Field(default_factory=lambda: project_root() / "logs")
+    log_file_max_bytes: int = 5_000_000
+    log_file_backup_count: int = 3
 
     @property
     def dsn(self) -> str:

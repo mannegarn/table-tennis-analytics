@@ -1,8 +1,9 @@
 """Fetch, validate and land one WTT event-calendar payload per year.
 
-The payload is saved to disk as a local debug copy and upserted into
-``ingest.events_by_year_raw`` in the same run. The raw table is the source of
-truth; the file is there so a failed or changed response can be inspected.
+The payload is upserted into ``ingest.events_by_year_raw``; the database row is
+the source of truth. No payload files are written. Every attempt, successful or
+not, is also recorded in ``ingest.ingest_runs`` so the history survives the
+terminal closing.
 """
 
 import argparse
@@ -10,6 +11,7 @@ import asyncio
 import hashlib
 import logging
 from collections.abc import Callable, Sequence
+from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Any, cast
@@ -20,7 +22,17 @@ from tt_stats.core.clients.wtt_api import (
     WttRequestError,
 )
 from tt_stats.core.config import get_settings
-from tt_stats.core.logging_config import configure_logging, get_logger
+from tt_stats.core.ingest_runs import (
+    SOURCE_WTT_EVENTCALENDAR,
+    RunRecord,
+    record_run,
+    status_for,
+)
+from tt_stats.core.logging_config import (
+    configure_logging,
+    get_logger,
+    progress_owns_console,
+)
 from tt_stats.core.progress import (
     NullProgress,
     ProgressReporter,
@@ -58,6 +70,7 @@ class PayloadShapeError(ValueError):
 
 
 LandingFn = Callable[["YearPayloadSummary", Any], None]
+RecordRunFn = Callable[[RunRecord], None]
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,11 +159,15 @@ async def collect_events_by_year(
     client: WttClient,
     progress: ProgressReporter | None = None,
     land: LandingFn | None = None,
+    record: RecordRunFn | None = None,
 ) -> list[YearPayloadSummary]:
     """Fetch and land every requested year.
 
     One failed year does not stop the others. The caller decides what a
     non-empty error list means for the run.
+
+    ``record`` receives every settled attempt, so run history is written from
+    inside the loop rather than reconstructed afterwards.
     """
     summaries: list[YearPayloadSummary] = []
     reporter = progress or NullProgress()
@@ -163,17 +180,25 @@ async def collect_events_by_year(
         },
     )
     try:
-        # Intentionally sequential: one request per year, a small fixed list.
-        # The match fan-out is where concurrency and chunking belong.
-        for year in years:
-            summary = await _collect_one(
-                year,
-                client=client,
-                log_summary=reporter.logs_records,
-                land=land,
-            )
-            summaries.append(summary)
-            reporter.advance(_progress_message(summary))
+        # While the bar is drawing it owns the terminal, so the console is muted
+        # and every record still goes to the log file. Non-interactive runs keep
+        # the full console output.
+        gate: AbstractContextManager[None] = (
+            nullcontext() if reporter.logs_records else progress_owns_console()
+        )
+        with gate:
+            # Intentionally sequential: one request per year, a small fixed list.
+            # The match fan-out is where concurrency and chunking belong.
+            for year in years:
+                summary = await _collect_one(
+                    year,
+                    client=client,
+                    log_summary=reporter.logs_records,
+                    land=land,
+                    record=record,
+                )
+                summaries.append(summary)
+                reporter.advance(_progress_message(summary))
     finally:
         reporter.close()
         failed = sum(1 for summary in summaries if summary.error)
@@ -191,27 +216,32 @@ async def _collect_one(
     client: WttClient,
     log_summary: bool = True,
     land: LandingFn | None = None,
+    record: RecordRunFn | None = None,
 ) -> YearPayloadSummary:
     fetched_at = datetime.now(tz=UTC)
 
     try:
         response = await client.fetch_events_by_year(year)
     except WttRequestError as error:
-        return _failed_summary(
+        summary = _failed_summary(
             year=year,
             fetched_at=fetched_at,
             status_code=error.status_code,
             message=str(error),
             log_summary=log_summary,
         )
+        _record_run(summary, record)
+        return summary
     except WttPayloadError as error:
-        return _failed_summary(
+        summary = _failed_summary(
             year=year,
             fetched_at=fetched_at,
             status_code=None,
             message=str(error),
             log_summary=log_summary,
         )
+        _record_run(summary, record)
+        return summary
 
     digest = hashlib.sha256(response.content).hexdigest()
 
@@ -257,6 +287,7 @@ async def _collect_one(
 
     if log_summary:
         _log_summary(summary)
+    _record_run(summary, record)
     return summary
 
 
@@ -287,6 +318,32 @@ def _progress_message(summary: YearPayloadSummary) -> str:
     state = "failed" if summary.error else "ok"
     api = f" | api={summary.api_count}" if summary.api_count is not None else ""
     return f"year={summary.year} | saved={summary.row_count}{api} | {state}"
+
+
+def _record_run(summary: YearPayloadSummary, record: RecordRunFn | None) -> None:
+    """Write the attempt to ``ingest.ingest_runs``, never breaking the scrape."""
+    if record is None:
+        return
+
+    try:
+        record(
+            RunRecord(
+                source=SOURCE_WTT_EVENTCALENDAR,
+                entity_key=str(summary.year),
+                status=status_for(summary.error),
+                started_at=summary.fetched_at,
+                http_status=summary.status_code,
+                row_count=summary.row_count,
+                payload_sha256=summary.payload_sha256,
+                error=summary.error,
+            )
+        )
+    except Exception as error:
+        # Recording is diagnostics: losing a row must not lose the payload.
+        logger.warning(
+            "ingest_run_not_recorded",
+            extra={"year": summary.year, "error": str(error)},
+        )
 
 
 def _log_summary(summary: YearPayloadSummary) -> None:
@@ -329,6 +386,7 @@ async def _run(
             client=client,
             progress=progress,
             land=land_events_by_year,
+            record=record_run,
         )
 
 

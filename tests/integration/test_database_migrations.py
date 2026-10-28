@@ -69,5 +69,10 @@ def test_migrations_create_the_raw_table() -> None:
     assert by_name["payload"]["data_type"] == "jsonb"
     assert by_name["year"]["is_nullable"] == "NO"
     assert by_name["payload_sha256"]["is_nullable"] == "NO"
-    assert "001_events_raw" in {row["version"] for row in versions}
+    applied = {row["version"] for row in versions}
+    assert {
+        "001_events_raw",
+        "002_ingest_runs",
+        "003_events_unpacked",
+    } <= applied
     assert [row["schema_name"] for row in schemas] == ["analytics", "ingest"]

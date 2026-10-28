@@ -8,7 +8,7 @@ import psycopg
 from psycopg import Connection
 from psycopg.rows import RowFactory, dict_row
 
-from tt_stats.core.config import get_settings
+from tt_stats.core.config import Settings, get_settings
 from tt_stats.core.logging_config import configure_logging, get_logger
 
 logger = get_logger(__name__)
@@ -17,6 +17,7 @@ logger = get_logger(__name__)
 @contextmanager
 def get_connection(
     *,
+    settings: Settings | None = None,
     autocommit: bool = False,
     row_factory: RowFactory[Any] | None = dict_row,
 ) -> Generator[Connection[Any]]:
@@ -27,14 +28,17 @@ def get_connection(
     behaviour without manual ``commit`` or ``rollback`` calls.
 
     Args:
+        settings: Configuration to connect with. Defaults to the cached
+            process settings; passing one keeps callers testable without
+            patching the environment.
         autocommit: When True, statements commit immediately. Useful for
             DDL and for simple reads.
         row_factory: How rows are returned. Defaults to ``dict_row`` so
             callers can index by column name.
     """
-    settings = get_settings()
+    resolved = settings or get_settings()
     with psycopg.connect(
-        settings.dsn,
+        resolved.dsn,
         autocommit=autocommit,
         row_factory=row_factory,
     ) as connection:

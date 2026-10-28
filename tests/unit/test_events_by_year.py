@@ -9,6 +9,7 @@ import pytest
 
 from tt_stats.core.clients.wtt_api import WttClient
 from tt_stats.core.config import Settings
+from tt_stats.core.ingest_runs import RunRecord
 from tt_stats.events.collect.events_by_year import (
     PayloadShapeError,
     YearPayloadSummary,
@@ -247,3 +248,64 @@ async def test_http_failure_returns_a_failed_summary() -> None:
     assert result.error is not None
     assert result.status_code == 503
     assert progress.messages == ["year=2023 | saved=0 | failed"]
+
+
+async def test_collect_records_a_successful_run() -> None:
+    payload = _payload([_row(1), _row(2)])
+    recorded: list[RunRecord] = []
+
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=payload)
+
+    async with WttClient(
+        settings=_settings(), transport=httpx.MockTransport(handler)
+    ) as client:
+        await collect_events_by_year([2023], client=client, record=recorded.append)
+
+    assert len(recorded) == 1
+    record = recorded[0]
+    assert record.source == "wtt_eventcalendar"
+    assert record.entity_key == "2023"
+    assert record.status == "succeeded"
+    assert record.http_status == 200
+    assert record.row_count == 2
+    assert record.payload_sha256 is not None
+    assert record.error is None
+
+
+async def test_collect_records_a_failed_run() -> None:
+    recorded: list[RunRecord] = []
+
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(503, json={"error": "unavailable"})
+
+    async with WttClient(
+        settings=_settings(), transport=httpx.MockTransport(handler)
+    ) as client:
+        await collect_events_by_year([2023], client=client, record=recorded.append)
+
+    assert len(recorded) == 1
+    record = recorded[0]
+    assert record.status == "failed"
+    assert record.http_status == 503
+    assert record.row_count == 0
+    assert record.payload_sha256 is None
+    assert record.error is not None
+
+
+async def test_recording_failure_does_not_break_the_scrape() -> None:
+    payload = _payload([_row(1)])
+
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=payload)
+
+    def record(_record: RunRecord) -> None:
+        raise RuntimeError("runs table missing")
+
+    async with WttClient(
+        settings=_settings(), transport=httpx.MockTransport(handler)
+    ) as client:
+        results = await collect_events_by_year([2023], client=client, record=record)
+
+    assert results[0].error is None
+    assert results[0].row_count == 1

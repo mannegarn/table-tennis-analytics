@@ -30,6 +30,7 @@ htmlcov/
 
 # Logs
 *.log
+logs/
 
 # Editors and OS
 .DS_Store
