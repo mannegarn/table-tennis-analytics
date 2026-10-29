@@ -81,18 +81,18 @@ with its start and finish time, status, HTTP status, row count and error. That
 is the durable history: a failed year leaves a row, so nothing depends on
 scrolling back through a terminal.
 
-`ingest.events_unpacked` holds one row per event. The table, its constraints,
-index, loader, CLI and tests are all wired; only the statement itself is
-missing. It lives in `src/tt_stats/events/land/sql/unpack_events.sql`, is
-currently a scaffold of comments, and while it stays that way every landing logs
-`unpack_not_implemented` and carries on so the raw insert is never blocked.
+`ingest.events_unpacked` holds one row per event: 736 rows for the six landed
+years, from 755 calendar rows. The difference is duplicates: 2021, 2022 and 2026
+each list some events more than once, and the unpack de-duplicates them. The
+statement lives in `src/tt_stats/events/land/sql/unpack_events.sql` and runs
+inside the same transaction as the raw insert, so a year is never half-landed.
 
-Once the statement is written it runs inside the same transaction as the raw
-insert, and the backfill becomes available:
+The same statement can be run by hand:
 
 ```sh
-make events-unpack                 # every year present in the raw table
-make events-unpack YEARS="2023"    # one year
+make events-unpack-preview YEARS="2023"   # run it, print counts, roll back
+make events-unpack YEARS="2023"           # commit one year
+make events-unpack                        # every year in the raw table
 ```
 
 A terminal uses one compact `tqdm` bar that updates in place, so a long scrape
@@ -142,9 +142,9 @@ the database. `data/` remains git-ignored for legacy captures and scratch files.
 | `make db-psql` | Open a `psql` shell |
 | `make db-check` | Verify the Python to PostgreSQL connection |
 | `make db-migrate` | Apply versioned SQL migrations |
-| `make log-demo` | Show the logging output formats: console, JSON and levels |
 | `make events-scrape` | Fetch event calendars and land them in `ingest.events_by_year_raw` |
 | `make events-unpack` | Unpack landed calendars into `ingest.events_unpacked` |
+| `make events-unpack-preview` | Run the unpack for one year, print counts, roll back |
 | `make test` | Run the test suite |
 | `make test-integration` | Run only integration tests |
 | `make dbt-debug` | Verify dbt can reach the warehouse |
@@ -230,11 +230,10 @@ airflow/dags/             orchestration (later)
 
 ## Data layers
 
-Raw payloads land in the `ingest` schema as JSONB. `ingest.events_unpacked`
-exists with its constraints and index but is deliberately still empty: the
-unpack statement is the next piece of work, and it will run in the same
-transaction as the insert. dbt reads ingestion tables as sources and writes
-every model to `analytics`.
+Raw payloads land in the `ingest` schema as JSONB. The same transaction then
+unpacks the payload into `ingest.events_unpacked`, one row per event, using
+`src/tt_stats/events/land/sql/unpack_events.sql`. dbt reads ingestion tables as
+sources and writes every model to `analytics`.
 
 | Level | Schema | Naming | Example | Owner |
 | --- | --- | --- | --- | --- |

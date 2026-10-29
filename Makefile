@@ -12,10 +12,10 @@ YEARS ?=
 
 .DEFAULT_GOAL := help
 
-.PHONY: help setup db-up db-down db-reset db-logs db-psql db-check db-migrate log-demo events-scrape events-unpack test test-integration dbt-debug lint format typecheck check hooks-install hooks-run
+.PHONY: help setup db-up db-down db-reset db-logs db-psql db-check db-migrate events-scrape events-unpack events-unpack-preview test test-integration dbt-debug lint format typecheck check hooks-install hooks-run
 
 help: ## Show available commands
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
+	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
 
 setup: ## Create .env if missing and install dependencies
@@ -44,14 +44,14 @@ db-check: ## Verify the Python to PostgreSQL connection
 db-migrate: ## Apply db/migrations to the warehouse
 	uv run tt-db-migrate
 
-log-demo: ## Show the logging output formats: console, JSON and levels
-	uv run tt-log-demo
-
 events-scrape: ## Fetch event calendars and land them in ingest.events_by_year_raw
 	uv run tt-events-scrape $(if $(YEARS),--years $(YEARS),)
 
 events-unpack: ## Unpack landed calendars into ingest.events_unpacked
 	uv run tt-events-unpack $(if $(YEARS),--years $(YEARS),)
+
+events-unpack-preview: ## Run the unpack for one year, then roll it back
+	uv run tt-events-unpack --years $(or $(YEARS),2023) --dry-run
 
 test: ## Run the test suite
 	uv run pytest

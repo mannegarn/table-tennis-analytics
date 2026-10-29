@@ -21,6 +21,18 @@ pytestmark = pytest.mark.integration
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "events_2023.json"
 TEST_YEAR = 2099
 
+# The fixture is real 2023 data. Landing it unchanged would reparent those real
+# events to TEST_YEAR (the unpack upserts on EventId), so the ids are shifted
+# into a private range to keep this test from touching real rows.
+ID_OFFSET = 900_000_000
+
+
+def _synthetic(payload: Any) -> Any:
+    """Return the payload with EventIds moved out of the real range."""
+    for row in payload[0]["rows"]:
+        row["EventId"] = int(row["EventId"]) + ID_OFFSET
+    return payload
+
 
 def _require_database() -> None:
     try:
@@ -53,7 +65,7 @@ def test_landing_upserts_one_row_and_is_idempotent() -> None:
     _require_database()
     apply_migrations()
 
-    payload = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    payload = _synthetic(json.loads(FIXTURE.read_text(encoding="utf-8")))
     digest = hashlib.sha256(FIXTURE.read_bytes()).hexdigest()
     summary = _summary(payload, digest)
 
@@ -86,6 +98,10 @@ def test_landing_upserts_one_row_and_is_idempotent() -> None:
         assert count == {"n": 1}
     finally:
         with get_connection() as connection:
+            connection.execute(
+                "DELETE FROM ingest.events_unpacked WHERE source_year = %s;",
+                (TEST_YEAR,),
+            )
             connection.execute(
                 "DELETE FROM ingest.events_by_year_raw WHERE year = %s;",
                 (TEST_YEAR,),

@@ -17,7 +17,6 @@ dependencies = [
 [project.scripts]
 tt-db-check = "tt_stats.core.db:main"
 tt-db-migrate = "tt_stats.core.migrations:main"
-tt-log-demo = "tt_stats.core.logging_demo:main"
 tt-events-scrape = "tt_stats.events.collect.events_by_year:main"
 tt-events-unpack = "tt_stats.events.land.unpack:main"
 

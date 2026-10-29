@@ -15,17 +15,19 @@ Updated: 2026-10-27.
   match-detail fan-out, so size it there.
 - Every attempt is recorded in `ingest.ingest_runs` (migration 002), success or
   failure, with start/finish time, status, HTTP status, row count and error.
-- `ingest.events_unpacked` exists (migration 003) and is empty. Everything except
-  the SQL is wired: migration, loader, landing-transaction call, `make
-  events-unpack`, console script, unit guardrails and integration tests.
-- The statement lives at `src/tt_stats/events/land/sql/unpack_events.sql` and is
-  deliberately comments only. While it stays that way, landing logs
-  `unpack_not_implemented` and continues, and `make events-unpack` exits 1. The
-  unit guardrails and the integration tests skip themselves until it exists.
+- `ingest.events_unpacked` is live: 736 rows, 736 distinct event ids, from the
+  six landed years. The unpack statement runs automatically inside each landing
+  transaction and by hand via `make events-unpack`.
+- Per year, unpacked vs landed: 2021 86/99, 2022 91/94, 2023 101/101,
+  2024 131/131, 2025 156/156, 2026 171/174. The 19 missing rows are duplicate
+  events listed twice inside one year, never across years.
+- `make events-unpack-preview YEARS=2023` runs the statement and rolls back, so
+  the SQL can be exercised without touching the data.
 - The 755 calendar rows collapse to **736 distinct EventIds**. Every duplicate is
-  an exact repeat inside one year, and no EventId appears in two different years.
-  The unpack statement must de-duplicate before inserting, because one
-  `INSERT ... ON CONFLICT DO UPDATE` cannot affect the same row twice.
+  an exact repeat inside one year (2021: 13, 2022: 3, 2026: 3), and no EventId
+  appears in two different years. The unpack statement de-duplicates with
+  `DISTINCT ON`, because one `INSERT ... ON CONFLICT DO UPDATE` cannot affect
+  the same row twice.
 - Console output is mirrored to `logs/tt_stats.log`, rotating at 5 MB with three
   backups. `LOG_TO_FILE=false` disables it.
 - The runtime output is the database only. No payload or `.meta.json` files are
@@ -57,6 +59,11 @@ Updated: 2026-10-27.
   errors still print. Non-interactive runs keep the full console output.
 - **Recording a run never breaks a scrape.** If the insert fails, the failure is
   logged as `ingest_run_not_recorded` and the payload still lands.
+- **Integration tests may never touch real years.** The unpack upserts on
+  `event_id`, so loading the 2023 fixture under the test year reparented real
+  events and cleanup then deleted them. Both landing tests now shift every
+  EventId by 900,000,000 into a private range, and the unpack test asserts the
+  real-year row count is unchanged after teardown.
 - **`EventId` is the key, not the year.** It is unique across years, so the
   unpacked table is keyed on `event_id` and `source_year` is a fact rather than
   part of the identity.
