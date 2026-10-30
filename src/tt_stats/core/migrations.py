@@ -140,6 +140,10 @@ def main() -> int:
         return 1
 
     logger.info("migrations_complete", extra={"applied": len(applied)})
+    # Deliberate stdout write: terminal logging sits at WARNING, so the log
+    # line above never reaches the console. This is the CLI's user-facing
+    # confirmation, not application logging.
+    print(f"Migrations complete: {len(applied)} applied")  # noqa: T201
     return 0
 
 

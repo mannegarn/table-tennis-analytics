@@ -16,14 +16,13 @@ from __future__ import annotations
 import argparse
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from tt_stats.core.db import get_connection
 from tt_stats.core.logging_config import configure_logging, get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-    from typing import LiteralString
 
     from psycopg import Connection
 
@@ -78,10 +77,11 @@ def unpack_events_year(connection: Connection[Any], year: int) -> int:
         )
         return 0
 
-    # Repo-controlled SQL read from disk, never user input, so asserting what
-    # psycopg's LiteralString guard asks for is accurate. mypy considers plain
-    # str already compatible and calls the cast redundant; ty does not.
-    query = cast("LiteralString", statement)  # type: ignore[redundant-cast]
+    # Bytes, not text: psycopg types a plain ``str`` as a
+    # ``LiteralString``-only query, which static checkers reject for a value
+    # read from disk. ``bytes`` sidesteps that entirely, as ``migrations.py``
+    # already does.
+    query = statement.encode("utf-8")
     # Named rather than positional: the statement mentions the year once now,
     # but a future clause that needs it again costs nothing to add.
     cursor = connection.execute(query, {"year": year})
@@ -171,12 +171,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     results = unpack_years(args.years, dry_run=args.dry_run)
+    years = len(results)
+    rows = sum(touched for _, touched in results)
     logger.info(
         "unpack_complete",
-        extra={
-            "years": len(results),
-            "rows": sum(rows for _, rows in results),
-            "dry_run": args.dry_run,
-        },
+        extra={"years": years, "rows": rows, "dry_run": args.dry_run},
+    )
+    # Deliberate stdout write: terminal logging sits at WARNING, so the log
+    # line above never reaches the console. This is the CLI's user-facing
+    # confirmation, not application logging.
+    print(  # noqa: T201
+        f"Unpack complete: {years} years, {rows} rows (dry_run={args.dry_run})"
     )
     return 0

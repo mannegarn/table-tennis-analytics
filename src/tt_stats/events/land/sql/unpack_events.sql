@@ -41,10 +41,11 @@
 --   2024 -> 131 from 131, 2025 -> 156 from 156
 --   2021 ->  86 from  99, 2022 ->  91 from  94, 2026 -> 171 from 174
 --           those three years list some events word-for-word twice or more
---   All six years -> 736 rows keyed by event_id from 755 landed calendar rows.
---   About a dozen events appear in two years, so the (source_year, event_id)
---   key keeps more rows than that: count rows, not distinct event ids, when
---   checking totals.
+--   All six years -> 736 distinct event ids from 755 landed calendar rows.
+--   All 19 duplicates (2021, 2022, 2026) are repeats inside one year, so no
+--   event appears in two years in this data. The key is still the pair
+--   (source_year, event_id): that is what protects a New Year straddling
+--   tournament, not something these six years currently exercise.
 -- =============================================================================
 
 

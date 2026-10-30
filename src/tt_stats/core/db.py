@@ -66,7 +66,13 @@ def main() -> int:
     ``check_connection`` itself only logs, and assumes someone else set that up.
     """
     configure_logging()
-    return 0 if check_connection() else 1
+    if not check_connection():
+        return 1
+    # Deliberate stdout write: terminal logging sits at WARNING, so the log
+    # line inside ``check_connection`` never reaches the console. This is the
+    # CLI's user-facing confirmation, not application logging.
+    print("Database connection OK")  # noqa: T201
+    return 0
 
 
 if __name__ == "__main__":
