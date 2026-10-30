@@ -46,9 +46,9 @@ def land_events_by_year(
                 year,
                 payload,
                 http_status,
-                api_count,
-                original_count,
-                row_count,
+                source_final_count,
+                source_original_count,
+                received_count,
                 payload_sha256,
                 fetched_at
             )
@@ -56,9 +56,9 @@ def land_events_by_year(
             ON CONFLICT (year) DO UPDATE SET
                 payload = EXCLUDED.payload,
                 http_status = EXCLUDED.http_status,
-                api_count = EXCLUDED.api_count,
-                original_count = EXCLUDED.original_count,
-                row_count = EXCLUDED.row_count,
+                source_final_count = EXCLUDED.source_final_count,
+                source_original_count = EXCLUDED.source_original_count,
+                received_count = EXCLUDED.received_count,
                 payload_sha256 = EXCLUDED.payload_sha256,
                 fetched_at = EXCLUDED.fetched_at,
                 ingested_at = now();
@@ -67,9 +67,9 @@ def land_events_by_year(
                 summary.year,
                 Jsonb(payload),
                 summary.status_code,
-                summary.api_count,
-                summary.original_count,
-                summary.row_count,
+                summary.source_final_count,
+                summary.source_original_count,
+                summary.received_count,
                 summary.payload_sha256,
                 summary.fetched_at,
             ),
@@ -80,7 +80,7 @@ def land_events_by_year(
         "events_year_landed",
         extra={
             "year": summary.year,
-            "rows": summary.row_count,
+            "received_count": summary.received_count,
             "unpacked": unpacked,
         },
     )

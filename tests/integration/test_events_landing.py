@@ -52,9 +52,9 @@ def _summary(payload: Any, digest: str) -> YearPayloadSummary:
     return YearPayloadSummary(
         year=TEST_YEAR,
         status_code=200,
-        api_count=envelope["Count"],
-        original_count=int(envelope["Original_Count"]),
-        row_count=len(envelope["rows"]),
+        source_final_count=envelope["Count"],
+        source_original_count=int(envelope["Original_Count"]),
+        received_count=len(envelope["rows"]),
         payload_sha256=digest,
         fetched_at=datetime.now(tz=UTC),
         error=None,
@@ -76,8 +76,8 @@ def test_landing_upserts_one_row_and_is_idempotent() -> None:
         with get_connection() as connection:
             row = connection.execute(
                 """
-                SELECT payload, http_status, api_count, original_count,
-                       row_count, payload_sha256
+                SELECT payload, http_status, source_final_count,
+                       source_original_count, received_count, payload_sha256
                 FROM ingest.events_by_year_raw
                 WHERE year = %s;
                 """,
@@ -91,9 +91,9 @@ def test_landing_upserts_one_row_and_is_idempotent() -> None:
         assert row is not None
         assert row["payload"] == payload
         assert row["http_status"] == 200
-        assert row["api_count"] == payload[0]["Count"]
-        assert row["original_count"] == int(payload[0]["Original_Count"])
-        assert row["row_count"] == len(payload[0]["rows"])
+        assert row["source_final_count"] == payload[0]["Count"]
+        assert row["source_original_count"] == int(payload[0]["Original_Count"])
+        assert row["received_count"] == len(payload[0]["rows"])
         assert row["payload_sha256"] == digest
         assert count == {"n": 1}
     finally:

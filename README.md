@@ -73,8 +73,17 @@ make events-scrape                 # 2021 through the current year
 make events-scrape YEARS="2023"    # one year
 ```
 
-Each row stores the JSONB payload plus the fetch metadata: HTTP status,
-`Count`, `Original_Count`, row count, SHA-256 and `fetched_at`.
+Each row stores the JSONB payload plus the fetch metadata: HTTP status, SHA-256,
+`fetched_at`, and three counts that are easy to confuse:
+
+| Column | Whose | Means |
+| --- | --- | --- |
+| `received_count` | ours | Rows we actually parsed from `payload -> 0 -> 'rows'` |
+| `source_final_count` | WTT's `Count` | What the API says it returned; must match `received_count` |
+| `source_original_count` | WTT's `Original_Count` | Their total before their own internal step; informational only |
+
+A year fails instead of landing when `source_final_count != received_count`, so a
+truncated or reshaped response cannot pass silently.
 
 Every attempt, successful or failed, is also written to `ingest.ingest_runs`
 with its start and finish time, status, HTTP status, row count and error. That

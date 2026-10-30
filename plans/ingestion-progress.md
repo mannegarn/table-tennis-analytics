@@ -7,8 +7,8 @@ Updated: 2026-10-27.
 - `make events-scrape` fetches the WTT event calendar for 2021 through the
   current year, validates it, and upserts one row per year into
   `ingest.events_by_year_raw`.
-- Six rows are landed: 2021–2026. `api_count` and `row_count` agree for every
-  year. Event counts: 2021 99, 2022 94, 2023 101, 2024 131, 2025 156, 2026 174
+- Six rows are landed: 2021–2026. `source_final_count` and `received_count` agree
+  for every year. Event counts: 2021 99, 2022 94, 2023 101, 2024 131, 2025 156, 2026 174
   (755 events, which is the size of the coming match-list fan-out).
 - Measured payload size: 72 kB in total for all six years, 9–16 kB per year.
   The calendar payloads are negligible; all real volume comes from the match and
@@ -59,6 +59,11 @@ Updated: 2026-10-27.
   errors still print. Non-interactive runs keep the full console output.
 - **Recording a run never breaks a scrape.** If the insert fails, the failure is
   logged as `ingest_run_not_recorded` and the payload still lands.
+- **Count names say who owns the number (2026-10-30).** `source_final_count` is
+  WTT's `Count`, `source_original_count` is WTT's `Original_Count`, and
+  `received_count` is what we parsed. `ingest_runs.row_count` was renamed to
+  `received_count` too, so one vocabulary runs through the code. Migration 004 is
+  a pure rename with column comments; no data was rewritten.
 - **Integration tests may never touch real years.** The unpack upserts on
   `event_id`, so loading the 2023 fixture under the test year reparented real
   events and cleanup then deleted them. Both landing tests now shift every
@@ -78,8 +83,8 @@ Updated: 2026-10-27.
 - **Keep the year range simple for now.** The pending view will decide which
   years are missing, current or stale. Do not add an `if` in the CLI first.
 - **2027 and empty calendars are deferred.** The default will include 2027 next
-  year. Decide then whether an empty payload is stored with `row_count=0` or
-  treated as a failed fetch.
+  year. Decide then whether an empty payload is stored with `received_count=0`
+  or treated as a failed fetch.
 
 ## Checkpoint before the match fan-out
 
@@ -125,7 +130,7 @@ Still missing before per-event scraping can start:
 Use DBeaver or `make db-psql`.
 
 ```sql
-SELECT entity_key, status, http_status, row_count, started_at, error
+SELECT entity_key, status, http_status, received_count, started_at, error
 FROM ingest.ingest_runs
 ORDER BY run_id DESC
 LIMIT 20;
@@ -141,7 +146,7 @@ FROM ingest.events_unpacked
 ORDER BY start_date DESC
 LIMIT 20;
 
-SELECT year, http_status, api_count, row_count, fetched_at
+SELECT year, http_status, source_final_count, received_count, fetched_at
 FROM ingest.events_by_year_raw
 ORDER BY year;
 

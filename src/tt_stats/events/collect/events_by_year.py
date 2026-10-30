@@ -79,9 +79,11 @@ class YearPayloadSummary:
 
     year: int
     status_code: int | None
-    api_count: int | None
-    original_count: int | None
-    row_count: int
+    # WTT's own numbers, lifted from the payload and kept for audit:
+    source_original_count: int | None
+    source_final_count: int | None
+    # Ours: rows actually parsed from payload -> 0 -> rows.
+    received_count: int
     payload_sha256: str | None
     fetched_at: datetime
     error: str | None
@@ -245,32 +247,35 @@ async def _collect_one(
 
     digest = hashlib.sha256(response.content).hexdigest()
 
-    api_count: int | None = None
-    original_count: int | None = None
-    row_count = 0
+    source_final_count: int | None = None
+    source_original_count: int | None = None
+    received_count = 0
     error_message: str | None = None
 
     try:
         rows = extract_rows(response.data)
-        api_count, original_count = extract_counts(response.data)
-        row_count = len(rows)
+        source_final_count, source_original_count = extract_counts(response.data)
+        received_count = len(rows)
 
         problems = validate_rows(rows)
         if problems:
             error_message = "row validation failed: " + "; ".join(problems[:5])
-        elif api_count is None:
+        elif source_final_count is None:
             error_message = "payload has no Count"
-        elif api_count != row_count:
-            error_message = f"count mismatch: Count={api_count} rows={row_count}"
+        elif source_final_count != received_count:
+            error_message = (
+                f"count mismatch: source_final_count={source_final_count} "
+                f"received_count={received_count}"
+            )
     except PayloadShapeError as error:
         error_message = f"payload shape error: {error}"
 
     summary = YearPayloadSummary(
         year=year,
         status_code=response.status_code,
-        api_count=api_count,
-        original_count=original_count,
-        row_count=row_count,
+        source_original_count=source_original_count,
+        source_final_count=source_final_count,
+        received_count=received_count,
         payload_sha256=digest,
         fetched_at=fetched_at,
         error=error_message,
@@ -302,9 +307,9 @@ def _failed_summary(
     summary = YearPayloadSummary(
         year=year,
         status_code=status_code,
-        api_count=None,
-        original_count=None,
-        row_count=0,
+        source_original_count=None,
+        source_final_count=None,
+        received_count=0,
         payload_sha256=None,
         fetched_at=fetched_at,
         error=message,
@@ -316,8 +321,12 @@ def _failed_summary(
 
 def _progress_message(summary: YearPayloadSummary) -> str:
     state = "failed" if summary.error else "ok"
-    api = f" | api={summary.api_count}" if summary.api_count is not None else ""
-    return f"year={summary.year} | saved={summary.row_count}{api} | {state}"
+    source = (
+        f" | source={summary.source_final_count}"
+        if summary.source_final_count is not None
+        else ""
+    )
+    return f"year={summary.year} | received={summary.received_count}{source} | {state}"
 
 
 def _record_run(summary: YearPayloadSummary, record: RecordRunFn | None) -> None:
@@ -333,7 +342,7 @@ def _record_run(summary: YearPayloadSummary, record: RecordRunFn | None) -> None
                 status=status_for(summary.error),
                 started_at=summary.fetched_at,
                 http_status=summary.status_code,
-                row_count=summary.row_count,
+                received_count=summary.received_count,
                 payload_sha256=summary.payload_sha256,
                 error=summary.error,
             )
@@ -350,9 +359,9 @@ def _log_summary(summary: YearPayloadSummary) -> None:
     extra: dict[str, Any] = {
         "year": summary.year,
         "status": summary.status_code,
-        "rows": summary.row_count,
-        "api_count": summary.api_count,
-        "original_count": summary.original_count,
+        "received_count": summary.received_count,
+        "source_final_count": summary.source_final_count,
+        "source_original_count": summary.source_original_count,
     }
     if summary.error:
         logger.error(

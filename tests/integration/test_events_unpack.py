@@ -70,9 +70,9 @@ def _summary(payload: Any, digest: str) -> YearPayloadSummary:
     return YearPayloadSummary(
         year=TEST_YEAR,
         status_code=200,
-        api_count=envelope["Count"],
-        original_count=int(envelope["Original_Count"]),
-        row_count=len(envelope["rows"]),
+        source_final_count=envelope["Count"],
+        source_original_count=int(envelope["Original_Count"]),
+        received_count=len(envelope["rows"]),
         payload_sha256=digest,
         fetched_at=datetime.now(tz=UTC),
         error=None,

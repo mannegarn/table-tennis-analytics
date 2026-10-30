@@ -31,10 +31,10 @@ def test_committed_fixture_matches_the_contract() -> None:
 
     payload = json.loads(FIXTURE.read_text(encoding="utf-8"))
     rows = extract_rows(payload)
-    api_count, _ = extract_counts(payload)
+    source_final_count, _ = extract_counts(payload)
 
     assert validate_rows(rows) == []
-    assert api_count == len(rows)
+    assert source_final_count == len(rows)
 
 
 def test_live_2023_calendar_matches_the_contract() -> None:
@@ -47,12 +47,12 @@ def test_live_2023_calendar_matches_the_contract() -> None:
 
     response = asyncio.run(fetch())
     rows = extract_rows(response.data)
-    api_count, _ = extract_counts(response.data)
+    source_final_count, _ = extract_counts(response.data)
 
     assert response.status_code == 200
     assert rows
     assert validate_rows(rows) == []
-    assert api_count == len(rows)
+    assert source_final_count == len(rows)
 
     sample = rows[0]
     assert isinstance(sample["EventId"], int)

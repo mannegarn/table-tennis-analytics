@@ -39,7 +39,7 @@ class RunRecord:
     status: str
     started_at: datetime
     http_status: int | None = None
-    row_count: int | None = None
+    received_count: int | None = None
     payload_sha256: str | None = None
     error: str | None = None
 
@@ -60,7 +60,7 @@ def record_run(record: RunRecord) -> None:
                 started_at,
                 finished_at,
                 http_status,
-                row_count,
+                received_count,
                 payload_sha256,
                 error
             )
@@ -73,7 +73,7 @@ def record_run(record: RunRecord) -> None:
                 record.started_at,
                 datetime.now(tz=UTC),
                 record.http_status,
-                record.row_count,
+                record.received_count,
                 record.payload_sha256,
                 record.error,
             ),

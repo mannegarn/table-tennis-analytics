@@ -94,10 +94,12 @@ def test_extract_rows_rejects_the_wrong_envelope() -> None:
 
 
 def test_extract_counts_reads_both_values() -> None:
-    api_count, original_count = extract_counts(_payload([_row(1)], original=7))
+    source_final_count, source_original_count = extract_counts(
+        _payload([_row(1)], original=7)
+    )
 
-    assert api_count == 1
-    assert original_count == 7
+    assert source_final_count == 1
+    assert source_original_count == 7
 
 
 def test_validate_rows_accepts_a_complete_row() -> None:
@@ -137,9 +139,9 @@ async def test_collect_returns_a_summary() -> None:
     result = results[0]
     assert result.error is None
     assert result.status_code == 200
-    assert result.row_count == 2
-    assert result.api_count == 2
-    assert result.original_count == 2
+    assert result.received_count == 2
+    assert result.source_final_count == 2
+    assert result.source_original_count == 2
     assert result.payload_sha256 is not None
     assert len(result.payload_sha256) == 64
 
@@ -163,8 +165,8 @@ async def test_collect_reports_progress_for_every_year() -> None:
 
     assert progress.start_context["Output"] == "ingest.events_by_year_raw"
     assert progress.messages == [
-        "year=2023 | saved=1 | api=1 | ok",
-        "year=2024 | saved=1 | api=1 | ok",
+        "year=2023 | received=1 | source=1 | ok",
+        "year=2024 | received=1 | source=1 | ok",
     ]
     assert progress.closed is True
 
@@ -177,7 +179,7 @@ async def test_collect_lands_successful_years() -> None:
         return httpx.Response(200, json=payload)
 
     def land(summary: YearPayloadSummary, data: object) -> None:
-        landed.append((summary.year, summary.row_count))
+        landed.append((summary.year, summary.received_count))
 
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
@@ -247,7 +249,7 @@ async def test_http_failure_returns_a_failed_summary() -> None:
     result = results[0]
     assert result.error is not None
     assert result.status_code == 503
-    assert progress.messages == ["year=2023 | saved=0 | failed"]
+    assert progress.messages == ["year=2023 | received=0 | failed"]
 
 
 async def test_collect_records_a_successful_run() -> None:
@@ -268,7 +270,7 @@ async def test_collect_records_a_successful_run() -> None:
     assert record.entity_key == "2023"
     assert record.status == "succeeded"
     assert record.http_status == 200
-    assert record.row_count == 2
+    assert record.received_count == 2
     assert record.payload_sha256 is not None
     assert record.error is None
 
@@ -288,7 +290,7 @@ async def test_collect_records_a_failed_run() -> None:
     record = recorded[0]
     assert record.status == "failed"
     assert record.http_status == 503
-    assert record.row_count == 0
+    assert record.received_count == 0
     assert record.payload_sha256 is None
     assert record.error is not None
 
@@ -308,4 +310,4 @@ async def test_recording_failure_does_not_break_the_scrape() -> None:
         results = await collect_events_by_year([2023], client=client, record=record)
 
     assert results[0].error is None
-    assert results[0].row_count == 1
+    assert results[0].received_count == 1
