@@ -93,11 +93,16 @@ with its start and finish time, status, HTTP status, row count and error. That
 is the durable history: a failed year leaves a row, so nothing depends on
 scrolling back through a terminal.
 
-`ingest.events_unpacked` holds one row per event: 736 rows for the six landed
-years, from 755 calendar rows. The difference is duplicates: 2021, 2022 and 2026
-each list some events more than once, and the unpack de-duplicates them. The
-statement lives in `src/tt_stats/events/land/sql/unpack_events.sql` and runs
-inside the same transaction as the raw insert, so a year is never half-landed.
+`ingest.events_unpacked` holds one row per event per calendar: 736 rows for the
+six landed years, from 755 calendar rows. The difference is duplicates: 2021,
+2022 and 2026 each list some events more than once, and the unpack de-duplicates
+them. The key is `(source_year, event_id)`, so a tournament listed in two years'
+calendars keeps a row in both instead of the later landing overwriting the
+earlier one. `first_seen_at` is written once and `last_seen_at` advances on
+every unpack, which is how an event WTT dropped is spotted without deleting
+anything. The statement lives in `src/tt_stats/events/land/sql/unpack_events.sql`
+and runs inside the same transaction as the raw insert, so a year is never
+half-landed.
 
 The same statement can be run by hand:
 
@@ -107,26 +112,18 @@ make events-unpack YEARS="2023"           # commit one year
 make events-unpack                        # every year in the raw table
 ```
 
-A terminal uses one compact `tqdm` bar that updates in place, so a long scrape
-does not print one line per item. While the bar is drawing, the console is
-muted so nothing can break the bar: every record still goes to
-`logs/tt_stats.log` and to `ingest.ingest_runs`, and errors are the one
-exception that is still printed. Piped output keeps the full per-year records.
+A terminal uses one `tqdm` bar that rewrites a single line, so a long scrape
+does not print one line per item. The console handler only prints `WARNING`
+and above, so routine records cannot push the bar down a line; every record
+still goes to `logs/tt_stats.log` and to `ingest.ingest_runs`. Piped, captured
+and JSON runs draw no bar and keep the per-year log records.
 
 ```text
-Starting events scrape
-  Total Years:  6
-  Output:       ingest.events_by_year_raw
-
-Events calendar: 6/6 [##########] year=2026 | saved=174 | api=174 | ok
-
-Events scrape complete
-  Total Years:  6
-  Failed:       0
+Events calendar: 6/6 [##########] year=2026 | received=174 | source=174 | ok
 ```
 
-The run starts with `Starting events scrape` and ends with
-`Events scrape complete`, so the beginning and end are always explicit.
+The run boundaries are logged as `events_scrape_started` and
+`events_scrape_complete` (or `events_scrape_incomplete`).
 
 Console output is mirrored to a rotating file, so no `tee` is needed:
 
@@ -209,7 +206,8 @@ git-ignored. `.env.example` is committed and mirrors it.
 | `POSTGRES_PORT` | Published port |
 | `MIGRATIONS_DIR` | Migration directory; defaults to `db/migrations` in the repo |
 | `DATA_DIR` | Local scratch directory; defaults to `data/` in the repo |
-| `LOG_LEVEL` | `DEBUG`, `INFO`, `WARNING`, `ERROR` or `CRITICAL` |
+| `LOG_LEVEL` | Level of the rotating log file: `DEBUG`, `INFO`, `WARNING`, `ERROR` or `CRITICAL` |
+| `LOG_CONSOLE_LEVEL` | Level printed to the terminal; defaults to `WARNING` so the progress bar stays clean |
 | `LOG_JSON` | `true` emits one JSON object per line instead of console text |
 | `LOG_TO_FILE` | `true` also writes to the rotating log file; defaults to `true` |
 | `LOGS_DIR` | Log directory; defaults to `logs/` in the repo |

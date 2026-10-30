@@ -56,10 +56,15 @@ def load_unpack_sql(path: Path = UNPACK_SQL_PATH) -> str | None:
 def unpack_events_year(connection: Connection[Any], year: int) -> int:
     """Unpack one year inside the caller's transaction.
 
+    The statement upserts on ``(source_year, event_id)``. Re-running a year is
+    therefore safe: row counts stay put, ``last_seen_at`` advances and
+    ``first_seen_at`` is left as it was.
+
     Args:
         connection: An open connection. The caller owns the transaction, so the
             raw insert and this statement commit or roll back together.
-        year: Calendar year to unpack, passed as the single statement parameter.
+        year: Calendar year to unpack, bound to the statement's ``%(year)s``
+            placeholder.
 
     Returns:
         The number of rows the statement touched, or 0 when the statement has
@@ -77,7 +82,9 @@ def unpack_events_year(connection: Connection[Any], year: int) -> int:
     # psycopg's LiteralString guard asks for is accurate. mypy considers plain
     # str already compatible and calls the cast redundant; ty does not.
     query = cast("LiteralString", statement)  # type: ignore[redundant-cast]
-    cursor = connection.execute(query, (year,))
+    # Named rather than positional: the statement mentions the year once now,
+    # but a future clause that needs it again costs nothing to add.
+    cursor = connection.execute(query, {"year": year})
     rows = cursor.rowcount or 0
     logger.info("events_unpacked", extra={"year": year, "rows": rows})
     return rows

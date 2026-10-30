@@ -1,6 +1,5 @@
 """Unit tests for the events-by-year collector. No network, no database."""
 
-from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 
@@ -19,30 +18,6 @@ from tt_stats.events.collect.events_by_year import (
     extract_rows,
     validate_rows,
 )
-
-
-class RecordingProgress:
-    """Capture progress messages without drawing anything."""
-
-    logs_records = False
-    prints_summary = True
-
-    def __init__(self) -> None:
-        self.messages: list[str] = []
-        self.start_context: dict[str, str] = {}
-        self.closed = False
-
-    def start(self, title: str, context: Mapping[str, str]) -> None:
-        self.start_context = dict(context)
-
-    def advance(self, message: str) -> None:
-        self.messages.append(message)
-
-    def finish(self, title: str, context: Mapping[str, str]) -> None:
-        pass
-
-    def close(self) -> None:
-        self.closed = True
 
 
 def _settings(**overrides: Any) -> Settings:
@@ -152,7 +127,7 @@ async def test_collect_reports_progress_for_every_year() -> None:
     async def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=payload)
 
-    progress = RecordingProgress()
+    reported: list[YearPayloadSummary] = []
 
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
@@ -160,15 +135,12 @@ async def test_collect_reports_progress_for_every_year() -> None:
         await collect_events_by_year(
             [2023, 2024],
             client=client,
-            progress=progress,
+            progress=reported.append,
         )
 
-    assert progress.start_context["Output"] == "ingest.events_by_year_raw"
-    assert progress.messages == [
-        "year=2023 | received=1 | source=1 | ok",
-        "year=2024 | received=1 | source=1 | ok",
-    ]
-    assert progress.closed is True
+    assert [summary.year for summary in reported] == [2023, 2024]
+    assert [summary.received_count for summary in reported] == [1, 1]
+    assert all(summary.error is None for summary in reported)
 
 
 async def test_collect_lands_successful_years() -> None:
@@ -235,7 +207,7 @@ async def test_http_failure_returns_a_failed_summary() -> None:
     async def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(503, json={"error": "unavailable"})
 
-    progress = RecordingProgress()
+    reported: list[YearPayloadSummary] = []
 
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
@@ -243,13 +215,13 @@ async def test_http_failure_returns_a_failed_summary() -> None:
         results = await collect_events_by_year(
             [2023],
             client=client,
-            progress=progress,
+            progress=reported.append,
         )
 
     result = results[0]
     assert result.error is not None
     assert result.status_code == 503
-    assert progress.messages == ["year=2023 | received=0 | failed"]
+    assert [summary.error is not None for summary in reported] == [True]
 
 
 async def test_collect_records_a_successful_run() -> None:

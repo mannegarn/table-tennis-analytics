@@ -59,7 +59,44 @@ def test_statement_is_a_single_dml_insert() -> None:
 def test_statement_takes_exactly_one_parameter() -> None:
     body = executable_sql(STATEMENT or "")
 
-    assert body.count("%s") == 1, "the year is the only parameter"
+    assert body.count("%(year)s") == 1, "the year is the only parameter"
+    assert "%s" not in body, "the year is bound by name, not position"
+
+
+@requires_statement
+def test_statement_upserts_on_the_composite_key() -> None:
+    body = " ".join(executable_sql(STATEMENT or "").upper().split())
+
+    assert "ON CONFLICT (SOURCE_YEAR, EVENT_ID)" in body, (
+        "a tournament can appear in two years, so the year is part of the key"
+    )
+    assert "SOURCE_YEAR = EXCLUDED.SOURCE_YEAR" not in body, (
+        "the year is key material now, not a value to overwrite"
+    )
+
+
+@requires_statement
+def test_statement_tracks_presence_without_rewriting_first_seen() -> None:
+    body = " ".join(executable_sql(STATEMENT or "").upper().split())
+
+    assert "FIRST_SEEN_AT" in body, "presence needs a first sighting"
+    assert "LAST_SEEN_AT = EXCLUDED.LAST_SEEN_AT" in body, (
+        "every unpack must advance last_seen_at"
+    )
+    assert "FIRST_SEEN_AT = EXCLUDED.FIRST_SEEN_AT" not in body, (
+        "first_seen_at must be written once and then left alone"
+    )
+    assert "REFRESHED_AT" not in body, "refreshed_at was replaced by last_seen_at"
+
+
+@requires_statement
+def test_statement_orders_by_event_then_start_date() -> None:
+    body = " ".join(executable_sql(STATEMENT or "").upper().split())
+
+    assert "ORDER BY (E.VALUE ->> 'EVENTID')::BIGINT" in body
+    assert "(E.VALUE ->> 'STARTDATETIME')::TEXT DESC NULLS LAST" in body, (
+        "a stable tie-breaker keeps the DISTINCT ON pick deterministic"
+    )
 
 
 @requires_statement

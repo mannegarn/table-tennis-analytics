@@ -18,7 +18,6 @@ from tt_stats.core.logging_config import (
     JsonFormatter,
     configure_logging,
     get_logger,
-    progress_owns_console,
 )
 
 
@@ -44,13 +43,37 @@ def _flush_handlers() -> None:
         handler.flush()
 
 
-def _configure_with_file(log_file: Path, *, json_output: bool = True) -> None:
+def _configure_with_file(
+    log_file: Path,
+    *,
+    json_output: bool = True,
+    console_level: str | None = None,
+) -> None:
     """Configure logging with a file handler at a test-owned path."""
     configure_logging(
         level="INFO",
+        console_level=console_level,
         json_output=json_output,
         log_to_file=True,
         log_file=log_file,
+    )
+
+
+def _console_handler() -> logging.Handler:
+    """Return the handler that is not the rotating file handler."""
+    return next(
+        handler
+        for handler in logging.getLogger().handlers
+        if not isinstance(handler, logging.FileHandler)
+    )
+
+
+def _file_handler() -> RotatingFileHandler:
+    """Return the rotating file handler."""
+    return next(
+        handler
+        for handler in logging.getLogger().handlers
+        if isinstance(handler, RotatingFileHandler)
     )
 
 
@@ -65,8 +88,7 @@ def _make_record(**extras: object) -> logging.LogRecord:
         args=(),
         exc_info=None,
     )
-    for key, value in extras.items():
-        setattr(record, key, value)
+    record.__dict__.update(extras)
     return record
 
 
@@ -96,7 +118,14 @@ def test_configure_logging_creates_the_log_directory(tmp_path: Path) -> None:
     assert log_file.parent.is_dir()
 
 
-def test_file_handler_records_what_the_console_prints(tmp_path: Path) -> None:
+def test_handlers_have_separate_levels(tmp_path: Path) -> None:
+    _configure_with_file(tmp_path / "tt_stats.log")
+
+    assert _console_handler().level == logging.WARNING
+    assert _file_handler().level == logging.INFO
+
+
+def test_file_handler_records_every_info_line(tmp_path: Path) -> None:
     log_file = tmp_path / "tt_stats.log"
     _configure_with_file(log_file, json_output=False)
 
@@ -108,7 +137,49 @@ def test_file_handler_records_what_the_console_prints(tmp_path: Path) -> None:
     assert "year=2021" in written
 
 
-def test_configure_logging_sets_level() -> None:
+def test_info_stays_off_the_console(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    log_file = tmp_path / "tt_stats.log"
+    _configure_with_file(log_file, json_output=False)
+
+    get_logger("tt_stats.events.land").info(
+        "events_year_landed",
+        extra={"year": 2026},
+    )
+    _flush_handlers()
+
+    assert "events_year_landed" not in capsys.readouterr().err
+
+
+def test_errors_reach_the_console(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _configure_with_file(tmp_path / "tt_stats.log", json_output=False)
+
+    get_logger("tt_stats.events.land").error("landing_exploded")
+
+    assert "landing_exploded" in capsys.readouterr().err
+
+
+def test_console_level_can_be_raised(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _configure_with_file(
+        tmp_path / "tt_stats.log",
+        json_output=False,
+        console_level="INFO",
+    )
+
+    get_logger("tt_stats.events.land").info("events_year_landed")
+
+    assert "events_year_landed" in capsys.readouterr().err
+
+
+def test_configure_logging_sets_the_root_level() -> None:
     configure_logging(level="debug", json_output=False, log_to_file=False)
 
     assert logging.getLogger().level == logging.DEBUG
@@ -116,10 +187,10 @@ def test_configure_logging_sets_level() -> None:
 
 def test_configure_logging_selects_the_formatter() -> None:
     configure_logging(level="INFO", json_output=False, log_to_file=False)
-    assert isinstance(logging.getLogger().handlers[0].formatter, ConsoleFormatter)
+    assert isinstance(_console_handler().formatter, ConsoleFormatter)
 
     configure_logging(level="INFO", json_output=True, log_to_file=False)
-    assert isinstance(logging.getLogger().handlers[0].formatter, JsonFormatter)
+    assert isinstance(_console_handler().formatter, JsonFormatter)
 
 
 def test_get_logger_returns_a_named_logger() -> None:
@@ -155,6 +226,7 @@ def test_console_formatter_appends_extras() -> None:
 
 def test_configure_logging_reads_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LOG_LEVEL", "DEBUG")
+    monkeypatch.setenv("LOG_CONSOLE_LEVEL", "ERROR")
     monkeypatch.setenv("LOG_JSON", "true")
     monkeypatch.setenv("LOG_TO_FILE", "false")
     get_settings.cache_clear()
@@ -166,49 +238,6 @@ def test_configure_logging_reads_settings(monkeypatch: pytest.MonkeyPatch) -> No
 
     root = logging.getLogger()
     assert root.level == logging.DEBUG
-    assert isinstance(root.handlers[0].formatter, JsonFormatter)
+    assert _console_handler().level == logging.ERROR
+    assert isinstance(_console_handler().formatter, JsonFormatter)
     assert len(root.handlers) == 1
-
-
-def test_progress_owns_console_keeps_info_out_of_the_console(
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    log_file = tmp_path / "tt_stats.log"
-    _configure_with_file(log_file, json_output=False)
-
-    with progress_owns_console():
-        get_logger("tt_stats.events.land").info(
-            "events_year_landed",
-            extra={"year": 2026},
-        )
-    _flush_handlers()
-
-    assert "events_year_landed" not in capsys.readouterr().out
-    assert "events_year_landed" in log_file.read_text(encoding="utf-8")
-
-
-def test_progress_owns_console_still_prints_errors(
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    _configure_with_file(tmp_path / "tt_stats.log", json_output=False)
-
-    with progress_owns_console():
-        get_logger("tt_stats.events.land").error("landing_exploded")
-
-    assert "landing_exploded" in capsys.readouterr().out
-
-
-def test_console_resumes_when_the_bar_finishes(
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    _configure_with_file(tmp_path / "tt_stats.log", json_output=False)
-    logger = get_logger("tt_stats.events.land")
-
-    with progress_owns_console():
-        pass
-    logger.info("after_the_bar")
-
-    assert "after_the_bar" in capsys.readouterr().out

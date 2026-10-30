@@ -11,7 +11,6 @@ import asyncio
 import hashlib
 import logging
 from collections.abc import Callable, Sequence
-from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Any, cast
@@ -28,16 +27,8 @@ from tt_stats.core.ingest_runs import (
     record_run,
     status_for,
 )
-from tt_stats.core.logging_config import (
-    configure_logging,
-    get_logger,
-    progress_owns_console,
-)
-from tt_stats.core.progress import (
-    NullProgress,
-    ProgressReporter,
-    make_progress,
-)
+from tt_stats.core.logging_config import configure_logging, get_logger
+from tt_stats.core.progress import progress_bar
 from tt_stats.events.land import land_events_by_year
 
 logger = get_logger(__name__)
@@ -71,6 +62,8 @@ class PayloadShapeError(ValueError):
 
 LandingFn = Callable[["YearPayloadSummary", Any], None]
 RecordRunFn = Callable[[RunRecord], None]
+# Called after each year settles, so a caller can drive its own progress bar.
+ProgressFn = Callable[["YearPayloadSummary"], None]
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,7 +152,7 @@ async def collect_events_by_year(
     years: Sequence[int],
     *,
     client: WttClient,
-    progress: ProgressReporter | None = None,
+    progress: ProgressFn | None = None,
     land: LandingFn | None = None,
     record: RecordRunFn | None = None,
 ) -> list[YearPayloadSummary]:
@@ -169,45 +162,24 @@ async def collect_events_by_year(
     non-empty error list means for the run.
 
     ``record`` receives every settled attempt, so run history is written from
-    inside the loop rather than reconstructed afterwards.
+    inside the loop rather than reconstructed afterwards. ``progress`` is called
+    with each settled summary; drawing is the caller's business, which keeps
+    this function free of terminal concerns.
     """
     summaries: list[YearPayloadSummary] = []
-    reporter = progress or NullProgress()
 
-    reporter.start(
-        "Starting events scrape",
-        {
-            "Total Years": str(len(years)),
-            "Output": "ingest.events_by_year_raw",
-        },
-    )
-    try:
-        # While the bar is drawing it owns the terminal, so the console is muted
-        # and every record still goes to the log file. Non-interactive runs keep
-        # the full console output.
-        gate: AbstractContextManager[None] = (
-            nullcontext() if reporter.logs_records else progress_owns_console()
+    # Intentionally sequential: one request per year, a small fixed list. The
+    # match fan-out is where concurrency and chunking belong.
+    for year in years:
+        summary = await _collect_one(
+            year,
+            client=client,
+            land=land,
+            record=record,
         )
-        with gate:
-            # Intentionally sequential: one request per year, a small fixed list.
-            # The match fan-out is where concurrency and chunking belong.
-            for year in years:
-                summary = await _collect_one(
-                    year,
-                    client=client,
-                    log_summary=reporter.logs_records,
-                    land=land,
-                    record=record,
-                )
-                summaries.append(summary)
-                reporter.advance(_progress_message(summary))
-    finally:
-        reporter.close()
-        failed = sum(1 for summary in summaries if summary.error)
-        reporter.finish(
-            "Events scrape complete",
-            {"Total Years": str(len(summaries)), "Failed": str(failed)},
-        )
+        summaries.append(summary)
+        if progress is not None:
+            progress(summary)
 
     return summaries
 
@@ -216,7 +188,6 @@ async def _collect_one(
     year: int,
     *,
     client: WttClient,
-    log_summary: bool = True,
     land: LandingFn | None = None,
     record: RecordRunFn | None = None,
 ) -> YearPayloadSummary:
@@ -230,7 +201,6 @@ async def _collect_one(
             fetched_at=fetched_at,
             status_code=error.status_code,
             message=str(error),
-            log_summary=log_summary,
         )
         _record_run(summary, record)
         return summary
@@ -240,7 +210,6 @@ async def _collect_one(
             fetched_at=fetched_at,
             status_code=None,
             message=str(error),
-            log_summary=log_summary,
         )
         _record_run(summary, record)
         return summary
@@ -290,8 +259,7 @@ async def _collect_one(
                 error=f"landing failed: {error}",
             )
 
-    if log_summary:
-        _log_summary(summary)
+    _log_summary(summary)
     _record_run(summary, record)
     return summary
 
@@ -302,7 +270,6 @@ def _failed_summary(
     fetched_at: datetime,
     status_code: int | None,
     message: str,
-    log_summary: bool,
 ) -> YearPayloadSummary:
     summary = YearPayloadSummary(
         year=year,
@@ -314,8 +281,7 @@ def _failed_summary(
         fetched_at=fetched_at,
         error=message,
     )
-    if log_summary:
-        _log_summary(summary)
+    _log_summary(summary)
     return summary
 
 
@@ -387,7 +353,7 @@ def _as_int(value: object) -> int | None:
 
 async def _run(
     years: Sequence[int],
-    progress: ProgressReporter,
+    progress: ProgressFn | None,
 ) -> list[YearPayloadSummary]:
     async with WttClient() as client:
         return await collect_events_by_year(
@@ -416,29 +382,39 @@ def main(argv: Sequence[str] | None = None) -> int:
     years = args.years if args.years is not None else default_years()
 
     settings = get_settings()
-    if not settings.log_json and settings.log_level.upper() != "DEBUG":
-        # One line per HTTP request drowns out the progress display.
+    if settings.log_level.upper() != "DEBUG":
+        # One line per HTTP request would bury the audit trail.
         logging.getLogger("httpx").setLevel(logging.WARNING)
         logging.getLogger("httpcore").setLevel(logging.WARNING)
-    progress = make_progress(
+
+    logger.info("events_scrape_started", extra={"years": len(years)})
+
+    # The bar owns one stdout line and rewrites it. Routine records are INFO,
+    # so the WARNING-level console handler cannot push it down a line; they
+    # still land in logs/tt_stats.log.
+    with progress_bar(
         len(years),
-        json_output=settings.log_json,
-    )
-    if not progress.prints_summary:
-        logger.info(
-            "Starting events scrape",
-            extra={"years": len(years)},
-        )
-    results = asyncio.run(_run(years, progress))
+        description="Scraping calendar",
+        unit="year",
+        disable=settings.log_json,
+    ) as bar:
+
+        def advance(summary: YearPayloadSummary) -> None:
+            bar.set_postfix_str(_progress_message(summary), refresh=False)
+            bar.update(1)
+
+        results = asyncio.run(_run(years, advance))
 
     failed = [result for result in results if result.error]
-    if not progress.prints_summary:
+    if failed:
+        logger.error(
+            "events_scrape_incomplete",
+            extra={"years": len(results), "failed": len(failed)},
+        )
+    else:
         logger.info(
-            "Events scrape complete",
-            extra={
-                "years": len(results),
-                "failed": len(failed),
-            },
+            "events_scrape_complete",
+            extra={"years": len(results)},
         )
     return 0 if not failed else 1
 

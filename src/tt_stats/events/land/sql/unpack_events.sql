@@ -23,23 +23,39 @@
 --   matter is a dbt job later. There is also no DELETE or TRUNCATE anywhere:
 --   running it twice must be harmless.
 --
+-- WHY THE KEY IS (source_year, event_id)
+--   A tournament that straddles New Year is listed in both years' payloads, so
+--   event_id alone would let the later landing overwrite the earlier row and
+--   quietly rewrite its source_year. Keying on the pair keeps both sightings.
+--   Within a single year an event_id is still unique, which is what the
+--   DISTINCT ON below enforces.
+--
+-- FRESHNESS
+--   first_seen_at is written once, on the first insert, and never touched
+--   again. last_seen_at is rewritten on every unpack, so "still in the calendar"
+--   means "last_seen_at moved". An event WTT dropped simply stops advancing,
+--   and its row stays put so nothing already pointing at it is orphaned.
+--
 -- NUMBERS TO EXPECT (measured, 29 Oct 2026)
 --   2023 -> 101 from 101 landed   (no duplicates that year)
 --   2024 -> 131 from 131, 2025 -> 156 from 156
 --   2021 ->  86 from  99, 2022 ->  91 from  94, 2026 -> 171 from 174
 --           those three years list some events word-for-word twice or more
---   All six years -> 736 distinct events out of 755 landed rows
---   The 19 rows lost are duplicates inside a single year, never across years.
+--   All six years -> 736 rows keyed by event_id from 755 landed calendar rows.
+--   About a dozen events appear in two years, so the (source_year, event_id)
+--   key keeps more rows than that: count rows, not distinct event ids, when
+--   checking totals.
 -- =============================================================================
 
 
 INSERT INTO ingest.events_unpacked (
+    source_year,
     event_id,
     event_name,
     start_date,
     end_date,
-    source_year,
-    refreshed_at
+    first_seen_at,
+    last_seen_at
 )
 -- Naming the columns, rather than relying on their order, means adding a
 -- column to the table later cannot quietly shift values into the wrong field.
@@ -52,27 +68,32 @@ SELECT DISTINCT ON ((e.value ->> 'EventId')::bigint)
 -- statement, and Postgres refuses that with "ON CONFLICT DO UPDATE cannot
 -- affect row a second time".
 --
--- The expression is the event id, which becomes the primary key below.
+-- Only event_id is used, not the full key: this statement reads one year's
+-- payload, so source_year is constant here and adds nothing.
 
-       (e.value ->> 'EventId')::bigint     AS event_id,
+       r.year::smallint                        AS source_year,
+-- Which calendar year this row came from. It is half of the key, because the
+-- same tournament can legitimately be listed by two years.
+
+       (e.value ->> 'EventId')::bigint         AS event_id,
 -- '->>' pulls a field out of the JSON as text. Cast to bigint because the API
 -- sends a number and we want arithmetic and joins to work on it.
 
-       (e.value ->> 'EventName')::text     AS event_name,
+       (e.value ->> 'EventName')::text         AS event_name,
 
-       (e.value ->> 'StartDateTime')::date AS start_date,
+       (e.value ->> 'StartDateTime')::date     AS start_date,
 -- Cast straight to date. The API sends "2023-03-07T00:00:00" with no timezone,
 -- so turning it into a timestamp would mean inventing one. A date is honest.
 
-       (e.value ->> 'EndDateTime')::date   AS end_date,
+       (e.value ->> 'EndDateTime')::date       AS end_date,
 
-       r.year::smallint                    AS source_year,
--- Which calendar year this row came from. It is a fact about the fetch, not
--- part of the event's identity, so a re-fetch simply rewrites it.
+       clock_timestamp()                       AS first_seen_at,
+-- Only meaningful on the first insert: the upsert below deliberately leaves it
+-- alone, so it keeps recording when this row first appeared.
 
-       now()                               AS refreshed_at
--- "When this unpack ran". The pending view uses this to tell fresh data from
--- stale data, so it must be set every time.
+       clock_timestamp()                       AS last_seen_at
+-- Rewritten on every unpack; this is the column that moves while an event is
+-- still scheduled.
 
 FROM ingest.events_by_year_raw AS r
 -- The raw row for the year we were asked for. The year arrives as a query
@@ -89,26 +110,36 @@ CROSS JOIN LATERAL jsonb_array_elements(r.payload -> 0 -> 'rows') AS e
 -- LATERAL lets each of those rows refer back to r from the line above; without
 -- it, the function could not see the current raw row.
 
-WHERE r.year = %s
+WHERE r.year = %(year)s
 -- Only for the year we asked about. A year that never landed simply returns no
--- rows, which is why the backfill can loop over years safely.
+-- rows, which is why the backfill can loop over years safely. The parameter is
+-- named in Python as {"year": year}; keep exactly one placeholder in the whole
+-- file, because psycopg counts them literally, even inside a comment.
 
-ORDER BY 1
--- Required by DISTINCT ON: it must sort by the same thing it de-duplicates by.
--- "1" means "the first column in the SELECT list", which is the event id.
--- Writing it as ORDER BY 1 keeps the two expressions guaranteed identical; a
--- typo in a repeated expression would be easy to miss.
+ORDER BY
+    (e.value ->> 'EventId')::bigint,
+    (e.value ->> 'StartDateTime')::text DESC NULLS LAST
+-- DISTINCT ON requires ORDER BY to start with the same expression, which is
+-- what the first line does. Written out rather than as "1" because the second
+-- line is required too, and mixing a positional reference with a real
+-- expression reads as a mistake.
+--
+-- The tie-breaker makes the choice deterministic: when a year lists an event
+-- twice with different start dates, keep the latest-dated copy. Without a
+-- tie-breaker Postgres is free to return either row and the values could flip
+-- between runs. DESC NULLS LAST puts a blank start date after every real one,
+-- so an empty duplicate never wins.
 
-ON CONFLICT (event_id) DO UPDATE SET
--- What happens when the event is already there: update it instead of failing.
+ON CONFLICT (source_year, event_id) DO UPDATE SET
+-- What happens when this event was already unpacked for this year: update it
+-- instead of failing.
     event_name   = EXCLUDED.event_name,
     start_date   = EXCLUDED.start_date,
     end_date     = EXCLUDED.end_date,
-    source_year  = EXCLUDED.source_year,
-    refreshed_at = now();
+    last_seen_at = EXCLUDED.last_seen_at;
 -- EXCLUDED means "the row we just tried to insert". So this reads as "take the
--- newer values". refreshed_at deliberately uses now() rather than the new
--- value, because it should record when the unpack happened.
+-- newer values".
 --
--- Do not update event_id here: it is the key. Do not forget refreshed_at, or a
--- refresh will still look stale and the queue will keep asking for it.
+-- Deliberately absent: source_year and event_id (they are the key), and
+-- first_seen_at. Leaving first_seen_at out is the whole point of the column;
+-- rewriting it here would turn it into a second last_seen_at.

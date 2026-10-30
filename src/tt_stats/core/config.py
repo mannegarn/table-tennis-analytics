@@ -81,7 +81,11 @@ class Settings(BaseSettings):
     migrations_dir: Path | None = None
 
     # Logging. Read by configure_logging() at process entry points.
+    # ``log_level`` is the file handler level: the audit trail records
+    # everything. ``log_console_level`` keeps routine progress off the
+    # terminal, so it cannot collide with the progress bar.
     log_level: str = "INFO"
+    log_console_level: str = "WARNING"
     log_json: bool = False
 
     # Durable log file. Console output always happens; the file handler is the

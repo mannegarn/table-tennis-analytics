@@ -28,8 +28,9 @@ Updated: 2026-10-27.
   appears in two different years. The unpack statement de-duplicates with
   `DISTINCT ON`, because one `INSERT ... ON CONFLICT DO UPDATE` cannot affect
   the same row twice.
-- Console output is mirrored to `logs/tt_stats.log`, rotating at 5 MB with three
-  backups. `LOG_TO_FILE=false` disables it.
+- The rotating `logs/tt_stats.log` (5 MB, three backups) records every `INFO`
+  line; the console only shows `WARNING` and above. `LOG_CONSOLE_LEVEL` and
+  `LOG_TO_FILE=false` change that.
 - The runtime output is the database only. No payload or `.meta.json` files are
   written by a scrape.
 - `data/raw/events/` still contains payload files from earlier runs. They are
@@ -37,8 +38,8 @@ Updated: 2026-10-27.
 - The `ingest` and `analytics` schemas exist. Migrations are tracked in
   `ingest.schema_version` with a checksum per file.
 - dbt writes to `analytics`. Ingestion tables are sources, not dbt models.
-- The terminal uses one compact `tqdm` bar with start and finish blocks.
-  Piped output and JSON logs keep the per-year records instead.
+- The terminal uses one `tqdm` bar that rewrites a single line. Piped output,
+  captured output and JSON logs draw no bar at all.
 
 ## Decisions
 
@@ -53,10 +54,11 @@ Updated: 2026-10-27.
 - **Logging is durable now (2026-10-27).** Console output plus a rotating file
   plus one `ingest_runs` row per attempt. The file covers diagnosis, the table
   covers history; neither is a scrape flag.
-- **The progress bar owns the console.** `progress_owns_console()` filters
-  sub-error records out of the console handler while `tqdm` is drawing, so
-  land and unpack lines cannot shred the bar. The file handler is untouched and
-  errors still print. Non-interactive runs keep the full console output.
+- **Separate handler levels, no handler mutation (2026-10-30).** The progress
+  bar owns one stdout line; the console handler logs `WARNING` and above to
+  stderr, so routine `INFO` records cannot push the bar down a line. They still
+  reach the file. There is no dynamic handler switching, so console `INFO` is
+  opt-in via `LOG_CONSOLE_LEVEL` (or `tqdm.contrib.logging.logging_redirect_tqdm`).
 - **Recording a run never breaks a scrape.** If the insert fails, the failure is
   logged as `ingest_run_not_recorded` and the payload still lands.
 - **Count names say who owns the number (2026-10-30).** `source_final_count` is
@@ -141,9 +143,15 @@ tail -f logs/tt_stats.log
 ```
 
 ```sql
-SELECT event_id, event_name, start_date, end_date, source_year, refreshed_at
+SELECT event_id, event_name, start_date, end_date, source_year, first_seen_at, last_seen_at
 FROM ingest.events_unpacked
 ORDER BY start_date DESC
+LIMIT 20;
+
+-- Events whose last_seen_at stopped advancing: dropped upstream, kept for history.
+SELECT event_id, event_name, source_year, last_seen_at
+FROM ingest.events_unpacked
+ORDER BY last_seen_at
 LIMIT 20;
 
 SELECT year, http_status, source_final_count, received_count, fetched_at

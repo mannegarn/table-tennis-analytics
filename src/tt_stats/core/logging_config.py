@@ -8,10 +8,17 @@ Two rules keep this simple:
 Configuring only at the entry point is what prevents duplicate handlers and
 doubled log lines later.
 
-Output goes to stdout so whatever runs the pipeline (a shell, Docker, Airflow,
-CI) captures it, and additionally to a rotating file so the record survives a
-closed terminal. Both handlers share one formatter, so the file mirrors the
-console format.
+The console and the file have different jobs:
+
+* The rotating file handler records everything at the configured level
+  (``INFO`` by default): every request, payload hash and checkpoint, for an
+  uncompromised audit trail.
+* The console handler shows ``WARNING`` and above only. Routine progress is
+  left to the terminal progress bar, so nothing a handler prints can push the
+  bar down a line.
+
+When console ``INFO`` output is genuinely needed, pass ``console_level``
+explicitly, or wrap the bar in :func:`tqdm.contrib.logging.logging_redirect_tqdm`.
 
 Extras are supported and carried through to both formats::
 
@@ -21,8 +28,6 @@ Extras are supported and carried through to both formats::
 import json
 import logging
 import sys
-from collections.abc import Generator
-from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from logging.handlers import RotatingFileHandler
@@ -69,6 +74,9 @@ _LOG_FILE_NAME = "tt_stats.log"
 _DEFAULT_MAX_BYTES = 5_000_000
 _DEFAULT_BACKUP_COUNT = 3
 
+# Routine progress is the progress bar's job, so the console starts quiet.
+_DEFAULT_CONSOLE_LEVEL = "WARNING"
+
 
 def _extras(record: logging.LogRecord) -> dict[str, Any]:
     """Return the caller-supplied extras attached to a record."""
@@ -77,6 +85,11 @@ def _extras(record: logging.LogRecord) -> dict[str, Any]:
         for key, value in record.__dict__.items()
         if key not in _RESERVED_ATTRS and not key.startswith("_")
     }
+
+
+def _level_number(name: str) -> int:
+    """Translate a level name such as ``"INFO"`` into its numeric value."""
+    return logging.getLevelNamesMapping().get(name, logging.WARNING)
 
 
 class ConsoleFormatter(logging.Formatter):
@@ -117,6 +130,7 @@ class _Options:
     """Resolved handler configuration for one ``configure_logging`` call."""
 
     level: str
+    console_level: str
     json_output: bool
     log_to_file: bool
     log_file: Path | None
@@ -126,11 +140,12 @@ class _Options:
 
 def _resolve_options(
     level: str | None,
+    console_level: str | None,
     json_output: bool | None,
     log_to_file: bool | None,
     log_file: Path | None,
 ) -> _Options:
-    """Resolve level, format and file handling, reading Settings when needed.
+    """Resolve levels, format and file handling, reading Settings when needed.
 
     Passing the console options explicitly avoids touching Settings, which keeps
     the formatter tests independent of database configuration.
@@ -138,6 +153,7 @@ def _resolve_options(
     if level is not None and json_output is not None and log_to_file is not None:
         return _Options(
             level=level.upper(),
+            console_level=(console_level or _DEFAULT_CONSOLE_LEVEL).upper(),
             json_output=json_output,
             log_to_file=log_to_file,
             log_file=log_file,
@@ -149,6 +165,7 @@ def _resolve_options(
     enabled = settings.log_to_file if log_to_file is None else log_to_file
     return _Options(
         level=(level or settings.log_level).upper(),
+        console_level=(console_level or settings.log_console_level).upper(),
         json_output=settings.log_json if json_output is None else json_output,
         log_to_file=enabled,
         log_file=(log_file or settings.logs_dir / _LOG_FILE_NAME) if enabled else None,
@@ -176,46 +193,10 @@ def _file_handler(
     return handler
 
 
-class _BelowErrorOnConsole(logging.Filter):
-    """Drop sub-error records while a progress bar is drawing on the terminal."""
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        return record.levelno >= logging.ERROR
-
-
-@contextmanager
-def progress_owns_console() -> Generator[None]:
-    """Mute the console while a progress bar owns the terminal.
-
-    Only the console handler is gated. The file handler is untouched, so every
-    record still reaches ``logs/tt_stats.log``. Errors are let through, because
-    losing one of those is worse than a redrawn bar.
-    """
-    gated: list[tuple[logging.Handler, _BelowErrorOnConsole]] = []
-
-    for candidate in logging.getLogger().handlers:
-        # Bind to the non-generic base class: ``isinstance`` against the generic
-        # ``StreamHandler``/``FileHandler`` would narrow to an unknown stream
-        # type and break type checking of the collected pairs.
-        handler: logging.Handler = candidate
-        if isinstance(candidate, logging.FileHandler):
-            # File handlers must keep every record.
-            continue
-        if isinstance(candidate, logging.StreamHandler):
-            gate = _BelowErrorOnConsole()
-            handler.addFilter(gate)
-            gated.append((handler, gate))
-
-    try:
-        yield
-    finally:
-        for handler, gate in gated:
-            handler.removeFilter(gate)
-
-
 def configure_logging(
     *,
     level: str | None = None,
+    console_level: str | None = None,
     json_output: bool | None = None,
     log_to_file: bool | None = None,
     log_file: Path | None = None,
@@ -230,13 +211,23 @@ def configure_logging(
     a process entry point.
 
     Args:
-        level: Override the log level, for example ``"DEBUG"``.
+        level: Level for the root logger and the rotating file handler, for
+            example ``"DEBUG"``.
+        console_level: Level for the console handler. Defaults to
+            ``settings.log_console_level``, which is ``"WARNING"`` so routine
+            records cannot collide with a terminal progress bar.
         json_output: Override the format. ``True`` emits JSON, ``False`` emits
             readable console output.
         log_to_file: Override whether the rotating file handler is added.
         log_file: Override the file path, ignoring ``logs_dir``.
     """
-    options = _resolve_options(level, json_output, log_to_file, log_file)
+    options = _resolve_options(
+        level,
+        console_level,
+        json_output,
+        log_to_file,
+        log_file,
+    )
 
     formatter: logging.Formatter = (
         JsonFormatter()
@@ -249,21 +240,27 @@ def configure_logging(
         root.removeHandler(existing)
         existing.close()
 
-    console = logging.StreamHandler(sys.stdout)
+    # stderr, so anything that does reach the console stays out of stdout where
+    # the progress bar draws.
+    console = logging.StreamHandler(sys.stderr)
+    console.setLevel(options.console_level)
     console.setFormatter(formatter)
     root.addHandler(console)
 
     if options.log_file is not None:
-        root.addHandler(
-            _file_handler(
-                options.log_file,
-                max_bytes=options.max_bytes,
-                backup_count=options.backup_count,
-                formatter=formatter,
-            )
+        file_handler = _file_handler(
+            options.log_file,
+            max_bytes=options.max_bytes,
+            backup_count=options.backup_count,
+            formatter=formatter,
         )
+        file_handler.setLevel(options.level)
+        root.addHandler(file_handler)
 
-    root.setLevel(options.level)
+    # The root must pass everything either handler wants to see.
+    root.setLevel(
+        min(_level_number(options.level), _level_number(options.console_level))
+    )
 
 
 def get_logger(name: str) -> logging.Logger:

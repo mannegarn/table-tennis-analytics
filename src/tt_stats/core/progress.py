@@ -1,162 +1,90 @@
-"""Live progress display for the collectors.
+"""Terminal progress bars for the collectors.
 
-A terminal gets one compact ``tqdm`` bar that updates in place. Piped output
-and JSON logs get no bar: JSON already has one record per event, and a bar
-cannot render into a file.
+``tqdm`` owns the terminal while a bar is live: it rewrites a single line in
+place. Routine log records never fight it for that line because the console
+handler is set to ``WARNING`` (see :mod:`tt_stats.core.logging_config`), while
+every ``INFO`` record still lands in ``logs/tt_stats.log``.
+
+Two shapes cover every collector::
+
+    # item by item
+    for year in track(years, description="Scraping calendar", unit="year"):
+        ...
+
+    # chunked: advance once per committed batch
+    with progress_bar(len(events), description="Matches", unit="match") as bar:
+        for chunk in chunks:
+            bar.update(len(chunk))
+
+Both helpers disable themselves when the stream is not a terminal, so piped,
+captured and JSON runs produce no bar at all.
 """
 
 import sys
-from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, Protocol, TextIO
+from collections.abc import Iterable, Iterator
+from typing import TYPE_CHECKING, Any, TextIO, cast
 
 from tqdm import tqdm as _tqdm
 
-# tqdm is generic in the type stubs but is not subscriptable at runtime,
-# so only subscript it for the type checker.
+# tqdm is generic in the type stubs but is not subscriptable at runtime, so only
+# subscript it for the type checker.
 if TYPE_CHECKING:
-    _TqdmBase = _tqdm[Any]
+    _Tqdm = _tqdm[Any]
 else:
-    _TqdmBase = _tqdm
+    _Tqdm = _tqdm
+
+_BAR_FORMAT = "{desc}: {n_fmt}/{total_fmt} [{bar:10}] {postfix}"
 
 
-class ProgressReporter(Protocol):
-    """Minimal interface for a progress display."""
-
-    @property
-    def logs_records(self) -> bool:
-        """Whether the collector should also emit per-item log records."""
-        ...
-
-    @property
-    def prints_summary(self) -> bool:
-        """Whether the reporter prints its own start and finish blocks."""
-        ...
-
-    def start(self, title: str, context: Mapping[str, str]) -> None:
-        """Print the opening block."""
-        ...
-
-    def advance(self, message: str) -> None:
-        """Mark one item complete and show what it was."""
-        ...
-
-    def finish(self, title: str, context: Mapping[str, str]) -> None:
-        """Print the closing block."""
-        ...
-
-    def close(self) -> None:
-        """Finish the display."""
-        ...
-
-
-class NullProgress:
-    """Used when a bar cannot render, such as JSON or piped output."""
-
-    logs_records = True
-    prints_summary = False
-
-    def start(self, title: str, context: Mapping[str, str]) -> None:
-        pass
-
-    def advance(self, message: str) -> None:
-        pass
-
-    def finish(self, title: str, context: Mapping[str, str]) -> None:
-        pass
-
-    def close(self) -> None:
-        pass
-
-
-class _CompactTqdm(_TqdmBase):
-    """tqdm prepends a comma to the postfix; remove it."""
-
-    @staticmethod
-    def format_meter(
-        n: float,
-        total: float,
-        elapsed: float,
-        *args: Any,
-        **kwargs: Any,
-    ) -> str:
-        # Forward everything: tqdm calls this with **format_dict, which
-        # carries keys beyond the documented parameters (file, desc, ...).
-        line = _tqdm.format_meter(n, total, elapsed, *args, **kwargs)
-        return line.replace("] , ", "] ")
-
-
-class TqdmProgress:
-    """Compact terminal bar that overwrites its own line."""
-
-    logs_records = False
-    prints_summary = True
-
-    def __init__(
-        self,
-        total: int,
-        description: str = "Events calendar",
-        *,
-        file: TextIO | None = None,
-        out: TextIO | None = None,
-    ) -> None:
-        self._total = total
-        self._description = description
-        self._file = file or sys.stdout
-        self._out = out or sys.stdout
-        self._bar: _CompactTqdm | None = None
-
-    def start(self, title: str, context: Mapping[str, str]) -> None:
-        _write_block(self._out, title, context)
-        self._out.write("\n")
-        self._out.flush()
-
-        # Create the bar only now, so its first frame cannot appear before
-        # the start block and leave a stray 0/N line.
-        self._bar = _CompactTqdm(
-            total=self._total,
-            desc=self._description,
-            unit="item",
-            file=self._file,
-            leave=True,
-            bar_format="{desc}: {n_fmt}/{total_fmt} [{bar:10}] {postfix}",
-        )
-
-    def advance(self, message: str) -> None:
-        if self._bar is None:
-            return
-        # update() honours mininterval and would drop frames on fast runs, so
-        # refresh=True forces one rendered frame per item with its message.
-        self._bar.set_postfix_str(message, refresh=False)
-        self._bar.update(1)
-        self._bar.refresh()
-
-    def finish(self, title: str, context: Mapping[str, str]) -> None:
-        # Close the bar before printing, so its final frame cannot land on top
-        # of the summary block.
-        self.close()
-        self._out.write("\n")
-        _write_block(self._out, title, context)
-        self._out.flush()
-
-    def close(self) -> None:
-        if self._bar is not None:
-            self._bar.close()
-            self._bar = None
-
-
-def _write_block(file: TextIO, title: str, context: Mapping[str, str]) -> None:
-    file.write(f"{title}\n")
-    for key, value in context.items():
-        file.write(f"  {key + ':':<13} {value}\n")
-
-
-def make_progress(
+def progress_bar(
     total: int,
     *,
-    json_output: bool = False,
-    description: str = "Events calendar",
-) -> ProgressReporter:
-    """Return the bar in a terminal, or the log-only reporter otherwise."""
-    if json_output or total <= 0 or not sys.stdout.isatty():
-        return NullProgress()
-    return TqdmProgress(total, description)
+    description: str,
+    unit: str = "item",
+    file: TextIO | None = None,
+    disable: bool = False,
+) -> _Tqdm:
+    """Return a bar the caller advances manually.
+
+    Use with ``with`` so the final frame is always written. ``bar.update(n)``
+    advances by a batch; ``bar.set_postfix_str(...)`` shows what just finished.
+    """
+    stream = _stream(file)
+    return cast(
+        _Tqdm,
+        _tqdm(
+            total=total,
+            desc=description,
+            unit=unit,
+            file=stream,
+            bar_format=_BAR_FORMAT,
+            leave=True,
+            disable=disable or not stream.isatty(),
+        ),
+    )
+
+
+def track[T](
+    items: Iterable[T],
+    *,
+    description: str,
+    unit: str = "item",
+    file: TextIO | None = None,
+    disable: bool = False,
+) -> Iterator[T]:
+    """Iterate ``items`` under a bar that advances once per item."""
+    stream = _stream(file)
+    with _tqdm(
+        items,
+        desc=description,
+        unit=unit,
+        file=stream,
+        bar_format=_BAR_FORMAT,
+        leave=True,
+        disable=disable or not stream.isatty(),
+    ) as bar:
+        yield from bar
+
+
+def _stream(file: TextIO | None) -> TextIO:
+    return sys.stdout if file is None else file
