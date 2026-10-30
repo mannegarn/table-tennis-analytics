@@ -1,53 +1,32 @@
-"""Integration test: the local warehouse is reachable and usable.
+"""Integration test: the test warehouse is reachable and usable.
 
-Requires the PostgreSQL container from docker compose. When the database is
-not reachable the tests skip rather than fail, so the default test run stays
-green on a machine without Docker running.
+Runs against the isolated ``tt_stats_test`` database. The fixtures in
+``tests/integration/conftest.py`` skip the suite when PostgreSQL is not
+reachable, so the default test run stays green on a machine without Docker.
 
 Run explicitly with:
     make test-integration
 """
 
-from collections.abc import Iterator
+from typing import Any
 
-import psycopg
 import pytest
-from pydantic import ValidationError
-
-from tt_stats.core.config import get_settings
+from psycopg import Connection
 
 pytestmark = pytest.mark.integration
 
 
-@pytest.fixture(scope="module")
-def connection() -> Iterator[psycopg.Connection]:
-    """Yield a live connection, or skip the module if none is available."""
-    try:
-        settings = get_settings()
-    except ValidationError as error:
-        pytest.skip(f"Database settings are incomplete: {error}")
-
-    try:
-        conn = psycopg.connect(settings.dsn)
-    except psycopg.OperationalError as error:
-        pytest.skip(f"PostgreSQL not available: {error}")
-    yield conn
-    conn.close()
+def test_select_one(db_connection: Connection[Any]) -> None:
+    row = db_connection.execute("SELECT 1 AS one;").fetchone()
+    assert row == {"one": 1}
 
 
-def test_select_one(connection: psycopg.Connection) -> None:
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT 1 AS one;")
-        assert cursor.fetchone() == (1,)
-
-
-def test_public_schema_exists(connection: psycopg.Connection) -> None:
-    with connection.cursor() as cursor:
-        cursor.execute(
-            """
-            SELECT 1
-            FROM information_schema.schemata
-            WHERE schema_name = 'public';
-            """
-        )
-        assert cursor.fetchone() == (1,)
+def test_public_schema_exists(db_connection: Connection[Any]) -> None:
+    row = db_connection.execute(
+        """
+        SELECT 1 AS one
+        FROM information_schema.schemata
+        WHERE schema_name = 'public';
+        """
+    ).fetchone()
+    assert row == {"one": 1}

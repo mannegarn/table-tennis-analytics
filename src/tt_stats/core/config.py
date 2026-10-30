@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     # which is handy for deployed environments that inject a single URL.
     database_url: str | None = None
 
+    # Integration-test database. Kept separate from the parts above so a test
+    # run can never resolve to the scraped application database. Both are
+    # overridable through TEST_DATABASE_NAME / TEST_DATABASE_URL.
+    test_database_name: str = "tt_stats_test"
+    test_database_url: str | None = None
+
     # Ingestion knobs shared by the collectors. Concurrency stays low so the
     # pipeline remains a polite client rather than a load test.
     max_concurrent_requests: int = 6
@@ -87,15 +93,32 @@ class Settings(BaseSettings):
     log_file_max_bytes: int = 5_000_000
     log_file_backup_count: int = 3
 
-    @property
-    def dsn(self) -> str:
-        """Return the PostgreSQL connection string."""
-        if self.database_url:
-            return self.database_url
+    def _dsn_for(self, database: str) -> str:
+        """Build a connection string from the individual connection parts."""
         return (
             f"postgresql://{self.postgres_user}:{self.postgres_password}"
-            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+            f"@{self.postgres_host}:{self.postgres_port}/{database}"
         )
+
+    @property
+    def dsn(self) -> str:
+        """Return the PostgreSQL connection string for the application database."""
+        if self.database_url:
+            return self.database_url
+        return self._dsn_for(self.postgres_db)
+
+    @property
+    def test_dsn(self) -> str:
+        """Return the connection string for the isolated integration-test database.
+
+        ``database_url`` is intentionally ignored here: that variable describes
+        a deployed application database, and letting it win would silently undo
+        the isolation this property exists to provide. Use ``TEST_DATABASE_URL``
+        when a single URL must be injected.
+        """
+        if self.test_database_url:
+            return self.test_database_url
+        return self._dsn_for(self.test_database_name)
 
 
 @lru_cache

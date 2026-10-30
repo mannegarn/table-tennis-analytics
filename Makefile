@@ -9,10 +9,11 @@ endif
 
 COMPOSE := docker compose
 YEARS ?=
+TEST_DATABASE_NAME ?= tt_stats_test
 
 .DEFAULT_GOAL := help
 
-.PHONY: help setup db-up db-down db-reset db-logs db-psql db-check db-migrate events-scrape events-unpack events-unpack-preview test test-integration dbt-debug lint format typecheck check hooks-install hooks-run
+.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-scrape events-unpack events-unpack-preview test test-integration dbt-debug lint format typecheck check hooks-install hooks-run
 
 help: ## Show available commands
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -38,8 +39,23 @@ db-logs: ## Tail PostgreSQL logs
 db-psql: ## Open a psql shell against the warehouse
 	$(COMPOSE) exec postgres psql -U $(POSTGRES_USER) -d $(POSTGRES_DB)
 
+db-test-psql: ## Open a psql shell against the integration-test database
+	$(COMPOSE) exec postgres psql -U $(POSTGRES_USER) -d $(TEST_DATABASE_NAME)
+
 db-check: ## Verify the Python to PostgreSQL connection
 	uv run tt-db-check
+
+db-test-check: ## Verify the test database exists, is migrated and how many fixture rows it holds
+	@$(COMPOSE) exec -T postgres psql -U $(POSTGRES_USER) -d postgres -tAc \
+		"SELECT 1 FROM pg_database WHERE datname = '$(TEST_DATABASE_NAME)'" \
+		| grep -qx 1 \
+		|| { echo "missing database $(TEST_DATABASE_NAME); see db/init/000_create_test_db.sql"; exit 1; }
+	@$(COMPOSE) exec -T postgres psql -U $(POSTGRES_USER) -d $(TEST_DATABASE_NAME) -tAc \
+		"SELECT format('migrations=%s raw=%s unpacked=%s runs=%s', \
+			(SELECT count(*) FROM ingest.schema_version), \
+			(SELECT count(*) FROM ingest.events_by_year_raw), \
+			(SELECT count(*) FROM ingest.events_unpacked), \
+			(SELECT count(*) FROM ingest.ingest_runs));"
 
 db-migrate: ## Apply db/migrations to the warehouse
 	uv run tt-db-migrate

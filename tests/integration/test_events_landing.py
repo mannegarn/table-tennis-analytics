@@ -1,4 +1,9 @@
-"""Integration test: one year lands, upserts and stays a single row."""
+"""Integration test: one year lands, upserts and stays a single row.
+
+Runs against the isolated ``tt_stats_test`` database, so the committed 2023
+fixture can be landed unchanged: no id rewriting, and no cleanup sweeps that
+risk real rows.
+"""
 
 import hashlib
 import json
@@ -6,45 +11,16 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import psycopg
 import pytest
-from pydantic import ValidationError
+from psycopg import Connection
 
-from tt_stats.core.config import get_settings
-from tt_stats.core.db import get_connection
-from tt_stats.core.migrations import apply_migrations
 from tt_stats.events.collect.events_by_year import YearPayloadSummary
 from tt_stats.events.land import land_events_by_year
 
 pytestmark = pytest.mark.integration
 
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "events_2023.json"
-TEST_YEAR = 2099
-
-# The fixture is real 2023 data. Landing it unchanged would reparent those real
-# events to TEST_YEAR (the unpack upserts on EventId), so the ids are shifted
-# into a private range to keep this test from touching real rows.
-ID_OFFSET = 900_000_000
-
-
-def _synthetic(payload: Any) -> Any:
-    """Return the payload with EventIds moved out of the real range."""
-    for row in payload[0]["rows"]:
-        row["EventId"] = int(row["EventId"]) + ID_OFFSET
-    return payload
-
-
-def _require_database() -> None:
-    try:
-        settings = get_settings()
-    except ValidationError as error:
-        pytest.skip(f"Database settings are incomplete: {error}")
-
-    try:
-        with psycopg.connect(settings.dsn):
-            pass
-    except psycopg.OperationalError as error:
-        pytest.skip(f"PostgreSQL not available: {error}")
+TEST_YEAR = 2023
 
 
 def _summary(payload: Any, digest: str) -> YearPayloadSummary:
@@ -61,48 +37,35 @@ def _summary(payload: Any, digest: str) -> YearPayloadSummary:
     )
 
 
-def test_landing_upserts_one_row_and_is_idempotent() -> None:
-    _require_database()
-    apply_migrations()
-
-    payload = _synthetic(json.loads(FIXTURE.read_text(encoding="utf-8")))
+def test_landing_upserts_one_row_and_is_idempotent(
+    db_connection: Connection[Any],
+) -> None:
+    payload = json.loads(FIXTURE.read_text(encoding="utf-8"))
     digest = hashlib.sha256(FIXTURE.read_bytes()).hexdigest()
     summary = _summary(payload, digest)
 
-    try:
-        land_events_by_year(summary, payload)
-        land_events_by_year(summary, payload)
+    land_events_by_year(summary, payload)
+    land_events_by_year(summary, payload)
 
-        with get_connection() as connection:
-            row = connection.execute(
-                """
-                SELECT payload, http_status, source_final_count,
-                       source_original_count, received_count, payload_sha256
-                FROM ingest.events_by_year_raw
-                WHERE year = %s;
-                """,
-                (TEST_YEAR,),
-            ).fetchone()
-            count = connection.execute(
-                "SELECT count(*) AS n FROM ingest.events_by_year_raw WHERE year = %s;",
-                (TEST_YEAR,),
-            ).fetchone()
+    row = db_connection.execute(
+        """
+        SELECT payload, http_status, source_final_count,
+               source_original_count, received_count, payload_sha256
+        FROM ingest.events_by_year_raw
+        WHERE year = %s;
+        """,
+        (TEST_YEAR,),
+    ).fetchone()
+    count = db_connection.execute(
+        "SELECT count(*) AS n FROM ingest.events_by_year_raw WHERE year = %s;",
+        (TEST_YEAR,),
+    ).fetchone()
 
-        assert row is not None
-        assert row["payload"] == payload
-        assert row["http_status"] == 200
-        assert row["source_final_count"] == payload[0]["Count"]
-        assert row["source_original_count"] == int(payload[0]["Original_Count"])
-        assert row["received_count"] == len(payload[0]["rows"])
-        assert row["payload_sha256"] == digest
-        assert count == {"n": 1}
-    finally:
-        with get_connection() as connection:
-            connection.execute(
-                "DELETE FROM ingest.events_unpacked WHERE source_year = %s;",
-                (TEST_YEAR,),
-            )
-            connection.execute(
-                "DELETE FROM ingest.events_by_year_raw WHERE year = %s;",
-                (TEST_YEAR,),
-            )
+    assert row is not None
+    assert row["payload"] == payload
+    assert row["http_status"] == 200
+    assert row["source_final_count"] == payload[0]["Count"]
+    assert row["source_original_count"] == int(payload[0]["Original_Count"])
+    assert row["received_count"] == len(payload[0]["rows"])
+    assert row["payload_sha256"] == digest
+    assert count == {"n": 1}

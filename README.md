@@ -60,6 +60,9 @@ uv run tt-db-check
 - `make dbt-debug` ends with `All checks passed!`
 - `make test` runs the suite; the integration test skips automatically when the database is down.
 - `make test-integration` runs the database integration tests explicitly.
+- Integration tests run against `tt_stats_test`, not the warehouse, so scraped data
+  is never touched. `make db-test-check` shows its applied migrations and row
+  counts; `make db-test-psql` opens a shell on it.
 
 ## Events scrape
 
@@ -149,7 +152,9 @@ the database. `data/` remains git-ignored for legacy captures and scratch files.
 | `make db-reset` | Destroy the volume and recreate the database |
 | `make db-logs` | Tail PostgreSQL logs |
 | `make db-psql` | Open a `psql` shell |
+| `make db-test-psql` | Open a `psql` shell against `tt_stats_test` |
 | `make db-check` | Verify the Python to PostgreSQL connection |
+| `make db-test-check` | Verify `tt_stats_test` exists, is migrated and count its fixture rows |
 | `make db-migrate` | Apply versioned SQL migrations |
 | `make events-scrape` | Fetch event calendars and land them in `ingest.events_by_year_raw` |
 | `make events-unpack` | Unpack landed calendars into `ingest.events_unpacked` |
