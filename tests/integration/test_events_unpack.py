@@ -101,6 +101,21 @@ def _payload_with_renamed_rows_key() -> Any:
     ]
 
 
+def _payload_with_repeats(repeats: int = 2) -> Any:
+    """Return the fixture with one event repeated, as the 2021 payload does.
+
+    WTT lists the Tokyo Olympics three times in 2021, so a stored payload can
+    hold more items than it holds distinct ``EventId`` values. ``Count`` grows
+    with the rows so ``source_final_count`` still describes what arrived.
+    """
+    payload = _payload()
+    envelope = payload[0]
+    duplicates = [row for row in envelope["rows"] if row["EventId"] == KNOWN_EVENT_ID]
+    payload[0]["rows"] = envelope["rows"] + duplicates * repeats
+    payload[0]["Count"] = len(payload[0]["rows"])
+    return payload
+
+
 def _raw_rows(connection: Connection[Any]) -> int:
     """Number of landed raw payloads for the test year (0 means rolled back)."""
     row = connection.execute(
@@ -236,12 +251,41 @@ def test_landing_writes_one_row_per_distinct_event_id(
     """The count assertion compares distinct ids, not raw items.
 
     A year that repeats an event word-for-word (2021, 2022 and 2026 all do) must
-    still land, so the check in the landing path de-duplicates first.
+    still land, so the check in the landing path de-duplicates first. The 2023
+    fixture holds no duplicates, so the repetition itself is exercised by the
+    next test.
     """
     rows = _payload()[0]["rows"]
     distinct = len({row["EventId"] for row in rows})
 
     assert _raw_rows(db_connection) == 1
+    assert _counts(db_connection) == {"rows": distinct, "events": distinct}
+
+
+def test_landing_tolerates_intra_year_duplicate_events(
+    db_connection: Connection[Any],
+) -> None:
+    """A repeated event is de-duplicated, not treated as drift.
+
+    The fixture repeats nothing, so this lands a payload that lists one event
+    three times and expects it to commit, with ``received_count`` deliberately
+    larger than the number of unpacked rows.
+    """
+    payload = _payload_with_repeats()
+    rows = payload[0]["rows"]
+    distinct = len({row["EventId"] for row in rows})
+
+    assert len(rows) > distinct, "the helper must actually repeat an event"
+
+    land_events_by_year(_summary(payload, _digest(payload)), payload)
+
+    raw = db_connection.execute(
+        "SELECT received_count FROM ingest.events_by_year_raw WHERE year = %s;",
+        (TEST_YEAR,),
+    ).fetchone()
+
+    assert raw is not None
+    assert raw["received_count"] == len(rows)
     assert _counts(db_connection) == {"rows": distinct, "events": distinct}
 
 

@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS ingest.ingest_runs (
     started_at timestamptz NOT NULL,
     finished_at timestamptz NOT NULL DEFAULT now(),
     http_status integer,
-    row_count integer,
+    received_count integer,
     payload_sha256 text,
     error text,
     CONSTRAINT ingest_runs_status_check
@@ -21,8 +21,8 @@ CREATE TABLE IF NOT EXISTS ingest.ingest_runs (
         CHECK (finished_at >= started_at),
     CONSTRAINT ingest_runs_http_status_check
         CHECK (http_status IS NULL OR http_status BETWEEN 100 AND 599),
-    CONSTRAINT ingest_runs_row_count_check
-        CHECK (row_count IS NULL OR row_count >= 0),
+    CONSTRAINT ingest_runs_received_count_check
+        CHECK (received_count IS NULL OR received_count >= 0),
     CONSTRAINT ingest_runs_sha256_check
         CHECK (payload_sha256 IS NULL OR payload_sha256 ~ '^[0-9a-f]{64}$')
 );
@@ -42,5 +42,7 @@ COMMENT ON COLUMN ingest.ingest_runs.entity_key IS
     'Natural key of the entity attempted, for example the year 2023.';
 COMMENT ON COLUMN ingest.ingest_runs.status IS
     'succeeded when the payload validated and landed, failed otherwise.';
+COMMENT ON COLUMN ingest.ingest_runs.received_count IS
+    'Rows this attempt produced. Null or 0 for a failed attempt.';
 COMMENT ON COLUMN ingest.ingest_runs.error IS
     'Human readable failure reason. Never populated for a success.';

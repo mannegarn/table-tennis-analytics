@@ -47,10 +47,13 @@ class RunRecord:
 def record_run(record: RunRecord) -> None:
     """Insert one attempt into ``ingest.ingest_runs``.
 
-    The insert is committed with the surrounding connection context, so a caller
-    that raises afterwards cannot leave a half-written row behind.
+    Deliberately independent of whatever the caller is doing: its own
+    autocommit connection and its own explicit transaction. A run that failed
+    mid-landing has already rolled its data back by the time this is called, so
+    the audit row is the only thing that commits - and it must commit even if
+    the caller's transaction is aborted.
     """
-    with get_connection() as connection:
+    with get_connection(autocommit=True) as connection, connection.transaction():
         connection.execute(
             """
             INSERT INTO ingest.ingest_runs (

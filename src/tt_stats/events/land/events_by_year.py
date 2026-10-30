@@ -92,7 +92,12 @@ def land_events_by_year(
     if summary.status_code is None or summary.payload_sha256 is None:
         raise ValueError("summary is missing status or payload hash")
 
-    with get_connection() as connection:
+    # ``autocommit`` plus an explicit transaction block, rather than relying on
+    # the connection context manager: the commit happens exactly here and
+    # nowhere else. Any exception inside the block - a constraint violation, a
+    # failed cast, or the post-unpack assertion below - rolls back the raw
+    # upsert and every unpacked row together, so nothing is half-landed.
+    with get_connection(autocommit=True) as connection, connection.transaction():
         connection.execute(
             """
             INSERT INTO ingest.events_by_year_raw (
@@ -129,8 +134,8 @@ def land_events_by_year(
         )
         unpacked = unpack_events_year(connection, summary.year)
         expected = _expected_unpack(connection, summary.year)
-        # Raises before the ``with`` block exits, so psycopg rolls back both the
-        # raw upsert and the unpacked rows. Nothing half-landed is committed.
+        # Raises before the transaction block exits, so psycopg rolls back
+        # both the raw upsert and the unpacked rows.
         _assert_unpack_is_complete(
             summary.year,
             received_count=summary.received_count,

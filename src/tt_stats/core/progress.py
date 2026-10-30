@@ -22,7 +22,7 @@ captured and JSON runs produce no bar at all.
 
 import sys
 from collections.abc import Iterable, Iterator
-from typing import TYPE_CHECKING, Any, TextIO, cast
+from typing import TYPE_CHECKING, Any, TextIO
 
 from tqdm import tqdm as _tqdm
 
@@ -50,17 +50,14 @@ def progress_bar(
     advances by a batch; ``bar.set_postfix_str(...)`` shows what just finished.
     """
     stream = _stream(file)
-    return cast(
-        _Tqdm,
-        _tqdm(
-            total=total,
-            desc=description,
-            unit=unit,
-            file=stream,
-            bar_format=_BAR_FORMAT,
-            leave=True,
-            disable=disable or not stream.isatty(),
-        ),
+    return _tqdm(
+        total=total,
+        desc=description,
+        unit=unit,
+        file=stream,
+        bar_format=_BAR_FORMAT,
+        leave=True,
+        disable=disable or not stream.isatty(),
     )
 
 

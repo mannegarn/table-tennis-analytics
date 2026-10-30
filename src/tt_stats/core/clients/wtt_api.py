@@ -8,8 +8,9 @@ The client owns three concerns that would otherwise leak into collectors:
 """
 
 import asyncio
+import math
 import random
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from types import TracebackType
 from typing import Any
@@ -17,6 +18,7 @@ from typing import Any
 import httpx
 from tenacity import (
     AsyncRetrying,
+    RetryCallState,
     retry_if_exception,
     stop_after_attempt,
     wait_exponential_jitter,
@@ -55,12 +57,46 @@ class WttResponse:
     data: Any
 
 
+#: Status codes that signal a transient upstream condition. Everything else in
+#: the 4xx/5xx range is a permanent outcome and must fail fast.
+_RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
+
+#: Status codes whose responses may carry a ``Retry-After`` hint.
+_RETRY_AFTER_STATUS_CODES = frozenset({429, 503})
+
+#: Upper bound applied to a server supplied ``Retry-After``. A broken or
+#: hostile value must not be able to stall an ingestion run indefinitely.
+_RETRY_AFTER_MAX_SECONDS = 300.0
+
+
 def _is_retryable(error: BaseException) -> bool:
     """Return True only for transient failures worth another attempt."""
     if isinstance(error, httpx.HTTPStatusError):
-        status = error.response.status_code
-        return status == 429 or status >= 500
+        return error.response.status_code in _RETRYABLE_STATUS_CODES
     return isinstance(error, httpx.RequestError)
+
+
+def _retry_after_seconds(error: BaseException) -> float | None:
+    """Return the ``Retry-After`` delay hinted by a rate-limited response.
+
+    Only the numeric form (delta seconds) is honoured. The HTTP-date form is
+    rare on these endpoints and not worth the parsing risk, so it is ignored
+    and the normal backoff applies.
+    """
+    if not isinstance(error, httpx.HTTPStatusError):
+        return None
+    if error.response.status_code not in _RETRY_AFTER_STATUS_CODES:
+        return None
+    raw = error.response.headers.get("Retry-After")
+    if raw is None:
+        return None
+    try:
+        seconds = float(raw.strip())
+    except (AttributeError, ValueError):
+        return None
+    if not math.isfinite(seconds):
+        return None
+    return min(max(seconds, 0.0), _RETRY_AFTER_MAX_SECONDS)
 
 
 class WttClient:
@@ -128,11 +164,7 @@ class WttClient:
         """
         retrying = AsyncRetrying(
             stop=stop_after_attempt(self._settings.max_retry_attempts),
-            wait=wait_exponential_jitter(
-                initial=self._settings.retry_wait_min_seconds,
-                max=self._settings.retry_wait_max_seconds,
-                jitter=self._settings.request_jitter_seconds,
-            ),
+            wait=self._wait_strategy(),
             retry=retry_if_exception(_is_retryable),
             reraise=True,
         )
@@ -156,6 +188,34 @@ class WttClient:
             ) from error
 
         raise WttRequestError("WTT request retry loop exited without a result")
+
+    def _wait_strategy(self) -> Callable[[RetryCallState], float]:
+        """Build the per-attempt wait: exponential backoff, jitter, hints.
+
+        A ``Retry-After`` header always wins over the computed backoff, because
+        the server is stating exactly how long the client must stay away.
+        """
+        exponential = wait_exponential_jitter(
+            initial=self._settings.retry_wait_min_seconds,
+            max=self._settings.retry_wait_max_seconds,
+            jitter=self._settings.request_jitter_seconds,
+        )
+
+        def _wait(retry_state: RetryCallState) -> float:
+            outcome = retry_state.outcome
+            error = outcome.exception() if outcome is not None else None
+            if error is not None:
+                hinted = _retry_after_seconds(error)
+                if hinted is not None:
+                    return hinted
+            delay = exponential(retry_state)
+            # ``tenacity`` may hand back a non-finite value for extreme settings;
+            # a NaN/inf sleep would raise instead of backing off.
+            if not math.isfinite(delay):
+                return self._settings.retry_wait_min_seconds
+            return max(delay, 0.0)
+
+        return _wait
 
     async def _post_once(
         self,

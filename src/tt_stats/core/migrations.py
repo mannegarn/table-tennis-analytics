@@ -13,6 +13,7 @@ installs where the repository layout is absent.
 import hashlib
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
 from psycopg import sql
 
@@ -42,7 +43,8 @@ def resolve_migrations_dir(directory: Path | None = None) -> Path:
     return configured or DEFAULT_MIGRATIONS_DIR
 
 
-SCHEMA_VERSION_DDL = """
+# ``Final`` keeps this a literal type, so ``sql.SQL`` accepts it without a cast.
+SCHEMA_VERSION_DDL: Final = """
 CREATE SCHEMA IF NOT EXISTS ingest;
 CREATE TABLE IF NOT EXISTS ingest.schema_version (
     version text PRIMARY KEY,
@@ -106,13 +108,18 @@ def apply_migrations(directory: Path | None = None) -> list[str]:
                 continue
 
             with connection.transaction():
+                # Bytes, not text: psycopg types a plain ``str`` as a
+                # ``LiteralString``-only query, which static checkers reject for
+                # a value read from disk. ``bytes`` sidesteps that entirely and
+                # is passed through to the server unmodified.
                 migration_sql = migration.path.read_bytes()
-                connection.execute(migration_sql)
-                connection.execute(
-                    "INSERT INTO ingest.schema_version (version, checksum) "
-                    "VALUES (%s, %s);",
-                    (migration.version, migration.checksum),
-                )
+                with connection.cursor() as cur:
+                    cur.execute(migration_sql)
+                    cur.execute(
+                        "INSERT INTO ingest.schema_version (version, checksum) "
+                        "VALUES (%s, %s);",
+                        (migration.version, migration.checksum),
+                    )
 
             applied.append(migration.version)
             logger.info(

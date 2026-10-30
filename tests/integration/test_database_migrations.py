@@ -60,12 +60,9 @@ def test_migrations_create_the_raw_table(
     assert by_name["year"]["is_nullable"] == "NO"
     assert by_name["payload_sha256"]["is_nullable"] == "NO"
     applied = {row["version"] for row in versions}
-    assert {
+    assert applied == {
         "001_events_raw",
         "002_ingest_runs",
         "003_events_unpacked",
-        "004_rename_count_columns",
-        "005_events_unpacked_freshness",
-        "006_events_unpacked_not_null",
-    } <= applied
+    }
     assert [row["schema_name"] for row in schemas] == ["analytics", "ingest"]

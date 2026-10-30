@@ -66,6 +66,13 @@ Updated: 2026-10-27.
   `received_count` is what we parsed. `ingest_runs.row_count` was renamed to
   `received_count` too, so one vocabulary runs through the code. Migration 004 is
   a pure rename with column comments; no data was rewritten.
+- **Intra-year duplicates are expected, not drift (2026-10-30).** WTT repeats
+  whole event rows inside a single year's payload: 2021 lists the Tokyo Olympics
+  three times. `unpack_events.sql` de-duplicates on `event_id`, so 2021 lands 86
+  rows from 99 items, 2022 91 from 94 and 2026 171 from 174. The post-unpack
+  assertion therefore compares `unpacked` against the number of **distinct**
+  `EventId` values in the stored payload, never against `received_count`. A
+  strict `unpacked == received_count` check would reject those three years.
 - **Integration tests may never touch real years.** The unpack upserts on
   `event_id`, so loading the 2023 fixture under the test year reparented real
   events and cleanup then deleted them. Both landing tests now shift every
