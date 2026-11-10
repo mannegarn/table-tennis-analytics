@@ -1,4 +1,4 @@
--- 007: the match-entries work queue, derived and never stored (ADR 0005).
+-- 006: the match-entries work queue, derived and never stored (ADR 0005).
 --
 -- WHAT IT ANSWERS
 --   Which events deserve a GetOfficialResult request right now? One row per

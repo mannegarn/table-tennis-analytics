@@ -24,8 +24,10 @@ CREATE TABLE IF NOT EXISTS ingest.events_by_year_raw (
     source text NOT NULL DEFAULT 'wtt_eventcalendar',
     fetched_at timestamptz NOT NULL,
     ingested_at timestamptz NOT NULL DEFAULT now(),
+    -- A sanity bound, not a policy: the API's real coverage starts at 1926 and
+    -- the backfill floor lives in Settings.events_start_year.
     CONSTRAINT events_by_year_raw_year_check
-        CHECK (year BETWEEN 2000 AND 2100),
+        CHECK (year BETWEEN 1900 AND 2100),
     CONSTRAINT events_by_year_raw_status_check
         CHECK (http_status BETWEEN 100 AND 599),
     CONSTRAINT events_by_year_raw_received_count_check

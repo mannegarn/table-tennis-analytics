@@ -1,53 +1,65 @@
 # Ingestion progress and decisions
 
-Updated: 2026-10-27.
+Updated: 2026-11-10.
 
 ## Current state
 
+**Events calendar**
+
 - `make events-collect` reads `ingest.events_years_pending`, fetches each year in
   chunks, and upserts one row per year into `ingest.events_by_year_raw`.
-- **102 years are landed: 1926-2027.** `source_final_count` and `received_count`
-  agree for every year, and nine years are legitimately empty (1927, 1934,
-  1940-1946). 2984 calendar rows in total, 2965 after unpacking.
-- The first backfill took one run of 94 years in a few minutes, chunked at 50
-  and concurrent at `max_concurrent_requests`. Every run after it is two
-  requests: the current year and the next.
-======= END"/>
-- Every attempt is recorded in `ingest.ingest_runs` (migration 002), success or
-  failure, with start/finish time, status, HTTP status, row count and error.
-- `ingest.events_unpacked` is live: 736 rows, 736 distinct event ids, from the
-  six landed years. The unpack statement runs automatically inside each landing
-  transaction and by hand via `make events-unpack`.
-- Per year, unpacked vs landed: 2021 86/99, 2022 91/94, 2023 101/101,
-  2024 131/131, 2025 156/156, 2026 171/174. The 19 missing rows are duplicate
-  events listed twice inside one year, never across years.
+- **102 years are landed: 1926-2027**, 2984 calendar rows. `source_final_count`
+  and `received_count` agree for every year, and nine years are legitimately
+  empty (1927, 1934, 1940-1946).
+- `ingest.events_unpacked` holds **2965 events** from those 2984 rows. The 19
+  duplicates are verbatim repeats inside a single year, removed by `DISTINCT ON`.
 - `make events-unpack-preview YEARS=2023` runs the statement and rolls back, so
   the SQL can be exercised without touching the data.
-- The 755 calendar rows collapse to **736 distinct EventIds**. Every duplicate is
-  an exact repeat inside one year (2021: 13, 2022: 3, 2026: 3), and no EventId
-  appears in two different years. The unpack statement de-duplicates with
-  `DISTINCT ON`, because one `INSERT ... ON CONFLICT DO UPDATE` cannot affect
-  the same row twice.
+- Every attempt is recorded in `ingest.ingest_runs`, success or failure, with
+  start/finish time, status, HTTP status, received count and error.
+
+**Match entries**
+
+- `make matches-collect` reads `ingest.match_entries_pending`, fetches one match
+  list per event into `ingest.match_entries_payloads_raw`, and writes one
+  `ingest_runs` row per event.
+- **2838 events fetched**: 2307 answers of `[]`, 531 with matches, 200,879 match
+  rows, 2.7 MB of payload. The queue then holds only the live events.
+- `ingest.match_entries_unpacked` exists and is **deliberately empty**: the
+  unpack SQL is the next step, so landing is raw-only for now.
+
+**Shared plumbing**
+
+- One `ingest` schema holds raw, unpacked and control tables; dbt writes to
+  `analytics` and ingestion never reads it.
+- Migrations are tracked in `ingest.schema_version` with a checksum per file, and
+  they are **declarative on the first pass**: no constraint is created only to be
+  dropped a few files later. The database is disposable during development, so a
+  migration is amended and the database rebuilt rather than layered with `ALTER`.
+- Both collectors fetch in chunks of `CHUNK_SIZE` (50), bounded by
+  `MAX_CONCURRENT_REQUESTS` (20), land one item per transaction, log one line per
+  chunk with that chunk's rate, and print a run summary at the end.
 - The rotating `logs/tt_stats.log` (5 MB, three backups) records every `INFO`
-  line; the console only shows `WARNING` and above. `LOG_CONSOLE_LEVEL` and
-  `LOG_TO_FILE=false` change that.
-- The runtime output is the database only. No payload or `.meta.json` files are
-  written by a collect run.
-- `data/raw/events/` still contains payload files from earlier runs. They are
-  legacy, are not updated, and can be deleted later.
-- The `ingest` and `analytics` schemas exist. Migrations are tracked in
-  `ingest.schema_version` with a checksum per file.
-- dbt writes to `analytics`. Ingestion tables are sources, not dbt models.
-- The terminal uses one `tqdm` bar that rewrites a single line. Piped output,
-  captured output and JSON logs draw no bar at all.
+  line; the console only shows `WARNING` and above, so the bar keeps its line.
+  `LOG_CONSOLE_LEVEL` and `LOG_TO_FILE=false` change that.
+- The runtime output is the database only. No payload files are written by a
+  collect run. `data/raw/events/` holds legacy files that can be deleted.
 
 ## Decisions
 
-- **Years are sequential.** Six requests is a small fixed list. Concurrency and
-  chunking belong to the match fan-out, where the request count grows with the
-  data.
-- **Default years are 2021 through the current year.** Change
-  `DEFAULT_START_YEAR` or `default_years()` when the backfill policy changes.
+- **Both collectors chunk (revised 2026-11-10).** Years are no longer a fixed
+  list of six: the calendar backfill covers 1926-2027, so the collector fetches
+  in chunks of `CHUNK_SIZE` exactly as the match fan-out does. Concurrency is the
+  client semaphore, never the chunk size.
+- **`events_start_year` is a backfill floor (1926), not a policy year.** The
+  pending view decides which years to ask for; the setting only says how far back
+  the history goes.
+- **Migrations stay declarative (2026-11-10).** A constraint is created correctly
+  the first time. When real data contradicts one, the migration is amended and
+  the database rebuilt, rather than a later file dropping what an earlier file
+  just added. The development database is disposable; this stops working the day
+  a database must be preserved, and that is the point at which additive
+  migrations become mandatory.
 - **Do not land failed fetches.** A failed response never overwrites a good
   payload. Failures go to `ingest_runs` instead.
 - **No local payload writes.** The database row is the source of truth.
@@ -64,8 +76,9 @@ Updated: 2026-10-27.
 - **Count names say who owns the number (2026-10-30).** `source_final_count` is
   WTT's `Count`, `source_original_count` is WTT's `Original_Count`, and
   `received_count` is what we parsed. `ingest_runs.row_count` was renamed to
-  `received_count` too, so one vocabulary runs through the code. Migration 004 is
-  a pure rename with column comments; no data was rewritten.
+  `received_count` in the same pass, so one vocabulary runs through the code. The
+  rename lives in the table definitions themselves; there is no separate rename
+  migration.
 - **Intra-year duplicates are expected, not drift (2026-10-30).** WTT repeats
   whole event rows inside a single year's payload: 2021 lists the Tokyo Olympics
   three times. `unpack_events.sql` de-duplicates on `event_id`, so 2021 lands 86
@@ -85,9 +98,9 @@ Updated: 2026-10-27.
   offset, so a timestamp would invent a timezone that was never sent.
 - **The unpacked table has structural constraints, not data-quality ones
   (revised 2026-11-10).** Blank names and absurd years are still rejected, because
-  those point at a broken unpack. The inverted-date check was **removed** in
-  migration 006: 1992 sends " World Cup  Ho Chi Minh City" with
-  `StartDateTime 1992-12-10` and `EndDateTime 1991-12-13`, and rejecting that row
+  those point at a broken unpack. Date ordering is deliberately **not** checked:
+  1992 sends " World Cup  Ho Chi Minh City" with `StartDateTime 1992-12-10` and
+  `EndDateTime 1991-12-13`, and rejecting that row
   aborted the year's transaction and silently discarded its other 15 events.
   Ordering dates is a domain rule, so it belongs in a dbt test where it flags one
   row instead of deleting a year (ADR 0003).
@@ -184,10 +197,10 @@ ORDER BY (y.year = cy) DESC, (y.year = cy + 1) DESC, y.year DESC
   upstream cancellation or reschedule discovered later is never picked up. The
   escape hatch is `--years 2023`, which bypasses the view. The alternative was
   re-fetching 96 years on every run.
-- **Blocker to clear first**: `events_by_year_raw.year` and
-  `events_unpacked.source_year` both carry `CHECK (... BETWEEN 2000 AND 2100)`,
-  so a 1930s year fails on insert. They must be widened in a new migration;
-  editing 001 or 003 is refused by the checksum guard.
+- **Year bounds are sanity checks, declared once**: `events_by_year_raw.year` and
+  `events_unpacked.source_year` both allow 1900-2100. The first version stopped at
+  2000, which a 1930s backfill fails on insert; the bounds were widened in place
+  rather than patched by a later migration, because the database is reset.
 
 ### Measured coverage (probe run, 2026-11-10)
 
@@ -370,11 +383,10 @@ The first full run took eight batches of 400 and about seven minutes.
 
 Verified:
 
-- Migration 004 creates `match_entries_payloads_raw` (one row per event) and
-  `match_entries_unpacked` (one row per match, still empty: the unpack is next).
-- Migration 005 widens the year checks to 1900 and adds `events_years_pending`,
-  migration 006 drops the inverted-date check, migration 007 adds
-  `match_entries_pending` with the six-state rules and no year floor.
+- Six migrations, declarative on the first pass: 001 events raw, 002 run history,
+  003 events unpacked, 004 `events_years_pending`, 005 match entries (raw plus an
+  empty `match_entries_unpacked`), 006 `match_entries_pending` with the six-state
+  rules and no year floor.
 - `get_match_entries_route` and `fetch_match_entries` share the POST path's
   semaphore, retry policy, jitter and `Retry-After` handling.
 - `tt-matches-collect` / `make matches-collect` read the view, fetch in chunks,

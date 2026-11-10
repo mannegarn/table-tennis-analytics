@@ -4,12 +4,20 @@
 -- rules (ADR 0003). One row per WTT event per calendar that listed it, so the
 -- scrape queue is an indexed join instead of a JSONB scan.
 --
--- Checked against the landed payloads before writing:
---   755 event rows across 2021-2026 collapse to 736 distinct EventIds, all
---   duplicates are exact repeats inside a single year, no EventId appears in
---   two different years, no name is blank and no end date precedes its start.
---   The unpack statement must therefore de-duplicate before inserting, because
---   one INSERT ... ON CONFLICT DO UPDATE cannot touch the same row twice.
+-- Checked against the landed payloads:
+--   2984 calendar rows across 1926-2027 collapse to 2965 distinct events. The
+--   19 duplicates are exact repeats inside a single year and no EventId appears
+--   in two different years, so the unpack statement must de-duplicate before
+--   inserting: one INSERT ... ON CONFLICT DO UPDATE cannot touch the same row
+--   twice.
+--
+-- NO DATE-ORDER RULE
+--   An earlier version of this table rejected end_date < start_date. Real data
+--   broke it: 1992 sends " World Cup  Ho Chi Minh City" with StartDateTime
+--   1992-12-10 and EndDateTime 1991-12-13, and rejecting that single row
+--   aborted the year's transaction and discarded its other 15 events. The
+--   unpack records structure only (ADR 0003), so date ordering is a dbt test,
+--   not a landing constraint.
 --
 -- WHY THE KEY IS (source_year, event_id)
 --   A tournament that straddles New Year is listed in both years' payloads, so
@@ -43,10 +51,9 @@ CREATE TABLE IF NOT EXISTS ingest.events_unpacked (
     CONSTRAINT events_unpacked_pkey PRIMARY KEY (source_year, event_id),
     CONSTRAINT events_unpacked_name_check
         CHECK (btrim(event_name) <> ''),
-    CONSTRAINT events_unpacked_dates_check
-        CHECK (end_date >= start_date),
+    -- No date-order check here: see the header, upstream sends inverted ranges.
     CONSTRAINT events_unpacked_source_year_check
-        CHECK (source_year BETWEEN 2000 AND 2100)
+        CHECK (source_year BETWEEN 1900 AND 2100)
 );
 
 -- The live-window predicate reads end_date, so it gets its own index.

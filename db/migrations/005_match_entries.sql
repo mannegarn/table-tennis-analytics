@@ -1,4 +1,4 @@
--- 004: the match-entries domain, owned by ingestion.
+-- 005: the match-entries domain, owned by ingestion.
 --
 -- Two tables, the same pair as the events domain:
 --
