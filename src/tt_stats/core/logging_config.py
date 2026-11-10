@@ -22,7 +22,7 @@ explicitly, or wrap the bar in :func:`tqdm.contrib.logging.logging_redirect_tqdm
 
 Extras are supported and carried through to both formats::
 
-    logger.info("scraped_year", extra={"year": 2021, "rows": 189})
+    logger.info("collected_year", extra={"year": 2021, "rows": 189})
 """
 
 import json

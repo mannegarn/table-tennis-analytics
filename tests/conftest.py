@@ -1,7 +1,7 @@
 """Shared pytest fixtures.
 
 Integration tests are pinned to a dedicated ``tt_stats_test`` database so that
-fixture rows can be truncated without ever touching scraped data. The database
+fixture rows can be truncated without ever touching collected data. The database
 is created by ``db/init/000_create_test_db.sql`` on a fresh container; the
 header of that file documents the one-line ``psql`` command for a container
 that already exists.

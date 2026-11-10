@@ -183,8 +183,10 @@ def test_re_seeing_an_event_advances_last_seen_at_only(
     ("event_name", "start_date", "end_date", "source_year"),
     [
         ("   ", "2023-01-10", "2023-01-15", 2023),
-        ("Inverted dates", "2023-01-15", "2023-01-10", 2023),
-        ("Year out of range", "2023-01-10", "2023-01-15", 1999),
+        # The check is a sanity bound, not a policy: the backfill floor is
+        # Settings.events_start_year (1926), and the table accepts anything from
+        # 1900 upwards. 1899 is therefore the nearest invalid value.
+        ("Year before the sanity bound", "2023-01-10", "2023-01-15", 1899),
     ],
 )
 def test_events_unpacked_rejects_a_bad_row(
@@ -199,6 +201,40 @@ def test_events_unpacked_rejects_a_bad_row(
             INSERT,
             (source_year, TEST_EVENT_ID, event_name, start_date, end_date),
         )
+
+
+def test_events_unpacked_keeps_an_upstream_inverted_date_range(
+    db_connection: Connection[Any],
+) -> None:
+    """1992 sends an event that ends before it starts. Store it as sent.
+
+    Rejecting it aborted the whole year's transaction and lost 15 good rows, so
+    the judgement belongs in a dbt test, not in the landing path (ADR 0003).
+    """
+    db_connection.execute(
+        INSERT,
+        (
+            FIRST_YEAR,
+            TEST_EVENT_ID,
+            " World Cup  Ho Chi Minh City",
+            "1992-12-10",
+            "1991-12-13",
+        ),
+    )
+    db_connection.commit()
+
+    row = db_connection.execute(
+        """
+        SELECT start_date, end_date
+        FROM ingest.events_unpacked
+        WHERE event_id = %s;
+        """,
+        (TEST_EVENT_ID,),
+    ).fetchone()
+
+    assert row is not None
+    assert str(row["start_date"]) == "1992-12-10"
+    assert str(row["end_date"]) == "1991-12-13"
 
 
 def test_events_unpacked_requires_a_name(

@@ -27,7 +27,7 @@ FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "events_2023.json"
 
 def test_committed_fixture_matches_the_contract() -> None:
     if not FIXTURE.exists():
-        pytest.skip("capture the fixture with make events-scrape first")
+        pytest.skip("capture the fixture with make events-collect first")
 
     payload = json.loads(FIXTURE.read_text(encoding="utf-8"))
     rows = extract_rows(payload)

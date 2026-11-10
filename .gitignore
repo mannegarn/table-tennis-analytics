@@ -20,6 +20,9 @@ data/
 *.csv
 *.parquet
 
+# Local API probe output (scripts/probe_*.py writes its payload here)
+scripts/*.json
+
 # Testing and coverage
 .pytest_cache/
 .mypy_cache/

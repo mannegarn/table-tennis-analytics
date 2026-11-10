@@ -11,7 +11,7 @@
 --   wrong we can re-run this and the raw data is still there to rebuild from.
 --
 -- WHEN IT RUNS
---   1. Automatically, on every scrape: after the raw row is written, in the
+--   1. Automatically, on every collect: after the raw row is written, in the
 --      same transaction. If this fails, the raw write is rolled back too, so a
 --      year is never half-landed.
 --   2. By hand, via `make events-unpack`, to catch up years that landed before

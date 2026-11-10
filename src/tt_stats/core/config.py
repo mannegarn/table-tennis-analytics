@@ -46,20 +46,32 @@ class Settings(BaseSettings):
     database_url: str | None = None
 
     # Integration-test database. Kept separate from the parts above so a test
-    # run can never resolve to the scraped application database. Both are
+    # run can never resolve to the collected application database. Both are
     # overridable through TEST_DATABASE_NAME / TEST_DATABASE_URL.
     test_database_name: str = "tt_stats_test"
     test_database_url: str | None = None
 
     # Ingestion knobs shared by the collectors. Concurrency stays low so the
     # pipeline remains a polite client rather than a load test.
-    max_concurrent_requests: int = 6
+    #
+    # ``chunk_size`` is how many units of work (years, or events) are fetched in
+    # one batch. It is a scheduling and commit-granularity knob, not a
+    # concurrency limit: ``max_concurrent_requests`` bounds the requests in
+    # flight, while the chunk bounds how much unlanded work one crash can lose
+    # and how often the run reports progress.
+    max_concurrent_requests: int = 20
     request_timeout_seconds: float = 40.0
-    chunk_size: int = 200
-    max_retry_attempts: int = 5
+    chunk_size: int = 50
+    max_retry_attempts: int = 6
     retry_wait_min_seconds: float = 2.0
     retry_wait_max_seconds: float = 16.0
     request_jitter_seconds: float = 0.01
+
+    # Earliest calendar year the collector considers. The API's first year with
+    # any tournaments is 1926 (measured), so this is the floor of a full
+    # backfill rather than an arbitrary cut-off. Years already landed below the
+    # current year are never fetched again, so this only affects a cold start.
+    events_start_year: int = 1926
 
     # WTT API client.
     wtt_api_key: str = "S_WTT_882jjh7basdj91834783mds8j2jsd81"

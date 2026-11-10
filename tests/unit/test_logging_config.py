@@ -84,7 +84,7 @@ def _make_record(**extras: object) -> logging.LogRecord:
         level=logging.INFO,
         pathname=__file__,
         lineno=1,
-        msg="scraped_year",
+        msg="collected_year",
         args=(),
         exc_info=None,
     )
@@ -129,11 +129,11 @@ def test_file_handler_records_every_info_line(tmp_path: Path) -> None:
     log_file = tmp_path / "tt_stats.log"
     _configure_with_file(log_file, json_output=False)
 
-    get_logger("tt_stats.test").info("scraped_year", extra={"year": 2021})
+    get_logger("tt_stats.test").info("collected_year", extra={"year": 2021})
     _flush_handlers()
 
     written = log_file.read_text(encoding="utf-8")
-    assert "scraped_year" in written
+    assert "collected_year" in written
     assert "year=2021" in written
 
 
@@ -205,7 +205,7 @@ def test_json_formatter_emits_extras_as_top_level_fields() -> None:
 
     assert payload["level"] == "INFO"
     assert payload["logger"] == "tt_stats.test"
-    assert payload["msg"] == "scraped_year"
+    assert payload["msg"] == "collected_year"
     assert payload["year"] == 2021
     assert payload["rows"] == 189
     assert "time" in payload
@@ -220,7 +220,7 @@ def test_json_formatter_handles_unserialisable_extras() -> None:
 def test_console_formatter_appends_extras() -> None:
     rendered = ConsoleFormatter("%(message)s").format(_make_record(year=2021))
 
-    assert "scraped_year" in rendered
+    assert "collected_year" in rendered
     assert "year=2021" in rendered
 
 

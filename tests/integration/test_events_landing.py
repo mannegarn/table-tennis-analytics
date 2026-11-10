@@ -95,6 +95,33 @@ def test_landing_upserts_one_row_and_is_idempotent(
     assert count == {"n": 1}
 
 
+def test_a_quiet_year_lands_zero_rows_without_failing(
+    db_connection: Connection[Any],
+) -> None:
+    """The API's empty year is the normal envelope with no rows, 228 bytes.
+
+    Landing it records "asked, nothing there" so the queue stops asking. The
+    unpack writes nothing, which must not be mistaken for a broken unpack.
+    """
+    payload: Any = [{"rows": [], "Count": 0, "Original_Count": "0"}]
+    digest = hashlib.sha256(json.dumps(payload).encode("utf-8")).hexdigest()
+    summary = _summary(payload, digest)
+
+    land_events_by_year(summary, payload)
+
+    raw = db_connection.execute(
+        "SELECT received_count FROM ingest.events_by_year_raw WHERE year = %s;",
+        (TEST_YEAR,),
+    ).fetchone()
+    unpacked = db_connection.execute(
+        "SELECT count(*) AS n FROM ingest.events_unpacked WHERE source_year = %s;",
+        (TEST_YEAR,),
+    ).fetchone()
+
+    assert raw == {"received_count": 0}
+    assert unpacked == {"n": 0}
+
+
 def _malformed_payload() -> Any:
     """Return the fixture with every ``EventName`` blanked out.
 
