@@ -427,22 +427,30 @@ separate document that nothing validates.
 The body is a bare array, not a `rows` envelope, and an event with no matched
 draw answers `[]`, two bytes of it.
 
-### Next fan-out: match details (decided, ADR 0008)
+### Next fan-out: match details and match logs (ADR 0009)
 
-- Endpoint: `wtt-web-frontdoor-withoutcache-…/matchdata/<eventId>/<documentCode>.json`.
-- **1,880 bytes** decoded per match. The cached `matchcentre` route returns the
-  same 25-key document **plus `full_msg`**: 176,505 bytes of point-by-point log,
-  160,252 bytes decoded. Rejected, because logs are deferred (ADR 0006).
-- The commentary route is that same log in another shape (a 114 KB JSON string),
-  so it is deferred too.
-- The summary carries competitors, `gameScores`, `resultStatus`, `action`
-  (server/receiver), `matchConfig`, `venueName`, `tableName` and
-  `subEventDescription`, which restates the round inside `documentCode`.
+Point-by-point data is **back in scope**: serve-win rates, deuce behaviour and
+best-of-five effects all need who served each point and who won it.
+
+- **matchcentre**, `wtt-web-frontdoor-…/matchdata/matchcentre/<eventId>/<documentCode>.json`:
+  the match summary plus `full_msg`, the official ITTF result document
+  (`Results_all`, 14 `DT_RESULT` messages, `Competition` 17 KB each). ~160 KB
+  decoded. `PlayByPlay` was null in the probed match.
+- **commentary**, `…/primary/api/match/commentary/<eventId>/<documentCode>`: the
+  point stream, ~114 KB JSON string. `SSR` gives the server ("Service change: X to
+  serve"), `PT` gives the winner and running scores, `GPOINT`/`MPOINT` give
+  deuce and game-point context.
+- Rejected: the `withoutcache` route (1.9 KB), which is the summary with
+  `full_msg: null` and cannot answer "who served".
+- **Volume is the open risk**: ~275 KB per match raw, so tens of gigabytes
+  across ~200k matches before PostgreSQL compression. Measure a sample of ~20
+  real matches and confirm the disk budget before the full fan-out.
 - Requires `document_code` in `match_entries_unpacked`; that is why the minimal
   unpack keeps it.
-- `brotli` is required: both hosts answer `br` even when asked for `identity`.
-- No live refresh is designed for. This is an archive, so the uncached host is
-  chosen for payload size, not freshness.
+- `brotli` is required: every one of these hosts answers `br` even when asked for
+  `identity`.
+- Both documents land as `match_details_raw` and `match_logs_raw`, with unpacked
+  siblings named as ADR 0003 set out.
 
 ## Next steps
 

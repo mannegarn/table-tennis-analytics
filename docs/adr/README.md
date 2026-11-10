@@ -15,4 +15,5 @@ Format: Status, Context, Decision, Consequences. Kept deliberately brief.
 | [0005](0005-derive-scrape-eligibility-never-store-it.md) | Derive scrape eligibility, never store a scrape flag | Accepted |
 | [0006](0006-fetch-all-match-details-defer-match-logs.md) | Fetch all match details; defer match logs | Accepted |
 | [0007](0007-ingest-and-analytics-schemas.md) | Separate ingest and analytics schemas | Accepted |
-| [0008](0008-match-details-from-the-uncached-matchdata-route.md) | Match details from the uncached matchdata route; logs stay deferred | Accepted |
+| [0008](0008-match-details-from-the-uncached-matchdata-route.md) | Match details from the uncached matchdata route; logs stay deferred | Superseded by 0009 |
+| [0009](0009-fetch-match-logs-alongside-match-details.md) | Fetch match logs alongside match details for serve and deuce analysis | Accepted |
