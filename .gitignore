@@ -20,8 +20,9 @@ data/
 *.csv
 *.parquet
 
-# Local API probe output (scripts/probe_*.py writes its payload here)
-scripts/*.json
+# Local scratch scripts and their captured payloads. API probes are throwaway
+# tooling, so the whole directory stays out of the repository.
+scripts/
 
 # Testing and coverage
 .pytest_cache/

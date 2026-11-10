@@ -23,6 +23,7 @@ tt-matches-collect = "tt_stats.matches.collect.match_entries:main"
 
 [dependency-groups]
 dev = [
+    "brotli>=1.2.1",
     "dbt-postgres>=1.9",
     "mypy>=1.13",
     "pre-commit>=4.0",
