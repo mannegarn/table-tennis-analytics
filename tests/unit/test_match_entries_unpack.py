@@ -82,6 +82,19 @@ def test_statement_turns_a_blank_start_time_into_null() -> None:
 
 
 @requires_statement
+def test_statement_does_not_copy_the_constant_or_derivable_fields() -> None:
+    """``fullResults`` is always OFFICIAL and ``subEventType`` repeats the code."""
+    body = _body()
+
+    assert "->> 'fullResults'" not in body, (
+        "a constant on every measured row carries no signal"
+    )
+    assert "->> 'subEventType'" not in body, (
+        "the label is derivable from documentCode; dbt owns that split"
+    )
+
+
+@requires_statement
 def test_statement_deduplicates_on_the_key() -> None:
     body = _upper()
 

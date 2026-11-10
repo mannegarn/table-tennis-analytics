@@ -86,8 +86,8 @@ def _unpacked(
 ) -> list[dict[str, Any]]:
     rows = connection.execute(
         """
-        SELECT match_id, event_id, document_code, sub_event_type, full_results,
-               start_date_local, first_seen_at, last_seen_at
+        SELECT match_id, event_id, document_code, start_date_local,
+               first_seen_at, last_seen_at
         FROM ingest.match_entries_unpacked
         WHERE event_id = %s
         ORDER BY document_code;
@@ -134,8 +134,6 @@ def test_unpacked_columns_match_the_payload(
     assert row["match_id"] == MATCH_ID
     assert row["event_id"] == EVENT_ID
     assert row["document_code"] == MEN_SINGLES
-    assert row["sub_event_type"] == "Men Singles"
-    assert row["full_results"] == "OFFICIAL"
     assert str(row["start_date_local"]) == "2025-09-29 18:35:00"
     assert row["first_seen_at"] is not None
     assert row["last_seen_at"] >= row["first_seen_at"]
@@ -187,7 +185,7 @@ def test_a_team_card_with_id_zero_is_kept(
     row = _unpacked(db_connection)[0]
 
     assert row["match_id"] == 0
-    assert row["sub_event_type"] == "Men's Team"
+    assert row["document_code"] == TEAM_CARD
     assert row["start_date_local"] is None
 
 

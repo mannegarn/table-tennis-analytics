@@ -44,6 +44,12 @@
 --   with no date. There is no DELETE or TRUNCATE anywhere: running it twice must
 --   be harmless.
 --
+--   It is also deliberately narrow: identity, upstream id, start time and
+--   presence. fullResults is "OFFICIAL" on all 200,879 measured rows and
+--   subEventType repeats what documentCode already encodes, so both stay in the
+--   payload; copying them would put WTT's labels and a constant in the schema
+--   for no gain. Deriving them is dbt's job (ADR 0003).
+--
 -- FRESHNESS
 --   first_seen_at is written once, on insert, and never touched again.
 --   last_seen_at is rewritten on every unpack, so "still in the event" means
@@ -59,8 +65,6 @@ INSERT INTO ingest.match_entries_unpacked (
     match_id,
     event_id,
     document_code,
-    sub_event_type,
-    full_results,
     start_date_local,
     first_seen_at,
     last_seen_at
@@ -82,12 +86,6 @@ SELECT DISTINCT ON (r.event_id, (e.value ->> 'documentCode'))
 -- mismatches), so this cannot drift silently.
 
        (e.value ->> 'documentCode')::text                  AS document_code,
-
-       (e.value ->> 'subEventType')::text                  AS sub_event_type,
--- Human readable label as sent: "Men Singles", "Men's Team", ... No enum and no
--- mapping here, because the set of labels is WTT's to change.
-
-       (e.value ->> 'fullResults')::text                   AS full_results,
 
        nullif(btrim(e.value ->> 'startDateLocal'), '')::timestamp
                                                            AS start_date_local,
@@ -134,8 +132,6 @@ ON CONFLICT (event_id, document_code) DO UPDATE SET
 -- What happens when this match was already unpacked for this event: update it
 -- instead of failing.
     match_id         = EXCLUDED.match_id,
-    sub_event_type   = EXCLUDED.sub_event_type,
-    full_results     = EXCLUDED.full_results,
     start_date_local = EXCLUDED.start_date_local,
     last_seen_at     = EXCLUDED.last_seen_at;
 -- EXCLUDED means "the row we just tried to insert", so this reads "take the

@@ -157,6 +157,14 @@ Updated: 2026-11-10.
   `subEventType`, `fullResults` and `startDateLocal` while `match_card`,
   `extended_info` and `messagePayload` arrive null until the deferred per-match
   details call fills them (ADR 0006).
+- **The unpacked entries table stays narrow (2026-11-10).** It holds the two
+  identity columns, `match_id`, `start_date_local` and the two presence
+  timestamps, and nothing else. `fullResults` is `"OFFICIAL"` on all 200,879
+  measured rows, so copying it adds a constant; `subEventType` repeats what
+  `documentCode` already encodes (TTEM/TTEW + SINGLES/DOUBLES/TEAM) and its
+  labels are inconsistent upstream (`Men Singles` beside `Men's Team`). Both stay
+  in the payload and are dbt's to derive, per ADR 0003. The fan-out does not need
+  either: match details and logs key on `(eventId, documentCode)` (ADR 0009).
 - **Eligibility is again derived, never a stored flag (2026-11-10).** A boolean
   such as `to_scrape` is a cache of a query: it goes stale the moment an event
   starts or is rescheduled, it cannot say *why* an event is in the queue, and

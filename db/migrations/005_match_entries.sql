@@ -56,8 +56,21 @@
 --     documentCode length ..................... 42 (198,579) or 34 (2,300)
 --
 --   So the id is neither unique nor global: it can only be a fact about a match.
---   It is still unpacked and indexed, because the deferred match-detail fan-out
---   looks matches up by it (ADR 0006, ADR 0009). ADR 0010 records the decision.
+--   It is still unpacked because it is the field people mean by "the match", but
+--   the fan-out does not need it: match details and logs are fetched by
+--   (eventId, documentCode) (ADR 0009). ADR 0010 records the decision.
+--
+-- WHY THE UNPACKED TABLE IS THIS NARROW
+--   Only what the pipeline needs without reading JSON: the identity, the
+--   presence timestamps, the upstream id and the start time. Everything else
+--   stays in the payload and is dbt's to derive.
+--
+--     full_results   "OFFICIAL" on all 200,879 rows, so it carries no signal.
+--                    if it ever varies, the payload still has it.
+--     subEventType   derivable from document_code (TTEM/TTEW + SINGLES/
+--                    DOUBLES/TEAM), and its labels are inconsistent upstream
+--                    ("Men Singles" next to "Men's Team"). Splitting the code is
+--                    a business rule anyway (ADR 0003), so dbt owns both.
 --
 -- NOT NULL
 --   Same rule as the events domain: ->> yields SQL NULL for a renamed key
@@ -115,8 +128,6 @@ CREATE TABLE IF NOT EXISTS ingest.match_entries_unpacked (
     match_id bigint NOT NULL,
     event_id bigint NOT NULL,
     document_code text NOT NULL,
-    sub_event_type text NOT NULL,
-    full_results text NOT NULL,
     start_date_local timestamp,
     first_seen_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     last_seen_at timestamptz NOT NULL DEFAULT clock_timestamp(),
@@ -126,50 +137,34 @@ CREATE TABLE IF NOT EXISTS ingest.match_entries_unpacked (
     CONSTRAINT match_entries_unpacked_event_id_check
         CHECK (event_id > 0),
     CONSTRAINT match_entries_unpacked_document_code_check
-        CHECK (btrim(document_code) <> ''),
-    CONSTRAINT match_entries_unpacked_sub_event_type_check
-        CHECK (btrim(sub_event_type) <> ''),
-    CONSTRAINT match_entries_unpacked_full_results_check
-        CHECK (btrim(full_results) <> '')
+        CHECK (btrim(document_code) <> '')
 );
 
 -- The pending view and the fan-out read by event, and the primary key already
 -- leads with event_id, so no separate event index is needed.
 
--- Reporting per draw ("how many Men Doubles matches") reads this pair.
-CREATE INDEX IF NOT EXISTS match_entries_unpacked_event_sub_event_idx
-    ON ingest.match_entries_unpacked (event_id, sub_event_type);
-
--- The deferred per-match fan-out reads one row per match id.
-CREATE INDEX IF NOT EXISTS match_entries_unpacked_match_id_idx
-    ON ingest.match_entries_unpacked (match_id);
-
 COMMENT ON TABLE ingest.match_entries_unpacked IS
     'One row per WTT match per event, unpacked from '
     'ingest.match_entries_payloads_raw. Match ENTRIES: identifies matches, '
     'does not carry their details. Keyed on (event_id, document_code): the '
-    'upstream id repeats inside and across events (ADR 0010).';
+    'upstream id repeats inside and across events (ADR 0010). Narrow on '
+    'purpose: identity, id, start time and presence only.';
 COMMENT ON COLUMN ingest.match_entries_unpacked.match_id IS
     'Payload key "id" or "iD", renamed to say what it is, cast to bigint. A '
     'FACT, not the identity: it repeats inside one event for different matches '
     'and is 0 for team tie cards. Use (event_id, document_code) to identify a '
-    'match.';
+    'match, and note the fan-out keys on that pair (ADR 0009).';
 COMMENT ON COLUMN ingest.match_entries_unpacked.event_id IS
     'Payload key "eventId". A STRING upstream, cast to bigint here so it joins '
-    'to events_unpacked.event_id without a cast on every query. Leads the key.';
+    'to events_unpacked.event_id without a cast on every query. Leads the key '
+    'and is half of the fan-out key.';
 COMMENT ON COLUMN ingest.match_entries_unpacked.document_code IS
-    'Payload key "documentCode", the match identity: a composite such as '
+    'Payload key "documentCode", the match identity and the other half of the '
+    'fan-out key: a composite such as '
     'TTEMSINGLES-----------FNL-000100---------- (42 chars) or the shorter team '
     'form (34 chars). Unique within an event and never seen twice in 200,879 '
     'rows. Kept intact; splitting it into gender, draw and round is a business '
     'rule and belongs in dbt.';
-COMMENT ON COLUMN ingest.match_entries_unpacked.sub_event_type IS
-    'Payload key "subEventType": Men Singles, Women Singles, Men Doubles, '
-    'Women Doubles, Mixed Doubles, plus team labels such as "Men''s Team". Human '
-    'readable label as sent, not a code.';
-COMMENT ON COLUMN ingest.match_entries_unpacked.full_results IS
-    'Payload key "fullResults": result status as sent, "OFFICIAL" for every '
-    'row seen so far. Not interpreted here.';
 COMMENT ON COLUMN ingest.match_entries_unpacked.start_date_local IS
     'Payload key "startDateLocal" as timestamp WITHOUT time zone. The API sends '
     'no offset, so none is invented. NULL when the payload sent blank or no '

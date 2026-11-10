@@ -42,8 +42,6 @@ EXPECTED_MATCH_ENTRY_UNPACKED_COLUMNS = {
     "match_id",
     "event_id",
     "document_code",
-    "sub_event_type",
-    "full_results",
     "start_date_local",
     "first_seen_at",
     "last_seen_at",
