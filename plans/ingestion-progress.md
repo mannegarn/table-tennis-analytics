@@ -190,9 +190,10 @@ ORDER BY (y.year = cy) DESC, (y.year = cy + 1) DESC, y.year DESC
   collector now rather than later.
 - **An empty year is a success** (see the decision above): `received_count = 0`,
   landed, remembered, never asked again. Without this, most pre-2000 years fail.
-- **The floor is configuration, not SQL**: the view exposes candidates from
-  1900 and the collector applies `WHERE year >= events_start_year`, so widening
-  or narrowing the backfill is a setting.
+- **The view starts at 1926, the first year with data.** That is a measured fact,
+  not a policy, so the queue never offers years the API has nothing for. The
+  collector still applies `WHERE year >= events_start_year` on top, which can
+  only narrow a backfill ("from 2000 onwards"), never widen it past 1926.
 - **Accepted cost**: a past year is frozen after its first landing, so an
   upstream cancellation or reschedule discovered later is never picked up. The
   escape hatch is `--years 2023`, which bypasses the view. The alternative was

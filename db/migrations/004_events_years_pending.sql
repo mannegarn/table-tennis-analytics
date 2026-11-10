@@ -13,10 +13,11 @@
 --     year < cy, payload landed        -> never again
 --     year > cy + 1                    -> not offered at all
 --
---   The candidate series starts at 1900 and the collector applies its own floor
---   (`Settings.events_start_year`, currently 1926, the first year the API has
---   any tournaments for). Keeping the floor in configuration means widening or
---   narrowing a backfill is a setting, not a migration.
+--   The candidate series starts at 1926: the first year the API returns any
+--   tournaments for, which is a measured fact rather than a policy. The
+--   collector still applies `Settings.events_start_year` on top, so a narrower
+--   backfill (say "only 2000 onwards") is a setting, not a migration, but
+--   nothing before 1926 is ever offered because nothing exists there.
 --
 -- WHY A YEAR IS NEVER REFETCHED ONCE PAST
 --   A past year's calendar is static, so one landing is enough. The accepted
@@ -41,7 +42,7 @@ SELECT
     END::text AS reason,
     r.fetched_at
 FROM bounds AS b
-CROSS JOIN LATERAL generate_series(1900, b.current_year + 1) AS y (year)
+CROSS JOIN LATERAL generate_series(1926, b.current_year + 1) AS y (year)
 LEFT JOIN ingest.events_by_year_raw AS r ON r.year = y.year
 WHERE y.year IN (b.current_year, b.current_year + 1)
    OR r.year IS NULL;

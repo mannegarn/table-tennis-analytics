@@ -115,9 +115,15 @@ def test_an_empty_payload_counts_as_fetched(
     assert quiet_year not in [year for year, _ in pending_years(FIRST_YEAR)]
 
 
-def test_the_floor_is_applied_by_the_caller_not_the_view(
+def test_the_queue_starts_at_the_first_year_with_data(
     db_connection: Connection[Any],
 ) -> None:
-    """The view offers 1900 upwards; the collector's floor trims the front."""
-    assert 1900 in [year for year, _ in pending_years(1900)]
-    assert 1900 not in [year for year, _ in pending_years(FIRST_YEAR)]
+    """Nothing before 1926 exists upstream, so nothing there is offered."""
+    assert min(year for year, _ in pending_years(1900)) == FIRST_YEAR
+
+
+def test_the_caller_floor_can_narrow_the_backfill(
+    db_connection: Connection[Any],
+) -> None:
+    """`events_start_year` still works as a floor, for narrowing only."""
+    assert min(year for year, _ in pending_years(2010)) == 2010
