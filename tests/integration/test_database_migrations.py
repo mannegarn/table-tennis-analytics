@@ -89,6 +89,7 @@ def test_migrations_create_the_raw_table(
         "004_events_years_pending",
         "005_match_entries",
         "006_match_entries_pending",
+        "007_match_entries_identity",
     }
     assert [row["schema_name"] for row in schemas] == ["analytics", "ingest"]
 
@@ -142,10 +143,16 @@ def test_migrations_create_the_match_entries_tables(
          AND kcu.table_schema = tc.table_schema
         WHERE tc.table_schema = 'ingest'
           AND tc.table_name = 'match_entries_unpacked'
-          AND tc.constraint_type = 'PRIMARY KEY';
+          AND tc.constraint_type = 'PRIMARY KEY'
+        ORDER BY kcu.ordinal_position;
         """
     ).fetchall()
-    assert [row["column_name"] for row in unpacked_key] == ["match_id"]
+    # The upstream match id repeats inside one event and across events, so the
+    # identity is the event plus the document code (ADR 0010).
+    assert [row["column_name"] for row in unpacked_key] == [
+        "event_id",
+        "document_code",
+    ]
 
     assert raw["payload"]["data_type"] == "jsonb"
     assert raw["event_id"]["data_type"] == "bigint"
@@ -153,4 +160,6 @@ def test_migrations_create_the_match_entries_tables(
 
     # No timezone is invented: the API sends "2025-09-29T18:35:00" with none.
     assert unpacked["start_date_local"]["data_type"] == ("timestamp without time zone")
+    # 424 rows send no start time at all, so the column has to allow NULL.
+    assert unpacked["start_date_local"]["is_nullable"] == "YES"
     assert unpacked["document_code"]["is_nullable"] == "NO"

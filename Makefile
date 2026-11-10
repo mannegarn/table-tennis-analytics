@@ -15,7 +15,7 @@ TEST_DATABASE_NAME ?= tt_stats_test
 
 .DEFAULT_GOAL := help
 
-.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-collect events-unpack events-unpack-preview matches-collect test test-integration dbt-debug lint format typecheck check hooks-install hooks-run
+.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-collect events-unpack events-unpack-preview matches-collect matches-unpack matches-unpack-preview test test-integration dbt-debug lint format typecheck check hooks-install hooks-run
 
 help: ## Show available commands
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -75,6 +75,12 @@ events-unpack-preview: ## Run the unpack for one year, then roll it back
 
 matches-collect: ## Collect match lists for pending events into ingest.match_entries_payloads_raw
 	uv run tt-matches-collect $(if $(EVENT_IDS),--event-ids $(EVENT_IDS),)$(if $(LIMIT), --limit $(LIMIT),)
+
+matches-unpack: ## Unpack landed match lists into ingest.match_entries_unpacked
+	uv run tt-matches-unpack $(if $(EVENT_IDS),--event-ids $(EVENT_IDS),)
+
+matches-unpack-preview: ## Run the match unpack with EVENT_IDS, then roll it back
+	uv run tt-matches-unpack $(if $(EVENT_IDS),--event-ids $(EVENT_IDS),) --dry-run
 
 test: ## Run the test suite
 	uv run pytest

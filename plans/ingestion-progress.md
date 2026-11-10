@@ -25,8 +25,13 @@ Updated: 2026-11-10.
   `ingest_runs` row per event.
 - **2838 events fetched**: 2307 answers of `[]`, 531 with matches, 200,879 match
   rows, 2.7 MB of payload. The queue then holds only the live events.
-- `ingest.match_entries_unpacked` exists and is **deliberately empty**: the
-  unpack SQL is the next step, so landing is raw-only for now.
+- `make matches-unpack` unpacks every landed payload into
+  `ingest.match_entries_unpacked`: **200,879 rows across 531 events**, with the
+  2307 empty payloads unpacking to nothing. A second run changes no counts, only
+  `last_seen_at`.
+- The unpack also runs inside `land_match_entries`, so a collect cannot land a
+  payload it has not unpacked, and a post-unpack assertion rolls the whole event
+  back when the row count disagrees with the payload (ADR 0003).
 
 **Shared plumbing**
 
@@ -60,6 +65,10 @@ Updated: 2026-11-10.
   just added. The development database is disposable; this stops working the day
   a database must be preserved, and that is the point at which additive
   migrations become mandatory.
+- **That day arrived with 007 (2026-11-10).** Measurement proved 005's primary
+  key wrong, but 2838 landed payloads were worth more than a checksum, so 007 is
+  the first additive migration: it swaps the key, relaxes one column and adds an
+  index. Future schema corrections follow the same shape.
 - **Do not land failed fetches.** A failed response never overwrites a good
   payload. Failures go to `ingest_runs` instead.
 - **No local payload writes.** The database row is the source of truth.
@@ -308,10 +317,43 @@ WHERE e.start_date <= p
 - **Upstream is inconsistent about the match-id key (found 2026-11-10).**
   Events 3098, 2519 and the 2022 samples send `id`; events 3257 and 3346 send
   `iD`. Same integer, different casing. The collector accepts either through
-  `MATCH_ID_KEYS`, and the unpack must coalesce
-  `payload ->> 'id'` with `payload ->> 'iD'` into one `match_id`. Assuming the
-  lower-case key would have silently rejected two live events (35 and 206 rows)
-  on the first smoke run.
+  `MATCH_ID_KEYS`, and the unpack coalesces `->> 'id'` with `->> 'iD'` into one
+  `match_id`. Assuming the lower-case key would have silently rejected two live
+  events (35 and 206 rows) on the first smoke run.
+
+### Match-entries unpack: identity is the event plus the document code (decided 2026-11-10)
+
+Measured over all 2838 landed payloads before the SQL was written, because the
+id looked like a key and was not.
+
+| Fact | Count |
+| --- | --- |
+| match rows landed | 200,879 |
+| distinct `(event_id, documentCode)` pairs | 200,879 |
+| `documentCode` repeated inside one event | 0 |
+| match id repeated inside one event | 278 groups, 943 rows |
+| match id shared by two or three events | 132 |
+| id = 0 (team tie cards, event 2345) | 183 |
+| `startDateLocal` blank or missing | 424 |
+| `startDateLocal` = `0001-01-01T00:00:00` | 1665 |
+| `documentCode` length 42 / 34 | 198,579 / 2,300 |
+| id sent under `iD` | 854 rows, 7 payloads |
+
+- **The key is `(event_id, document_code)` (ADR 0010).** Event 2411 sends id
+  59820 twice, as QFNL000100 and QFNL000200: two different matches, one id.
+  Keying on the id would have dropped one of them, and the first real unpack
+  would have failed outright with "ON CONFLICT DO UPDATE cannot affect row a
+  second time".
+- **`match_id` is a fact, not an identity.** It is unpacked and indexed for the
+  deferred fan-out, and it is 0 for the 183 team cards.
+- **`start_date_local` is nullable.** 424 rows send no date at all; the
+  `0001-01-01` sentinel is stored as sent, and deciding it means "unknown" is a
+  dbt rule.
+- **Document codes are 34 or 42 characters**, so the unpack keeps the code
+  intact rather than asserting a width; splitting it into gender, draw and round
+  belongs in dbt.
+- **Measured run**: 200,879 rows from 2838 events in about 8 seconds, 2307
+  events contributing nothing, and a second run changes no counts.
 
 ## Match-entries collector (built 2026-11-10)
 
@@ -322,14 +364,12 @@ Modules, in build order:
 2. `WttClient.get_json`, `_get_once` and `fetch_match_entries(event_id)`,
    reusing the semaphore, retry policy, jitter and `Retry-After` handling that
    the POST path already has.
-3. `matches/land/sql/unpack_match_entries.sql` plus its loader, **not yet
-   written**: scoped to one event, `DISTINCT ON (match_id)` over
-   `coalesce(payload ->> 'id', payload ->> 'iD')`, upsert on `match_id`, with a
-   conflict guard so a `match_id` seen under a different `event_id` fails
-   instead of reparenting.
-4. `matches/land/match_entries.land_match_entries()`: payload upsert today.
-   The unpack and its completeness assertion join this same transaction when
-   the SQL exists, mirroring `land_events_by_year`.
+3. `matches/land/sql/unpack_match_entries.sql` plus its loader (`tt-matches-unpack`,
+   `make matches-unpack`, `make matches-unpack-preview`): scoped to one event,
+   `DISTINCT ON (event_id, documentCode)`, upsert on the same pair.
+4. `matches/land/match_entries.land_match_entries()`: payload upsert and unpack
+   in one transaction, followed by the completeness assertion, mirroring
+   `land_events_by_year`.
 5. `matches/collect/match_entries.py`: queue read, chunk loop, per-event land,
    `ingest_runs` row per attempt, progress bar, CLI.
 

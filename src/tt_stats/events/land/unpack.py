@@ -14,12 +14,13 @@ the statement and everything switches on with no code change.
 from __future__ import annotations
 
 import argparse
-import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from tt_stats.core.db import get_connection
 from tt_stats.core.logging_config import configure_logging, get_logger
+from tt_stats.core.sql_files import executable_sql as executable_sql
+from tt_stats.core.sql_files import load_sql
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -30,26 +31,15 @@ logger = get_logger(__name__)
 
 UNPACK_SQL_PATH = Path(__file__).with_name("sql") / "unpack_events.sql"
 
-_BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
-_LINE_COMMENT = re.compile(r"--[^\n]*")
-
-
-def executable_sql(text: str) -> str:
-    """Return ``text`` with SQL comments stripped.
-
-    Used to tell a scaffold from a real statement. Deliberately dumb: it only
-    needs to answer "is there anything here besides comments".
-    """
-    without_blocks = _BLOCK_COMMENT.sub(" ", text)
-    return _LINE_COMMENT.sub(" ", without_blocks).strip()
-
 
 def load_unpack_sql(path: Path = UNPACK_SQL_PATH) -> str | None:
-    """Return the unpack statement, or ``None`` while the file is a scaffold."""
-    text = path.read_text(encoding="utf-8")
-    if not executable_sql(text):
-        return None
-    return text
+    """Return the unpack statement, or ``None`` while the file is a scaffold.
+
+    ``executable_sql`` is re-exported from ``core.sql_files`` so callers and
+    tests keep importing both from one place, and the scaffold rule stays
+    identical for every unpack statement in the project.
+    """
+    return load_sql(path)
 
 
 def unpack_events_year(connection: Connection[Any], year: int) -> int:
