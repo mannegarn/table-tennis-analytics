@@ -4,7 +4,7 @@ One row per fetch attempt, written once the attempt has settled. This is the
 durable counterpart to the console log: it survives a closed terminal and can
 be queried next to the data it describes.
 
-It is deliberately not a scrape flag. "Already fetched" stays row existence in
+It is deliberately not a collect flag. "Already fetched" stays row existence in
 the raw table, and eligibility stays derived in the pending view (ADR 0005).
 """
 
@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 from tt_stats.core.db import get_connection
 
 SOURCE_WTT_EVENTCALENDAR = "wtt_eventcalendar"
+SOURCE_WTT_MATCH_ENTRIES = "wtt_getofficialresult"
 
 STATUS_SUCCEEDED = "succeeded"
 STATUS_FAILED = "failed"

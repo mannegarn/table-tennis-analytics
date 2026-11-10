@@ -28,6 +28,77 @@ def _settings(**overrides: Any) -> Settings:
     return Settings(**values)
 
 
+async def test_fetch_match_entries_sends_the_event_and_document_code() -> None:
+    seen: list[httpx.Request] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=[{"id": 1, "eventId": "3098"}])
+
+    async with WttClient(
+        settings=_settings(), transport=httpx.MockTransport(handler)
+    ) as client:
+        response = await client.fetch_match_entries(3098)
+
+    request = seen[0]
+    assert request.method == "GET"
+    assert request.url.params["EventId"] == "3098"
+    assert request.url.params["DocumentCode"] == "TTE"
+    assert response.status_code == 200
+    assert response.data == [{"id": 1, "eventId": "3098"}]
+
+
+async def test_fetch_match_entries_accepts_an_empty_list() -> None:
+    """``[]`` is a real answer: some events have no matches at all."""
+
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=[])
+
+    async with WttClient(
+        settings=_settings(), transport=httpx.MockTransport(handler)
+    ) as client:
+        response = await client.fetch_match_entries(3098)
+
+    assert response.data == []
+    assert response.status_code == 200
+
+
+async def test_get_retries_a_transient_failure_then_succeeds() -> None:
+    calls = 0
+
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return httpx.Response(503, json={"error": "busy"})
+        return httpx.Response(200, json=[])
+
+    async with WttClient(
+        settings=_settings(), transport=httpx.MockTransport(handler)
+    ) as client:
+        await client.fetch_match_entries(3098)
+
+    assert calls == 2
+
+
+async def test_get_does_not_retry_a_client_error() -> None:
+    calls = 0
+
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(404, json={"error": "not found"})
+
+    async with WttClient(
+        settings=_settings(), transport=httpx.MockTransport(handler)
+    ) as client:
+        with pytest.raises(WttRequestError) as caught:
+            await client.fetch_match_entries(3098)
+
+    assert caught.value.status_code == 404
+    assert calls == 1
+
+
 async def test_retries_429_then_succeeds() -> None:
     calls = 0
 

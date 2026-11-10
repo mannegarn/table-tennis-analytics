@@ -9,11 +9,13 @@ endif
 
 COMPOSE := docker compose
 YEARS ?=
+LIMIT ?=
+EVENT_IDS ?=
 TEST_DATABASE_NAME ?= tt_stats_test
 
 .DEFAULT_GOAL := help
 
-.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-scrape events-unpack events-unpack-preview test test-integration dbt-debug lint format typecheck check hooks-install hooks-run
+.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-collect events-unpack events-unpack-preview matches-collect test test-integration dbt-debug lint format typecheck check hooks-install hooks-run
 
 help: ## Show available commands
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -51,23 +53,28 @@ db-test-check: ## Verify the test database exists, is migrated and how many fixt
 		| grep -qx 1 \
 		|| { echo "missing database $(TEST_DATABASE_NAME); see db/init/000_create_test_db.sql"; exit 1; }
 	@$(COMPOSE) exec -T postgres psql -U $(POSTGRES_USER) -d $(TEST_DATABASE_NAME) -tAc \
-		"SELECT format('migrations=%s raw=%s unpacked=%s runs=%s', \
+		"SELECT format('migrations=%s events_raw=%s events_unpacked=%s match_raw=%s match_unpacked=%s runs=%s', \
 			(SELECT count(*) FROM ingest.schema_version), \
 			(SELECT count(*) FROM ingest.events_by_year_raw), \
 			(SELECT count(*) FROM ingest.events_unpacked), \
+			(SELECT count(*) FROM ingest.match_entries_payloads_raw), \
+			(SELECT count(*) FROM ingest.match_entries_unpacked), \
 			(SELECT count(*) FROM ingest.ingest_runs));"
 
 db-migrate: ## Apply db/migrations to the warehouse
 	uv run tt-db-migrate
 
-events-scrape: ## Fetch event calendars and land them in ingest.events_by_year_raw
-	uv run tt-events-scrape $(if $(YEARS),--years $(YEARS),)
+events-collect: ## Collect the pending calendar years into ingest.events_by_year_raw
+	uv run tt-events-collect $(if $(YEARS),--years $(YEARS),)$(if $(LIMIT), --limit $(LIMIT),)
 
 events-unpack: ## Unpack landed calendars into ingest.events_unpacked
 	uv run tt-events-unpack $(if $(YEARS),--years $(YEARS),)
 
 events-unpack-preview: ## Run the unpack for one year, then roll it back
 	uv run tt-events-unpack --years $(or $(YEARS),2023) --dry-run
+
+matches-collect: ## Collect match lists for pending events into ingest.match_entries_payloads_raw
+	uv run tt-matches-collect $(if $(EVENT_IDS),--event-ids $(EVENT_IDS),)$(if $(LIMIT), --limit $(LIMIT),)
 
 test: ## Run the test suite
 	uv run pytest

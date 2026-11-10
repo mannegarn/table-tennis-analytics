@@ -10,7 +10,7 @@ The client owns three concerns that would otherwise leak into collectors:
 import asyncio
 import math
 import random
-from collections.abc import Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from types import TracebackType
 from typing import Any
@@ -24,7 +24,10 @@ from tenacity import (
     wait_exponential_jitter,
 )
 
-from tt_stats.core.clients.wtt_routes import get_events_year_route
+from tt_stats.core.clients.wtt_routes import (
+    get_events_year_route,
+    get_match_entries_route,
+)
 from tt_stats.core.config import Settings, get_settings
 
 
@@ -149,6 +152,25 @@ class WttClient:
             headers=route["headers"],
         )
 
+    async def fetch_match_entries(self, event_id: int) -> WttResponse:
+        """Fetch one event's match list.
+
+        The response is a bare JSON array, empty (``[]``) for an event with no
+        published matches. An empty array is a successful response, not an
+        error: some events never had matches, and 2020-and-earlier events have
+        none at all on this endpoint.
+        """
+        route = get_match_entries_route(
+            event_id,
+            api_key=self._settings.wtt_api_key,
+            user_agent=self._settings.user_agent,
+        )
+        return await self.get_json(
+            url=route["url"],
+            params=route["params"],
+            headers=route["headers"],
+        )
+
     async def post_json(
         self,
         *,
@@ -156,7 +178,36 @@ class WttClient:
         json_payload: Mapping[str, Any],
         headers: Mapping[str, str],
     ) -> WttResponse:
-        """POST a JSON body and return the parsed response.
+        """POST a JSON body and return the parsed response."""
+        return await self._send_with_retries(
+            lambda: self._post_once(
+                url=url,
+                json_payload=json_payload,
+                headers=headers,
+            )
+        )
+
+    async def get_json(
+        self,
+        *,
+        url: str,
+        params: Mapping[str, str],
+        headers: Mapping[str, str],
+    ) -> WttResponse:
+        """GET a JSON resource and return the parsed response.
+
+        Shares the POST path's retry policy, semaphore and jitter, so a caller
+        cannot accidentally introduce a second, looser concurrency policy.
+        """
+        return await self._send_with_retries(
+            lambda: self._get_once(url=url, params=params, headers=headers)
+        )
+
+    async def _send_with_retries(
+        self,
+        send: Callable[[], Awaitable[WttResponse]],
+    ) -> WttResponse:
+        """Run ``send`` under the retry policy and map failures to ``WttError``.
 
         Retries transient errors with exponential backoff and jitter. Client
         errors such as 400 or 403 are raised immediately, because repeating
@@ -172,11 +223,7 @@ class WttClient:
         try:
             async for attempt in retrying:
                 with attempt:
-                    return await self._post_once(
-                        url=url,
-                        json_payload=json_payload,
-                        headers=headers,
-                    )
+                    return await send()
         except (httpx.HTTPStatusError, httpx.RequestError) as error:
             status = (
                 error.response.status_code
@@ -225,10 +272,7 @@ class WttClient:
         headers: Mapping[str, str],
     ) -> WttResponse:
         async with self._semaphore:
-            if self._settings.request_jitter_seconds > 0:
-                await asyncio.sleep(
-                    random.uniform(0, self._settings.request_jitter_seconds)
-                )
+            await self._jitter()
 
             # Let httpx set the content type for a json= body.
             clean_headers = {
@@ -242,17 +286,40 @@ class WttClient:
                 json=json_payload,
                 headers=clean_headers,
             )
-            response.raise_for_status()
+            return self._parse(response)
 
-            try:
-                data = response.json()
-            except ValueError as error:
-                raise WttPayloadError(
-                    f"WTT response was not valid JSON: {error}"
-                ) from error
+    async def _get_once(
+        self,
+        *,
+        url: str,
+        params: Mapping[str, str],
+        headers: Mapping[str, str],
+    ) -> WttResponse:
+        async with self._semaphore:
+            await self._jitter()
 
-            return WttResponse(
-                status_code=response.status_code,
-                content=response.content,
-                data=data,
+            response = await self._http.get(url, params=params, headers=headers)
+            return self._parse(response)
+
+    async def _jitter(self) -> None:
+        """Sleep a random fraction of a second, so bursts do not align."""
+        if self._settings.request_jitter_seconds > 0:
+            await asyncio.sleep(
+                random.uniform(0, self._settings.request_jitter_seconds)
             )
+
+    def _parse(self, response: httpx.Response) -> WttResponse:
+        """Raise on a non-success status, then parse the body as JSON."""
+        response.raise_for_status()
+        try:
+            data = response.json()
+        except ValueError as error:
+            raise WttPayloadError(
+                f"WTT response was not valid JSON: {error}"
+            ) from error
+
+        return WttResponse(
+            status_code=response.status_code,
+            content=response.content,
+            data=data,
+        )

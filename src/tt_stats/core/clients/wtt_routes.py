@@ -13,6 +13,15 @@ WTT_CALENDAR_URL = (
     "/api/eventcalendar"
 )
 
+#: A different host from the calendar: this one serves the live-results API.
+_LIVE_EVENTS_BASE_URL = "https://wttwebsiteprodapi-liveevents.trafficmanager.net"
+WTT_MATCH_ENTRIES_URL = f"{_LIVE_EVENTS_BASE_URL}/api/cms/GetOfficialResult"
+
+#: Every match-list request uses the same document code. Measured against a
+#: 2025 event (306 rows) and late-2021 events (215-368 rows): one code covers
+#: men's, women's, doubles and mixed draws.
+MATCH_ENTRIES_DOCUMENT_CODE = "TTE"
+
 _COMMON_HEADERS = {
     "accept": "application/json, text/plain, */*",
     "origin": "https://www.worldtabletennis.com",
@@ -64,6 +73,40 @@ def get_events_year_route(
         "method": "POST",
         "url": WTT_CALENDAR_URL,
         "json_payload": {"custom_filter": json.dumps(inner_filter)},
+        "headers": {
+            **_COMMON_HEADERS,
+            "secapimkey": api_key,
+            "user-agent": user_agent,
+        },
+    }
+
+
+def get_match_entries_route(
+    event_id: int,
+    *,
+    api_key: str,
+    user_agent: str,
+) -> dict[str, Any]:
+    """Build the GET request for one event's match list.
+
+    Unlike the calendar, this endpoint takes query parameters, and its response
+    is a bare JSON array of match rows rather than a ``rows`` envelope.
+
+    Args:
+        event_id: WTT EventId to fetch the match list for.
+        api_key: Value for the ``secapimkey`` header.
+        user_agent: User agent advertised to the site.
+
+    Returns:
+        A mapping with ``method``, ``url``, ``params`` and ``headers``.
+    """
+    return {
+        "method": "GET",
+        "url": WTT_MATCH_ENTRIES_URL,
+        "params": {
+            "EventId": str(event_id),
+            "DocumentCode": MATCH_ENTRIES_DOCUMENT_CODE,
+        },
         "headers": {
             **_COMMON_HEADERS,
             "secapimkey": api_key,

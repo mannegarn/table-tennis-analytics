@@ -2,7 +2,10 @@
 
 import json
 
-from tt_stats.core.clients.wtt_routes import get_events_year_route
+from tt_stats.core.clients.wtt_routes import (
+    get_events_year_route,
+    get_match_entries_route,
+)
 
 
 def test_calendar_route_is_a_post_to_the_eventcalendar_endpoint() -> None:
@@ -28,6 +31,28 @@ def test_calendar_filter_is_json_encoded_inside_the_payload() -> None:
 
 def test_calendar_headers_carry_auth_and_user_agent() -> None:
     route = get_events_year_route(2023, api_key="test-key", user_agent="test-agent")
+
+    assert route["headers"]["secapimkey"] == "test-key"
+    assert route["headers"]["user-agent"] == "test-agent"
+
+
+def test_match_entries_route_is_a_get_to_official_results() -> None:
+    route = get_match_entries_route(3098, api_key="test-key", user_agent="test-agent")
+
+    assert route["method"] == "GET"
+    assert route["url"].endswith("/api/cms/GetOfficialResult")
+    assert "json_payload" not in route
+
+
+def test_match_entries_params_carry_the_event_and_document_code() -> None:
+    """EventId is a string on the wire, and DocumentCode is always TTE."""
+    route = get_match_entries_route(3098, api_key="test-key", user_agent="test-agent")
+
+    assert route["params"] == {"EventId": "3098", "DocumentCode": "TTE"}
+
+
+def test_match_entries_headers_carry_auth_and_user_agent() -> None:
+    route = get_match_entries_route(3098, api_key="test-key", user_agent="test-agent")
 
     assert route["headers"]["secapimkey"] == "test-key"
     assert route["headers"]["user-agent"] == "test-agent"

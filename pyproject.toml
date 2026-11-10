@@ -19,6 +19,7 @@ tt-db-check = "tt_stats.core.db:main"
 tt-db-migrate = "tt_stats.core.migrations:main"
 tt-events-collect = "tt_stats.events.collect.events_by_year:main"
 tt-events-unpack = "tt_stats.events.land.unpack:main"
+tt-matches-collect = "tt_stats.matches.collect.match_entries:main"
 
 [dependency-groups]
 dev = [

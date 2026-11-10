@@ -1,7 +1,8 @@
 # Table Tennis Analytics Platform
 
-End-to-end data platform for international table tennis: scrape the source,
-land raw payloads in PostgreSQL, transform with dbt, and analyse with Polars.
+End-to-end data platform for international table tennis: collect from the
+source, land raw payloads in PostgreSQL, transform with dbt, and analyse with
+Polars.
 
 > Status: ongoing. Nothing is deployed yet.
 
@@ -60,11 +61,11 @@ uv run tt-db-check
 - `make dbt-debug` ends with `All checks passed!`
 - `make test` runs the suite; the integration test skips automatically when the database is down.
 - `make test-integration` runs the database integration tests explicitly.
-- Integration tests run against `tt_stats_test`, not the warehouse, so scraped data
-  is never touched. `make db-test-check` shows its applied migrations and row
+- Integration tests run against `tt_stats_test`, not the warehouse, so collected
+  data is never touched. `make db-test-check` shows its applied migrations and row
   counts; `make db-test-psql` opens a shell on it.
 
-## Events scrape
+## Events collection
 
 The events calendar is fetched and upserted into
 `ingest.events_by_year_raw`. Each year is one row and one transaction. No
@@ -72,9 +73,28 @@ payload files are written. A landing failure marks that year as failed and
 makes the command exit non-zero.
 
 ```sh
-make events-scrape                 # 2021 through the current year
-make events-scrape YEARS="2023"    # one year
+make events-collect                 # whatever the pending view says
+make events-collect YEARS="2023"    # one year, bypassing the view
+make events-collect LIMIT=5         # first five years in queue order
 ```
+
+Which years get fetched is derived, never stored (`ingest.events_years_pending`):
+
+| Year | Payload already landed? | Fetched? | `reason` |
+| --- | --- | --- | --- |
+| current year | either | yes, every run | `current` |
+| next year | either | yes, every run | `next` |
+| any other year | no | yes, once | `backfill` |
+| any other year | yes | no | - |
+
+So the first run is the whole history and every run after it is two requests.
+Years are fetched in chunks of `CHUNK_SIZE` (default 50), concurrently within a
+chunk and landed one transaction at a time, so a crash cannot lose more than the
+chunk in flight. A year with no tournaments is a success: it lands with
+`received_count = 0` and is never asked for again.
+
+Measured coverage on 2026-11-10: **102 years, 1926-2027**, 2984 calendar rows,
+nine empty years (1927, 1934, 1940-1946), 2965 unpacked events.
 
 Each row stores the JSONB payload plus the fetch metadata: HTTP status, SHA-256,
 `fetched_at`, and three counts that are easy to confuse:
@@ -93,10 +113,10 @@ with its start and finish time, status, HTTP status, row count and error. That
 is the durable history: a failed year leaves a row, so nothing depends on
 scrolling back through a terminal.
 
-`ingest.events_unpacked` holds one row per event per calendar: 736 rows for the
-six landed years, from 755 calendar rows. The difference is duplicates: 2021,
-2022 and 2026 each list some events more than once, and the unpack de-duplicates
-them. The key is `(source_year, event_id)`, so a tournament listed in two years'
+`ingest.events_unpacked` holds one row per event per calendar: 2965 rows from
+2984 calendar rows. The difference is duplicates: 2021, 2022 and 2026 each list
+some events more than once, and the unpack de-duplicates them. The key is
+`(source_year, event_id)`, so a tournament listed in two years'
 calendars keeps a row in both instead of the later landing overwriting the
 earlier one. `first_seen_at` is written once and `last_seen_at` advances on
 every unpack, which is how an event WTT dropped is spotted without deleting
@@ -112,18 +132,34 @@ make events-unpack YEARS="2023"           # commit one year
 make events-unpack                        # every year in the raw table
 ```
 
-A terminal uses one `tqdm` bar that rewrites a single line, so a long scrape
-does not print one line per item. The console handler only prints `WARNING`
-and above, so routine records cannot push the bar down a line; every record
-still goes to `logs/tt_stats.log` and to `ingest.ingest_runs`. Piped, captured
-and JSON runs draw no bar and keep the per-year log records.
+A terminal uses one `tqdm` bar that rewrites a single line, so a long collect
+run does not print one line per item. The bar carries elapsed time, estimated
+time remaining and a live rate, because "how long left" is the question a long
+scrape actually raises. The console handler only prints `WARNING` and above, so
+routine records cannot push the bar down a line; every record still goes to
+`logs/tt_stats.log` and to `ingest.ingest_runs`. Piped, captured and JSON runs
+draw no bar and keep the per-item log records.
 
 ```text
-Events calendar: 6/6 [##########] year=2026 | received=174 | source=174 | ok
+Collecting match entries (50/chunk, 20 workers): 1200/2838 [##########] [02:14<03:03, 8.94event/s] live event=3257 | matches=35 | ok
 ```
 
-The run boundaries are logged as `events_scrape_started` and
-`events_scrape_complete` (or `events_scrape_incomplete`).
+The title states the chunk size and the worker count, so a plateau in the rate is
+explained: at most that many requests are ever in flight.
+
+Each run ends with a summary line, printed even when there is no terminal, and
+recorded in the log with `elapsed_seconds` and `rate_per_second`:
+
+```text
+2,840 events in 2m 05s (22.6/s), 57 chunks: 200,879 matches found, 2,309 events with no matches, 0 failed
+102 years in 5.2s (19.6/s), 3 chunks: 2,984 events found, 9 years with no events, 0 failed
+```
+
+Log volume is per chunk, not per item. `match_entries_chunk` and `events_chunk`
+record `chunk=i/n`, the item count for that chunk, matches found, empties,
+failures and the chunk's own rate, so a 2840-event run writes about 57 lines
+rather than 2840. Per-item records are `DEBUG`; failures stay at `ERROR`, one
+per item, because there are few and each one matters.
 
 Console output is mirrored to a rotating file, so no `tee` is needed:
 
@@ -135,8 +171,45 @@ Set `LOG_TO_FILE=false` to disable it, or `LOGS_DIR` to move it. `logs/` is
 git-ignored.
 
 The 2023 payload is committed at `tests/fixtures/events_2023.json` for the
-offline contract test. Run `make db-migrate` first; the scrape writes only to
+offline contract test. Run `make db-migrate` first; the command writes only to
 the database. `data/` remains git-ignored for legacy captures and scratch files.
+
+## Match entries collection
+
+One request per event returns that tournament's whole match list, so the
+request grain is the event and each response is stored as one row in
+`ingest.match_entries_payloads_raw`.
+
+```sh
+make matches-collect                    # whatever the pending view says
+make matches-collect LIMIT=5            # first five events in queue order
+make matches-collect EVENT_IDS="3098"   # one event, bypassing the view
+```
+
+Which events are requested is derived in `ingest.match_entries_pending`, never
+stored:
+
+| Event state | Fetched? | `reason` |
+| --- | --- | --- |
+| has not started yet | no | - |
+| in progress, or ended today or yesterday | yes, every run | `live` |
+| finished, never fetched | yes, once | `new` |
+| finished, last fetch on or before its final day | yes, once more | `stale` |
+| finished, fetched after its final day | no | - |
+
+Events are fetched in chunks of `CHUNK_SIZE` (default 50), concurrently within a
+chunk, and landed one transaction at a time. An empty answer is `[]` and is
+stored with `received_count = 0`, so "WTT has no matches for this event" is a
+recorded fact rather than a question asked every run.
+
+Two payload quirks are handled explicitly: the body is a bare JSON array rather
+than a `rows` envelope, and the match id arrives as `id` for some events and
+`iD` for others (the unpack will coalesce them).
+
+Measured on 2026-11-10: **2838 events fetched, 2307 empty answers, 531 events
+with matches, 200,879 match rows, 2.7 MB of payload.** No match data exists
+before 2012, and only sample traces in 2012 and 2019; the archive becomes
+substantial from 2021.
 
 ## Command surface
 
@@ -153,8 +226,9 @@ the database. `data/` remains git-ignored for legacy captures and scratch files.
 | `make db-check` | Verify the Python to PostgreSQL connection |
 | `make db-test-check` | Verify `tt_stats_test` exists, is migrated and count its fixture rows |
 | `make db-migrate` | Apply versioned SQL migrations |
-| `make events-scrape` | Fetch event calendars and land them in `ingest.events_by_year_raw` |
+| `make events-collect` | Collect event calendars and land them in `ingest.events_by_year_raw` |
 | `make events-unpack` | Unpack landed calendars into `ingest.events_unpacked` |
+| `make matches-collect` | Collect match lists and land them in `ingest.match_entries_payloads_raw` |
 | `make events-unpack-preview` | Run the unpack for one year, print counts, roll back |
 | `make test` | Run the test suite |
 | `make test-integration` | Run only integration tests |
@@ -227,9 +301,9 @@ Domain first, then data level.
 
 ```
 src/tt_stats/core/        shared config, database, logging, run history, clients
-src/tt_stats/events/      scrape and land events
-src/tt_stats/matches/     scrape and land match entries and details
-src/tt_stats/players/     scrape and land player details and playstyle
+src/tt_stats/events/      collect and land events
+src/tt_stats/matches/     collect and land match entries and details
+src/tt_stats/players/     collect and land player details and playstyle
 db/init/                  one-time SQL on first database start
 db/migrations/            versioned tables, unpack SQL, views, control tables
 dbt/models/<domain>/      marts models per domain, reading _unpacked tables
