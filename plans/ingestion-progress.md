@@ -65,10 +65,13 @@ Updated: 2026-11-10.
   just added. The development database is disposable; this stops working the day
   a database must be preserved, and that is the point at which additive
   migrations become mandatory.
-- **That day arrived with 007 (2026-11-10).** Measurement proved 005's primary
-  key wrong, but 2838 landed payloads were worth more than a checksum, so 007 is
-  the first additive migration: it swaps the key, relaxes one column and adds an
-  index. Future schema corrections follow the same shape.
+- **005 was amended in place, not patched by a 007 (2026-11-10).** Measurement
+  proved its primary key wrong before any unpack ran, so the file was rewritten
+  and the database rebuilt from a data-only dump of the raw tables. An additive
+  007 was written first and then folded back: one coherent table definition beats
+  a table plus an immediate correction, and the rebuild cost was one `pg_dump`
+  and one unpacks run. Additive migrations start when a rebuild costs more than
+  the mistake, which is the day match details land.
 - **Do not land failed fetches.** A failed response never overwrites a good
   payload. Failures go to `ingest_runs` instead.
 - **No local payload writes.** The database row is the source of truth.

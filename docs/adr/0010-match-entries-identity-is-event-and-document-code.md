@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted (November 2026). Supersedes the identity assumption in migration 005.
+Accepted (November 2026). Corrects the identity assumption in migration 005,
+which was amended in place the same day while the database was still disposable.
 
 ## Context
 
@@ -40,9 +41,11 @@ quarter-final.
 - **`start_date_local` becomes nullable**, storing blank as NULL. The
   `0001-01-01` sentinel is stored as sent; interpreting it is a dbt rule
   (ADR 0003).
-- **The change is an additive migration (007), not an amendment of 005.** This
-  is the pivot the ingestion plan anticipated: the database now holds work worth
-  keeping, so a checksum-breaking amendment is no longer acceptable.
+- **Migration 005 is amended in place, and the database rebuilt.** It was first
+  written as an additive 007 so the landed payloads would survive; once it was
+  clear the payloads could be re-dumped and replayed, the correction was folded
+  back into 005. One coherent table definition reads better than a table plus an
+  immediate patch, and the plan's declarative rule still holds today.
 
 ## Consequences
 
@@ -60,6 +63,6 @@ quarter-final.
   handful of ids.
 - The 183 team cards are stored but unusable until team ties get their own
   treatment.
-- Migration 005's key, comments and `> 0` check were wrong for a day: anyone
-  reading the file in isolation sees the assumption that was later falsified.
-  ADR 0010 is the correction of record.
+- Amending 005 means the first version of that file, which keyed on `match_id`,
+  no longer exists in history: readers see the corrected definition only, with
+  the measurements that produced it in the comments.

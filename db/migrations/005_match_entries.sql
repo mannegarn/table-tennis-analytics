@@ -39,10 +39,35 @@
 --   count at all, so received_count is the only number that exists and the only
 --   one that can be compared with what the unpack writes.
 --
+-- WHY THE KEY IS (event_id, document_code), NOT match id
+--   Measured on the 200,879 rows landed before the unpack existed:
+--
+--     distinct (event_id, documentCode) pairs .. 200,879, zero repeats, so the
+--                                                document code identifies a
+--                                                match inside its event
+--     match id repeated inside one event ....... 278 groups, 943 rows, each with
+--                                                a DIFFERENT documentCode
+--                                                (event 2411 sends id 59820 as
+--                                                both QFNL000100 and QFNL000200)
+--     one match id under two or three events ... 132 (events 2553/2554, 2632/2634)
+--     match id = 0 ............................ 183 team tie cards in event 2345
+--     match id spelled "iD" ................... 854 rows, 7 payloads, never mixed
+--                                                inside one payload
+--     documentCode length ..................... 42 (198,579) or 34 (2,300)
+--
+--   So the id is neither unique nor global: it can only be a fact about a match.
+--   It is still unpacked and indexed, because the deferred match-detail fan-out
+--   looks matches up by it (ADR 0006, ADR 0009). ADR 0010 records the decision.
+--
 -- NOT NULL
 --   Same rule as the events domain: ->> yields SQL NULL for a renamed key
 --   instead of raising, so non-nullable columns turn upstream drift into a
 --   failed transaction rather than a silently corrupt row (ADR 0003).
+--
+--   start_date_local is the one exception: 424 rows send blank or no time at
+--   all, so the column allows NULL and the unpack writes NULL rather than
+--   inventing a time. The "0001-01-01T00:00:00" sentinel (1665 rows) is stored
+--   as sent, because calling it "unknown" is a business rule and belongs in dbt.
 --
 -- NO FOREIGN KEY TO events_unpacked
 --   That table is keyed (source_year, event_id), so event_id alone is not a
@@ -92,12 +117,12 @@ CREATE TABLE IF NOT EXISTS ingest.match_entries_unpacked (
     document_code text NOT NULL,
     sub_event_type text NOT NULL,
     full_results text NOT NULL,
-    start_date_local timestamp NOT NULL,
+    start_date_local timestamp,
     first_seen_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     last_seen_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-    CONSTRAINT match_entries_unpacked_pkey PRIMARY KEY (match_id),
+    CONSTRAINT match_entries_unpacked_pkey PRIMARY KEY (event_id, document_code),
     CONSTRAINT match_entries_unpacked_match_id_check
-        CHECK (match_id > 0),
+        CHECK (match_id >= 0),
     CONSTRAINT match_entries_unpacked_event_id_check
         CHECK (event_id > 0),
     CONSTRAINT match_entries_unpacked_document_code_check
@@ -108,38 +133,47 @@ CREATE TABLE IF NOT EXISTS ingest.match_entries_unpacked (
         CHECK (btrim(full_results) <> '')
 );
 
--- The fan-out to match details and the pending view both read by event.
-CREATE INDEX IF NOT EXISTS match_entries_unpacked_event_id_idx
-    ON ingest.match_entries_unpacked (event_id);
+-- The pending view and the fan-out read by event, and the primary key already
+-- leads with event_id, so no separate event index is needed.
 
 -- Reporting per draw ("how many Men Doubles matches") reads this pair.
 CREATE INDEX IF NOT EXISTS match_entries_unpacked_event_sub_event_idx
     ON ingest.match_entries_unpacked (event_id, sub_event_type);
 
+-- The deferred per-match fan-out reads one row per match id.
+CREATE INDEX IF NOT EXISTS match_entries_unpacked_match_id_idx
+    ON ingest.match_entries_unpacked (match_id);
+
 COMMENT ON TABLE ingest.match_entries_unpacked IS
     'One row per WTT match per event, unpacked from '
     'ingest.match_entries_payloads_raw. Match ENTRIES: identifies matches, '
-    'does not carry their details.';
+    'does not carry their details. Keyed on (event_id, document_code): the '
+    'upstream id repeats inside and across events (ADR 0010).';
 COMMENT ON COLUMN ingest.match_entries_unpacked.match_id IS
-    'Payload key "id", renamed to say what it is. Unique per payload and '
-    'assumed global; the unpack is scoped to one event and refuses to reparent '
-    'a match_id onto a different event_id.';
+    'Payload key "id" or "iD", renamed to say what it is, cast to bigint. A '
+    'FACT, not the identity: it repeats inside one event for different matches '
+    'and is 0 for team tie cards. Use (event_id, document_code) to identify a '
+    'match.';
 COMMENT ON COLUMN ingest.match_entries_unpacked.event_id IS
     'Payload key "eventId". A STRING upstream, cast to bigint here so it joins '
-    'to events_unpacked.event_id without a cast on every query.';
+    'to events_unpacked.event_id without a cast on every query. Leads the key.';
 COMMENT ON COLUMN ingest.match_entries_unpacked.document_code IS
-    'Payload key "documentCode": a 42-char composite such as '
-    'TTEMSINGLES-----------FNL-000100----------. Kept intact; splitting it into '
-    'gender, draw and round is a business rule and belongs in dbt.';
+    'Payload key "documentCode", the match identity: a composite such as '
+    'TTEMSINGLES-----------FNL-000100---------- (42 chars) or the shorter team '
+    'form (34 chars). Unique within an event and never seen twice in 200,879 '
+    'rows. Kept intact; splitting it into gender, draw and round is a business '
+    'rule and belongs in dbt.';
 COMMENT ON COLUMN ingest.match_entries_unpacked.sub_event_type IS
     'Payload key "subEventType": Men Singles, Women Singles, Men Doubles, '
-    'Women Doubles, Mixed Doubles. Human readable label, not a code.';
+    'Women Doubles, Mixed Doubles, plus team labels such as "Men''s Team". Human '
+    'readable label as sent, not a code.';
 COMMENT ON COLUMN ingest.match_entries_unpacked.full_results IS
     'Payload key "fullResults": result status as sent, "OFFICIAL" for every '
     'row seen so far. Not interpreted here.';
 COMMENT ON COLUMN ingest.match_entries_unpacked.start_date_local IS
     'Payload key "startDateLocal" as timestamp WITHOUT time zone. The API sends '
-    'no offset, so none is invented. The column name keeps that honesty.';
+    'no offset, so none is invented. NULL when the payload sent blank or no '
+    'value: 424 rows, plus every team tie card in event 2345.';
 COMMENT ON COLUMN ingest.match_entries_unpacked.first_seen_at IS
     'When this match_id was first unpacked. Written once.';
 COMMENT ON COLUMN ingest.match_entries_unpacked.last_seen_at IS

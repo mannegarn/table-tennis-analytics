@@ -89,7 +89,6 @@ def test_migrations_create_the_raw_table(
         "004_events_years_pending",
         "005_match_entries",
         "006_match_entries_pending",
-        "007_match_entries_identity",
     }
     assert [row["schema_name"] for row in schemas] == ["analytics", "ingest"]
 
