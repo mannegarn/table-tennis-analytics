@@ -427,6 +427,23 @@ separate document that nothing validates.
 The body is a bare array, not a `rows` envelope, and an event with no matched
 draw answers `[]`, two bytes of it.
 
+### Next fan-out: match details (decided, ADR 0008)
+
+- Endpoint: `wtt-web-frontdoor-withoutcache-…/matchdata/<eventId>/<documentCode>.json`.
+- **1,880 bytes** decoded per match. The cached `matchcentre` route returns the
+  same 25-key document **plus `full_msg`**: 176,505 bytes of point-by-point log,
+  160,252 bytes decoded. Rejected, because logs are deferred (ADR 0006).
+- The commentary route is that same log in another shape (a 114 KB JSON string),
+  so it is deferred too.
+- The summary carries competitors, `gameScores`, `resultStatus`, `action`
+  (server/receiver), `matchConfig`, `venueName`, `tableName` and
+  `subEventDescription`, which restates the round inside `documentCode`.
+- Requires `document_code` in `match_entries_unpacked`; that is why the minimal
+  unpack keeps it.
+- `brotli` is required: both hosts answer `br` even when asked for `identity`.
+- No live refresh is designed for. This is an archive, so the uncached host is
+  chosen for payload size, not freshness.
+
 ## Next steps
 
 1. `unpack_match_entries.sql` plus its loader: `coalesce(payload ->> 'id',
