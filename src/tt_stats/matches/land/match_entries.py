@@ -20,7 +20,6 @@ from typing import TYPE_CHECKING, Any
 
 from psycopg.types.json import Jsonb
 
-from tt_stats.core.db import get_connection
 from tt_stats.core.logging_config import get_logger
 from tt_stats.matches.land.unpack import unpack_event
 
@@ -31,34 +30,18 @@ if TYPE_CHECKING:
 
     from tt_stats.matches.collect.match_entries import MatchEntriesSummary
 
-# What the unpack should have written for one event, worked out from the payload
-# that is now sitting in the raw table. Deliberately mirrors
-# unpack_match_entries.sql: the same array expansion and the same
-# ``documentCode`` key, so a rename in one without the other shows up as a count
-# mismatch rather than a silent difference.
-#
-#   items      elements of the payload array
-#   documents  distinct document codes, which is what the statement writes
-#
-# A payload that is not an array raises here rather than reporting zero.
-_EXPECTATION_SQL = """
-SELECT
-    count(*) AS items,
-    count(DISTINCT e.value ->> 'documentCode') AS documents
-FROM ingest.match_entries_payloads_raw AS r
-CROSS JOIN LATERAL jsonb_array_elements(r.payload) AS e
-WHERE r.event_id = %s;
-"""
-
 
 def land_match_entries(
+    connection: Connection[Any],
     summary: MatchEntriesSummary,
     payload: Any,
 ) -> None:
     """Upsert one event's match list, then unpack it, in one transaction.
 
-    Failed fetches are never landed. They belong in ``ingest_runs``, so a bad
-    response cannot overwrite a good payload.
+    The caller owns the connection (expected ``autocommit=True`` so each
+    ``connection.transaction()`` commits or rolls back on its own across a
+    multi-event run). Failed fetches are never landed. They belong in
+    ``ingest_runs``, so a bad response cannot overwrite a good payload.
 
     Raises:
         ValueError: If ``summary`` describes a failed attempt or is incomplete.
@@ -71,12 +54,12 @@ def land_match_entries(
     if summary.status_code is None or summary.payload_sha256 is None:
         raise ValueError("summary is missing status or payload hash")
 
-    # ``autocommit`` plus an explicit transaction block, rather than relying on
-    # the connection context manager: the commit happens exactly here and
-    # nowhere else. Any exception inside the block - a constraint violation, a
-    # failed cast, or the post-unpack assertion - rolls back the raw upsert and
-    # every unpacked row together, so nothing is half-landed.
-    with get_connection(autocommit=True) as connection, connection.transaction():
+    # An explicit transaction block on the caller's autocommit connection: the
+    # commit happens here and nowhere else. Any exception inside the block - a
+    # constraint violation, a failed cast, or the post-unpack assertion - rolls
+    # back the raw upsert and every unpacked row together, so nothing is
+    # half-landed and the connection stays reusable for the next event.
+    with connection.transaction():
         connection.execute(
             """
             INSERT INTO ingest.match_entries_payloads_raw (
@@ -106,8 +89,11 @@ def land_match_entries(
             ),
         )
 
-        unpacked = unpack_event(connection, summary.event_id)
-        _assert_unpacked(connection, event_id=summary.event_id, unpacked=unpacked)
+        unpacked = unpack_event(
+            connection,
+            summary.event_id,
+            received_count=summary.received_count,
+        )
 
     logger.info(
         "match_entries_landed",
@@ -118,25 +104,3 @@ def land_match_entries(
             "unpacked": unpacked,
         },
     )
-
-
-def _assert_unpacked(
-    connection: Connection[Any],
-    *,
-    event_id: int,
-    unpacked: int,
-) -> None:
-    """Raise unless the unpack wrote one row per distinct document code.
-
-    An empty payload is a success and stays one: ``0 == 0``. Anything else means
-    the statement and the payload disagree, and the transaction must roll back.
-    """
-    row = connection.execute(_EXPECTATION_SQL, (event_id,)).fetchone()
-    items = int(row["items"]) if row else 0
-    expected = int(row["documents"]) if row else 0
-    if unpacked != expected:
-        raise RuntimeError(
-            "Unpack validation failed: "
-            f"event {event_id} holds {items} items with {expected} distinct "
-            f"document codes, but the unpack touched {unpacked} rows"
-        )

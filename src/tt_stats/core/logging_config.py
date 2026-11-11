@@ -150,7 +150,12 @@ def _resolve_options(
     Passing the console options explicitly avoids touching Settings, which keeps
     the formatter tests independent of database configuration.
     """
-    if level is not None and json_output is not None and log_to_file is not None:
+    if (
+        level is not None
+        and json_output is not None
+        and log_to_file is not None
+        and (not log_to_file or log_file is not None)
+    ):
         return _Options(
             level=level.upper(),
             console_level=(console_level or _DEFAULT_CONSOLE_LEVEL).upper(),

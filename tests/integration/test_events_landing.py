@@ -68,8 +68,8 @@ def test_landing_upserts_one_row_and_is_idempotent(
     digest = hashlib.sha256(FIXTURE.read_bytes()).hexdigest()
     summary = _summary(payload, digest)
 
-    land_events_by_year(summary, payload)
-    land_events_by_year(summary, payload)
+    land_events_by_year(db_connection, summary, payload)
+    land_events_by_year(db_connection, summary, payload)
 
     row = db_connection.execute(
         """
@@ -107,7 +107,7 @@ def test_a_quiet_year_lands_zero_rows_without_failing(
     digest = hashlib.sha256(json.dumps(payload).encode("utf-8")).hexdigest()
     summary = _summary(payload, digest)
 
-    land_events_by_year(summary, payload)
+    land_events_by_year(db_connection, summary, payload)
 
     raw = db_connection.execute(
         "SELECT received_count FROM ingest.events_by_year_raw WHERE year = %s;",
@@ -175,7 +175,7 @@ def test_landing_raises_on_a_constraint_violation_and_rolls_back(
     summary = _summary(payload, hashlib.sha256(FIXTURE.read_bytes()).hexdigest())
 
     with pytest.raises(errors.CheckViolation, match=NAME_CHECK):
-        land_events_by_year(summary, payload)
+        land_events_by_year(db_connection, summary, payload)
 
     assert _raw_count(db_connection) == 0, "the raw upsert must roll back"
     assert _unpacked_count(db_connection) == 0, "unpacked rows must roll back"
@@ -201,8 +201,8 @@ async def test_landing_failure_rolls_back_cleanly_and_records_failed_run(
         summaries = await collect_events_by_year(
             [TEST_YEAR],
             client=client,
-            land=land_events_by_year,
-            record=record_run,
+            land=lambda s, p: land_events_by_year(db_connection, s, p),
+            record=lambda r: record_run(db_connection, r),
         )
 
     summary = summaries[0]

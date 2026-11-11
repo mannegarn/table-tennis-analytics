@@ -118,6 +118,24 @@ def test_configure_logging_creates_the_log_directory(tmp_path: Path) -> None:
     assert log_file.parent.is_dir()
 
 
+def test_configure_logging_resolves_default_log_file_when_enabled(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """log_to_file=True with no explicit path must still attach the file handler."""
+    monkeypatch.setenv("POSTGRES_PASSWORD", "test")
+    monkeypatch.setenv("LOGS_DIR", str(tmp_path))
+    get_settings.cache_clear()
+
+    try:
+        configure_logging(level="INFO", json_output=False, log_to_file=True)
+    finally:
+        get_settings.cache_clear()
+
+    handler = _file_handler()
+    assert Path(handler.baseFilename) == tmp_path / "tt_stats.log"
+
+
 def test_handlers_have_separate_levels(tmp_path: Path) -> None:
     _configure_with_file(tmp_path / "tt_stats.log")
 

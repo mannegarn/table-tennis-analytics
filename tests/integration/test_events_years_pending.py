@@ -29,11 +29,7 @@ def _current_year() -> int:
 
 
 def _land_year(connection: Connection[Any], year: int, *, received: int = 0) -> None:
-    """Write a raw row for ``year`` and commit it.
-
-    Committed on purpose: ``pending_years`` opens its own connection, so an
-    uncommitted insert would be invisible to the very query under test.
-    """
+    """Write a raw row for ``year``."""
     payload: list[dict[str, Any]] = [
         {"rows": [], "Count": received, "Original_Count": str(received)}
     ]
@@ -62,9 +58,11 @@ def _land_year(connection: Connection[Any], year: int, *, received: int = 0) -> 
     connection.commit()
 
 
-def test_a_cold_database_queues_every_year_from_the_floor() -> None:
+def test_a_cold_database_queues_every_year_from_the_floor(
+    db_connection: Connection[Any],
+) -> None:
     """First run: the current year, then next year, then the whole backfill."""
-    queue = pending_years(FIRST_YEAR)
+    queue = pending_years(db_connection, FIRST_YEAR)
     years = [year for year, _ in queue]
     current_year = _current_year()
 
@@ -86,7 +84,7 @@ def test_a_landed_past_year_leaves_the_queue(
     finished_year = _current_year() - 5
     _land_year(db_connection, finished_year, received=42)
 
-    years = [year for year, _ in pending_years(FIRST_YEAR)]
+    years = [year for year, _ in pending_years(db_connection, FIRST_YEAR)]
 
     assert finished_year not in years
     assert _current_year() in years
@@ -99,7 +97,7 @@ def test_the_current_year_stays_in_the_queue_after_landing(
     current_year = _current_year()
     _land_year(db_connection, current_year, received=10)
 
-    queue = pending_years(FIRST_YEAR)
+    queue = pending_years(db_connection, FIRST_YEAR)
 
     assert (current_year, "current") in queue
     assert (current_year + 1, "next") in queue
@@ -112,18 +110,20 @@ def test_an_empty_payload_counts_as_fetched(
     quiet_year = _current_year() - 40
     _land_year(db_connection, quiet_year, received=0)
 
-    assert quiet_year not in [year for year, _ in pending_years(FIRST_YEAR)]
+    assert quiet_year not in [
+        year for year, _ in pending_years(db_connection, FIRST_YEAR)
+    ]
 
 
 def test_the_queue_starts_at_the_first_year_with_data(
     db_connection: Connection[Any],
 ) -> None:
     """Nothing before 1926 exists upstream, so nothing there is offered."""
-    assert min(year for year, _ in pending_years(1900)) == FIRST_YEAR
+    assert min(year for year, _ in pending_years(db_connection, 1900)) == FIRST_YEAR
 
 
 def test_the_caller_floor_can_narrow_the_backfill(
     db_connection: Connection[Any],
 ) -> None:
     """`events_start_year` still works as a floor, for narrowing only."""
-    assert min(year for year, _ in pending_years(2010)) == 2010
+    assert min(year for year, _ in pending_years(db_connection, 2010)) == 2010

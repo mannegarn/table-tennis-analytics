@@ -39,10 +39,8 @@ EXPECTED_MATCH_ENTRY_RAW_COLUMNS = {
 }
 
 EXPECTED_MATCH_ENTRY_UNPACKED_COLUMNS = {
-    "match_id",
     "event_id",
     "document_code",
-    "start_date_local",
     "first_seen_at",
     "last_seen_at",
 }
@@ -116,7 +114,7 @@ def test_migrations_create_the_match_entries_tables(
     assert set(unpacked) == EXPECTED_MATCH_ENTRY_UNPACKED_COLUMNS
 
     # The raw table is one row per event, so event_id is the key. The unpacked
-    # table is one row per match, so match_id is.
+    # table is one row per match, identified by the event plus the document code.
     raw_key = db_connection.execute(
         """
         SELECT kcu.column_name
@@ -155,8 +153,6 @@ def test_migrations_create_the_match_entries_tables(
     assert raw["event_id"]["data_type"] == "bigint"
     assert raw["event_id"]["is_nullable"] == "NO"
 
-    # No timezone is invented: the API sends "2025-09-29T18:35:00" with none.
-    assert unpacked["start_date_local"]["data_type"] == ("timestamp without time zone")
-    # 424 rows send no start time at all, so the column has to allow NULL.
-    assert unpacked["start_date_local"]["is_nullable"] == "YES"
+    assert unpacked["event_id"]["data_type"] == "bigint"
+    assert unpacked["event_id"]["is_nullable"] == "NO"
     assert unpacked["document_code"]["is_nullable"] == "NO"

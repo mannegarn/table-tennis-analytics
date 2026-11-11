@@ -31,7 +31,7 @@
 
 CREATE OR REPLACE VIEW ingest.events_years_pending AS
 WITH bounds AS (
-    SELECT EXTRACT(YEAR FROM current_date)::int AS current_year
+    SELECT EXTRACT(YEAR FROM (current_timestamp AT TIME ZONE 'UTC'))::int AS current_year
 )
 SELECT
     y.year,

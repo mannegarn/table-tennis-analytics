@@ -16,64 +16,60 @@ Every attempt, successful or not, is recorded in ``ingest.ingest_runs`` with
 ``source = wtt_getofficialresult`` and ``entity_key = event_id``.
 """
 
+from __future__ import annotations
+
 import argparse
-import asyncio
 import hashlib
-import logging
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
-from tt_stats.core.batching import chunks
-from tt_stats.core.clients.wtt_api import (
-    WttClient,
-    WttPayloadError,
-    WttRequestError,
-    WttResponse,
+from tt_stats.core.batching import FetchedItem, collect_in_chunks, reason_counts
+from tt_stats.core.cli import (
+    add_queue_arguments,
+    chunk_count,
+    progress_message,
+    quiet_http_logs,
+    report_collect_run,
+    run_with_progress,
+    validate_queue_arguments,
 )
+from tt_stats.core.clients.wtt_api import WttClient
 from tt_stats.core.config import get_settings
 from tt_stats.core.db import get_connection
 from tt_stats.core.ingest_runs import (
     SOURCE_WTT_MATCH_ENTRIES,
     RunRecord,
     record_run,
+    safe_record_run,
     status_for,
 )
 from tt_stats.core.logging_config import configure_logging, get_logger
-from tt_stats.core.progress import RunTiming, plural, progress_bar
 from tt_stats.matches.land import land_match_entries
+
+if TYPE_CHECKING:
+    from psycopg import Connection
 
 logger = get_logger(__name__)
 
-#: The match id arrives under ``id`` or ``iD`` depending on the event: 3098 and
-#: the 2021-2022 events send ``id``, events 3257 and 3346 send ``iD``. Same
-#: integer, inconsistent casing upstream, so both are accepted here and the
-#: unpack coalesces them into one column.
-MATCH_ID_KEYS = ("id", "iD")
-
-#: Keys every match row carries, checked before landing so an upstream rename
-#: fails the event instead of filling the unpack with NULLs later.
+#: Keys every match row must carry so it can be unpacked and routed.
+#: ``id`` / ``iD``, ``startDateLocal``, ``subEventType`` and ``fullResults``
+#: stay in the raw JSON payload for dbt (ADR 0003 / ADR 0010), so their
+#: absence or upstream quirks do not block landing.
 REQUIRED_MATCH_KEYS = (
     "eventId",
     "documentCode",
-    "subEventType",
-    "fullResults",
-    "startDateLocal",
 )
 
 #: The queue, in the order the view defines: live events first, then finished
 #: events by most recent end date. ``--limit`` takes a prefix of this.
 _PENDING_EVENTS_SQL = """
-WITH bounds AS (
-    SELECT current_date AS today
-)
 SELECT p.event_id, p.reason
 FROM ingest.match_entries_pending AS p
-CROSS JOIN bounds AS b
 ORDER BY
-    (p.end_date + 1 >= b.today) DESC,
-    p.end_date DESC,
+    (p.reason = 'live') DESC,
+    GREATEST(p.start_date, p.end_date) DESC,
     p.event_id;
 """
 
@@ -102,27 +98,18 @@ class MatchEntriesSummary:
     reason: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
-class _Fetched:
-    """One settled network attempt, before validation and landing."""
-
-    event_id: int
-    fetched_at: datetime
-    response: WttResponse | None
-    error: str | None
-    status_code: int | None
-    reason: str | None
-
-
-def pending_events(limit: int | None = None) -> list[tuple[int, str]]:
+def pending_events(
+    connection: Connection[Any],
+    limit: int | None = None,
+) -> list[tuple[int, str]]:
     """Return ``(event_id, reason)`` pairs to fetch, in queue order.
 
     Args:
+        connection: Open database connection.
         limit: Optional cap, applied after ordering, so a smoke run picks the
             live events rather than an arbitrary slice.
     """
-    with get_connection() as connection:
-        rows = connection.execute(_PENDING_EVENTS_SQL).fetchall()
+    rows = connection.execute(_PENDING_EVENTS_SQL).fetchall()
 
     queue = [(int(row["event_id"]), str(row["reason"])) for row in rows]
     return queue[:limit] if limit is not None else queue
@@ -151,19 +138,6 @@ def extract_rows(payload: object) -> list[dict[str, Any]]:
     return rows
 
 
-def match_id_of(row: Mapping[str, Any]) -> int | None:
-    """Return the match id from ``id`` or ``iD``, whichever the row uses.
-
-    Returns None when neither key holds an integer, which is a contract problem
-    rather than a match without an id.
-    """
-    for key in MATCH_ID_KEYS:
-        value = row.get(key)
-        if isinstance(value, int) and not isinstance(value, bool):
-            return value
-    return None
-
-
 def validate_rows(
     rows: Sequence[dict[str, Any]],
     *,
@@ -183,8 +157,9 @@ def validate_rows(
             problems.append(f"row {index} missing keys: {', '.join(missing)}")
             continue
 
-        if match_id_of(row) is None:
-            problems.append(f"row {index} has no integer id or iD")
+        document_code = row.get("documentCode")
+        if not isinstance(document_code, str) or not document_code.strip():
+            problems.append(f"row {index} has no non-empty documentCode")
 
         if str(row.get("eventId")) != str(event_id):
             problems.append(
@@ -224,95 +199,19 @@ async def collect_match_entries(
     Raises:
         ValueError: If ``chunk_size`` is not a positive integer.
     """
-    summaries: list[MatchEntriesSummary] = []
-    size = chunk_size if chunk_size is not None else max(len(events), 1)
-    reason_for = reasons or {}
-    batches = chunks(list(events), size)
-
-    for index, chunk in enumerate(batches, start=1):
-        chunk_started = datetime.now(tz=UTC)
-        outcomes = await asyncio.gather(
-            *(
-                _fetch_one(event_id, client=client, reason=reason_for.get(event_id))
-                for event_id in chunk
-            ),
-            # One broken coroutine must not cancel its siblings; it becomes a
-            # failed event with the exception as the reason.
-            return_exceptions=True,
-        )
-
-        settled: list[MatchEntriesSummary] = []
-        for event_id, outcome in zip(chunk, outcomes, strict=True):
-            if isinstance(outcome, BaseException):
-                fetched = _Fetched(
-                    event_id=event_id,
-                    fetched_at=datetime.now(tz=UTC),
-                    response=None,
-                    error=f"{type(outcome).__name__}: {outcome}",
-                    status_code=None,
-                    reason=reason_for.get(event_id),
-                )
-            else:
-                fetched = outcome
-
-            summary = _settle(fetched, land=land, record=record)
-            settled.append(summary)
-            summaries.append(summary)
-            if progress is not None:
-                progress(summary)
-
-        _log_chunk(
-            index,
-            len(batches),
-            settled,
-            started_at=chunk_started,
-        )
-
-    return summaries
-
-
-async def _fetch_one(
-    event_id: int,
-    *,
-    client: WttClient,
-    reason: str | None,
-) -> _Fetched:
-    """Fetch one event's match list and describe the outcome without raising."""
-    fetched_at = datetime.now(tz=UTC)
-
-    try:
-        response = await client.fetch_match_entries(event_id)
-    except WttRequestError as error:
-        return _Fetched(
-            event_id=event_id,
-            fetched_at=fetched_at,
-            response=None,
-            error=str(error),
-            status_code=error.status_code,
-            reason=reason,
-        )
-    except WttPayloadError as error:
-        return _Fetched(
-            event_id=event_id,
-            fetched_at=fetched_at,
-            response=None,
-            error=str(error),
-            status_code=None,
-            reason=reason,
-        )
-
-    return _Fetched(
-        event_id=event_id,
-        fetched_at=fetched_at,
-        response=response,
-        error=None,
-        status_code=response.status_code,
-        reason=reason,
+    return await collect_in_chunks(
+        events,
+        fetch=client.fetch_match_entries,
+        settle=lambda fetched: _settle(fetched, land=land, record=record),
+        on_chunk=_log_chunk,
+        progress=progress,
+        chunk_size=chunk_size,
+        reasons=reasons,
     )
 
 
 def _settle(
-    fetched: _Fetched,
+    fetched: FetchedItem[int],
     *,
     land: LandingFn | None,
     record: RecordRunFn | None,
@@ -320,7 +219,7 @@ def _settle(
     """Validate, land and record one fetched event."""
     if fetched.response is None:
         summary = MatchEntriesSummary(
-            event_id=fetched.event_id,
+            event_id=fetched.key,
             status_code=fetched.status_code,
             received_count=0,
             payload_sha256=None,
@@ -329,7 +228,7 @@ def _settle(
             reason=fetched.reason,
         )
         _log_summary(summary)
-        _record_run(summary, record)
+        _record_run(summary, record, started_at=fetched.started_at)
         return summary
 
     response = fetched.response
@@ -341,14 +240,14 @@ def _settle(
     try:
         rows = extract_rows(response.data)
         received_count = len(rows)
-        problems = validate_rows(rows, event_id=fetched.event_id)
+        problems = validate_rows(rows, event_id=fetched.key)
         if problems:
             error_message = "row validation failed: " + "; ".join(problems[:5])
     except PayloadShapeError as error:
         error_message = f"payload shape error: {error}"
 
     summary = MatchEntriesSummary(
-        event_id=fetched.event_id,
+        event_id=fetched.key,
         status_code=response.status_code,
         received_count=received_count,
         payload_sha256=digest,
@@ -364,7 +263,7 @@ def _settle(
             summary = replace(summary, error=f"landing failed: {error}")
 
     _log_summary(summary)
-    _record_run(summary, record)
+    _record_run(summary, record, started_at=fetched.started_at)
     return summary
 
 
@@ -372,7 +271,6 @@ def _log_chunk(
     index: int,
     total: int,
     settled: Sequence[MatchEntriesSummary],
-    *,
     started_at: datetime,
 ) -> None:
     """Log one checkpoint per chunk, rather than one line per event.
@@ -403,46 +301,26 @@ def _log_chunk(
     )
 
 
-def _progress_message(summary: MatchEntriesSummary) -> str:
-    if summary.error:
-        state = "failed"
-    elif summary.received_count == 0:
-        state = "empty"
-    else:
-        state = "ok"
-    reason = f"{summary.reason} " if summary.reason else ""
-    return (
-        f"{reason}event={summary.event_id} | matches={summary.received_count} | {state}"
-    )
-
-
 def _record_run(
     summary: MatchEntriesSummary,
     record: RecordRunFn | None,
+    *,
+    started_at: datetime,
 ) -> None:
     """Write the attempt to ``ingest.ingest_runs``, never breaking the collect."""
-    if record is None:
-        return
-
-    try:
-        record(
-            RunRecord(
-                source=SOURCE_WTT_MATCH_ENTRIES,
-                entity_key=str(summary.event_id),
-                status=status_for(summary.error),
-                started_at=summary.fetched_at,
-                http_status=summary.status_code,
-                received_count=summary.received_count,
-                payload_sha256=summary.payload_sha256,
-                error=summary.error,
-            )
-        )
-    except Exception as error:
-        # Recording is diagnostics: losing a row must not lose the payload.
-        logger.warning(
-            "ingest_run_not_recorded",
-            extra={"event_id": summary.event_id, "error": str(error)},
-        )
+    safe_record_run(
+        record,
+        RunRecord(
+            source=SOURCE_WTT_MATCH_ENTRIES,
+            entity_key=str(summary.event_id),
+            status=status_for(summary.error),
+            started_at=started_at,
+            http_status=summary.status_code,
+            received_count=summary.received_count,
+            payload_sha256=summary.payload_sha256,
+            error=summary.error,
+        ),
+    )
 
 
 def _log_summary(summary: MatchEntriesSummary) -> None:
@@ -467,6 +345,7 @@ async def _run(
     events: Sequence[int],
     progress: ProgressFn | None,
     *,
+    connection: Connection[Any],
     chunk_size: int,
     reasons: Mapping[int, str] | None,
 ) -> list[MatchEntriesSummary]:
@@ -475,18 +354,13 @@ async def _run(
             events,
             client=client,
             progress=progress,
-            land=land_match_entries,
-            record=record_run,
+            land=lambda summary, payload: land_match_entries(
+                connection, summary, payload
+            ),
+            record=lambda run: record_run(connection, run),
             chunk_size=chunk_size,
             reasons=reasons,
         )
-
-
-def _reason_counts(queue: Sequence[tuple[int, str]]) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for _, reason in queue:
-        counts[reason] = counts.get(reason, 0) + 1
-    return counts
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -506,121 +380,73 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=None,
         help="Explicit event ids to fetch, bypassing the pending view.",
     )
-    parser.add_argument(
-        "--limit",
-        type=int,
-        default=None,
-        help="Fetch at most this many events from the queue, in queue order.",
-    )
-    parser.add_argument(
-        "--chunk-size",
-        type=int,
-        default=None,
-        help="Events fetched per batch. Defaults to Settings.chunk_size.",
-    )
+    add_queue_arguments(parser, unit="event")
     args = parser.parse_args(argv)
-
-    # Argparse-style validation, before any Settings or database work: a typo in
-    # a limit should not need a database password to be reported.
-    if args.limit is not None and args.limit < 1:
-        parser.error("--limit must be at least 1")
-    if args.chunk_size is not None and args.chunk_size < 1:
-        parser.error("--chunk-size must be at least 1")
+    validate_queue_arguments(parser, args)
 
     configure_logging()
     settings = get_settings()
-
-    reasons: dict[int, str] = {}
-    if args.event_ids is not None:
-        events = list(args.event_ids)
-        logger.info("match_entries_manual", extra={"events": len(events)})
-    else:
-        queue = pending_events(args.limit)
-        events = [event_id for event_id, _ in queue]
-        reasons = dict(queue)
-        logger.info(
-            "match_entries_queue",
-            extra={"events": len(events), "reasons": _reason_counts(queue)},
-        )
-
-    if not events:
-        logger.info("match_entries_nothing_pending")
-        print("Nothing pending: every event is already fetched.")  # noqa: T201
-        return 0
-
-    if settings.log_level.upper() != "DEBUG":
-        # One line per HTTP request would bury the audit trail.
-        logging.getLogger("httpx").setLevel(logging.WARNING)
-        logging.getLogger("httpcore").setLevel(logging.WARNING)
+    quiet_http_logs(settings)
 
     chunk_size = args.chunk_size or settings.chunk_size
-    chunks_total = -(-len(events) // chunk_size)
     started_at = datetime.now(tz=UTC)
-    logger.info(
-        "match_entries_started",
-        extra={
-            "events": len(events),
-            "chunk_size": chunk_size,
-            "chunks": chunks_total,
-            "concurrency": settings.max_concurrent_requests,
-        },
-    )
 
-    # The bar owns one stdout line and rewrites it. Routine records are INFO, so
-    # the WARNING-level console handler cannot push it down a line; they still
-    # land in logs/tt_stats.log.
-    with progress_bar(
-        len(events),
-        description=(
-            f"Collecting match entries "
-            f"({chunk_size}/chunk, {settings.max_concurrent_requests} workers)"
-        ),
-        unit="event",
-        disable=settings.log_json,
-    ) as bar:
-
-        def advance(summary: MatchEntriesSummary) -> None:
-            bar.set_postfix_str(_progress_message(summary), refresh=False)
-            bar.update(1)
-
-        results = asyncio.run(
-            _run(
-                events,
-                advance,
-                chunk_size=chunk_size,
-                reasons=reasons or None,
+    with get_connection(autocommit=True) as connection:
+        reasons: dict[int, str] = {}
+        if args.event_ids is not None:
+            events = list(args.event_ids)
+            logger.info("match_entries_manual", extra={"events": len(events)})
+        else:
+            queue = pending_events(connection, args.limit)
+            events = [event_id for event_id, _ in queue]
+            reasons = dict(queue)
+            logger.info(
+                "match_entries_queue",
+                extra={"events": len(events), "reasons": reason_counts(queue)},
             )
+
+        if not events:
+            logger.info("match_entries_nothing_pending")
+            print("Nothing pending: every event is already fetched.")  # noqa: T201
+            return 0
+
+        chunks_total = chunk_count(len(events), chunk_size)
+        logger.info(
+            "match_entries_started",
+            extra={
+                "events": len(events),
+                "chunk_size": chunk_size,
+                "chunks": chunks_total,
+                "concurrency": settings.max_concurrent_requests,
+            },
         )
 
-    timing = RunTiming(started_at, datetime.now(tz=UTC))
-    failed = [result for result in results if result.error]
-    empty = [
-        result for result in results if not result.error and result.received_count == 0
-    ]
-    matches = sum(result.received_count for result in results)
-    tally: dict[str, Any] = {
-        "events": len(results),
-        "failed": len(failed),
-        "empty": len(empty),
-        "matches": matches,
-        "elapsed_seconds": round(timing.elapsed.total_seconds(), 3),
-        "rate_per_second": round(timing.rate_per_second(len(results)), 3),
-    }
-    if failed:
-        logger.error("match_entries_incomplete", extra=tally)
-    else:
-        logger.info("match_entries_complete", extra=tally)
+        results = run_with_progress(
+            len(events),
+            description="Collecting match entries",
+            unit="event",
+            chunk_size=chunk_size,
+            settings=settings,
+            message=lambda summary: progress_message(
+                summary, key=f"event={summary.event_id}", count_label="matches"
+            ),
+            run=lambda advance: _run(
+                events,
+                advance,
+                connection=connection,
+                chunk_size=chunk_size,
+                reasons=reasons or None,
+            ),
+        )
 
-    # Deliberate stdout write: terminal logging sits at WARNING, so the record
-    # above never reaches the console. This is the run summary, not a log line.
-    print(  # noqa: T201
-        f"{timing.describe(len(results), unit='event')}, "
-        f"{chunks_total:,} {plural(chunks_total, 'chunk')}: "
-        f"{matches:,} matches found, "
-        f"{len(empty):,} {plural(len(empty), 'event')} with no matches, "
-        f"{len(failed):,} failed"
+    return report_collect_run(
+        results,
+        started_at=started_at,
+        chunks_total=chunks_total,
+        event="match_entries",
+        unit="event",
+        found_label="matches",
     )
-    return 0 if not failed else 1
 
 
 if __name__ == "__main__":

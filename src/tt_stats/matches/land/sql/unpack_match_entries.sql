@@ -5,9 +5,10 @@
 --
 -- WHAT "UNPACKING" MEANS HERE
 --   The raw table holds the response exactly as it arrived: a bare JSON array
---   per event. You cannot filter, join or index inside an array, so the useful
---   fields are copied into real columns. That copy is this file. The array stays
---   put, so if the mapping is ever wrong the columns can be rebuilt from it.
+--   per event. You cannot filter, join or index inside an array, so the fields
+--   that identify a match are copied into real columns. That copy is this file.
+--   The array stays put, so if the mapping is ever wrong the columns can be
+--   rebuilt from it.
 --
 -- WHEN IT RUNS
 --   1. Automatically, on every collect: after the raw row is written, in the
@@ -23,32 +24,21 @@
 --   document code is unique within an event, and was never repeated in any
 --   payload, so that pair is what a match is (ADR 0010).
 --
---   match_id is still unpacked because the deferred match-detail fan-out looks
---   matches up by it, but it is a fact about the row, never its identity. It is
---   0 for the 183 team tie cards in event 2345.
+--   The id is deliberately NOT unpacked: it is neither unique nor global, and
+--   nothing reads it, because match details and logs are fetched by
+--   (eventId, documentCode) (ADR 0009). It stays in the payload.
 --
--- id IS SPELLED "id" OR "iD"
---   854 rows in 7 payloads send "iD" instead of "id", never mixed inside one
---   payload. ``coalesce`` accepts whichever arrived, so the same statement
---   handles both and a rename to a third spelling fails loudly instead of
---   filling the column with NULLs.
---
--- BLANK TIMES BECOME NULL
---   424 rows send "" or nothing at all for startDateLocal. ``nullif(btrim(...))``
---   turns that into SQL NULL, which the column now allows. The sentinel
---   "0001-01-01T00:00:00" (1665 rows) is stored as sent: calling it "no date" is
---   a business rule and belongs in dbt.
+-- WHAT STAYS IN THE PAYLOAD
+--   id / iD, startDateLocal, subEventType and fullResults are all left as JSON.
+--   None of them is needed to identify a match, to schedule the fan-out or to
+--   unpack it, and turning their quirks (a blank or sentinel start time, a
+--   repeated id, inconsistent sub-event labels) into columns would put WTT's
+--   labels and business rules in the landing schema. Deriving them is dbt's
+--   job (ADR 0003).
 --
 -- WHAT IT IS NOT
---   Not a filter. It copies structure only, including empty team cards and rows
---   with no date. There is no DELETE or TRUNCATE anywhere: running it twice must
---   be harmless.
---
---   It is also deliberately narrow: identity, upstream id, start time and
---   presence. fullResults is "OFFICIAL" on all 200,879 measured rows and
---   subEventType repeats what documentCode already encodes, so both stay in the
---   payload; copying them would put WTT's labels and a constant in the schema
---   for no gain. Deriving them is dbt's job (ADR 0003).
+--   Not a filter. It copies structure only, including empty team cards. There
+--   is no DELETE or TRUNCATE anywhere: running it twice must be harmless.
 --
 -- FRESHNESS
 --   first_seen_at is written once, on insert, and never touched again.
@@ -62,10 +52,8 @@
 
 
 INSERT INTO ingest.match_entries_unpacked (
-    match_id,
     event_id,
     document_code,
-    start_date_local,
     first_seen_at,
     last_seen_at
 )
@@ -74,23 +62,14 @@ INSERT INTO ingest.match_entries_unpacked (
 
 SELECT DISTINCT ON (r.event_id, (e.value ->> 'documentCode'))
 
-       coalesce(e.value ->> 'id', e.value ->> 'iD')::bigint AS match_id,
--- '->>' pulls a field out as text; cast to bigint because it is a number and
--- the fan-out will compare and join on it. coalesce covers the two spellings
--- upstream uses. If WTT invents a third, this yields NULL and the NOT NULL
--- column aborts the transaction, which is the loud failure we want.
-
        r.event_id                                          AS event_id,
 -- Taken from the raw row, not from the payload's "eventId": the raw row is what
 -- was asked for, and every landed payload agrees with it (measured: 0
 -- mismatches), so this cannot drift silently.
 
        (e.value ->> 'documentCode')::text                  AS document_code,
-
-       nullif(btrim(e.value ->> 'startDateLocal'), '')::timestamp
-                                                           AS start_date_local,
--- Blank and missing both become NULL; a real timestamp, including one with
--- fractional seconds, is kept exactly as sent and with no timezone invented.
+-- The match identity inside its event. A missing key yields NULL and the NOT
+-- NULL column aborts the transaction, which is the loud failure we want.
 
        clock_timestamp()                                   AS first_seen_at,
 -- Only meaningful on the first insert: the upsert below deliberately leaves it
@@ -117,25 +96,17 @@ WHERE r.event_id = %(event_id)s
 
 ORDER BY
     r.event_id,
-    (e.value ->> 'documentCode'),
-    (e.value ->> 'startDateLocal') DESC NULLS LAST
--- DISTINCT ON requires ORDER BY to start with the same expressions, which the
--- first two lines do.
---
--- document_code was never repeated inside a payload when measured, so this
--- tie-break is insurance rather than a fact of the data: if WTT ever repeats a
--- code, the later-dated copy wins, deterministically, instead of Postgres
--- picking either row and the values flipping between runs. DESC NULLS LAST puts
--- a blank time after every real one.
+    (e.value ->> 'documentCode')
+-- DISTINCT ON requires ORDER BY to start with the same expressions, which both
+-- lines do. document_code was never repeated inside a payload when measured, so
+-- this pair is a complete, deterministic ordering with no tie-break needed.
 
 ON CONFLICT (event_id, document_code) DO UPDATE SET
 -- What happens when this match was already unpacked for this event: update it
 -- instead of failing.
-    match_id         = EXCLUDED.match_id,
-    start_date_local = EXCLUDED.start_date_local,
-    last_seen_at     = EXCLUDED.last_seen_at;
+    last_seen_at = EXCLUDED.last_seen_at;
 -- EXCLUDED means "the row we just tried to insert", so this reads "take the
--- newer values".
+-- newer presence stamp".
 --
 -- Deliberately absent: event_id and document_code (they are the key), and
 -- first_seen_at. Leaving first_seen_at out is the whole point of the column;

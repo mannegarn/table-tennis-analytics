@@ -56,15 +56,22 @@
 --     documentCode length ..................... 42 (198,579) or 34 (2,300)
 --
 --   So the id is neither unique nor global: it can only be a fact about a match.
---   It is still unpacked because it is the field people mean by "the match", but
---   the fan-out does not need it: match details and logs are fetched by
---   (eventId, documentCode) (ADR 0009). ADR 0010 records the decision.
+--   Nothing reads it either: match details and logs are fetched by
+--   (eventId, documentCode) (ADR 0009), so it stays in the payload rather than
+--   being unpacked. ADR 0010 records the identity decision.
 --
 -- WHY THE UNPACKED TABLE IS THIS NARROW
---   Only what the pipeline needs without reading JSON: the identity, the
---   presence timestamps, the upstream id and the start time. Everything else
---   stays in the payload and is dbt's to derive.
+--   Only what the pipeline needs without reading JSON: the identity and the
+--   presence timestamps. Everything else stays in the payload and is dbt's to
+--   derive.
 --
+--     id / iD        a fact about a match, never its identity, and no code path
+--                    filters on it. The payload keeps it.
+--     startDateLocal the fan-out keys on (eventId, documentCode), so the start
+--                    time is not needed for identity or scheduling. It is also
+--                    the messiest field upstream: 424 rows send blank or no
+--                    time and 1665 send the "0001-01-01T00:00:00" sentinel.
+--                    Interpreting those is a business rule, so dbt owns them.
 --     full_results   "OFFICIAL" on all 200,879 rows, so it carries no signal.
 --                    if it ever varies, the payload still has it.
 --     subEventType   derivable from document_code (TTEM/TTEW + SINGLES/
@@ -76,11 +83,6 @@
 --   Same rule as the events domain: ->> yields SQL NULL for a renamed key
 --   instead of raising, so non-nullable columns turn upstream drift into a
 --   failed transaction rather than a silently corrupt row (ADR 0003).
---
---   start_date_local is the one exception: 424 rows send blank or no time at
---   all, so the column allows NULL and the unpack writes NULL rather than
---   inventing a time. The "0001-01-01T00:00:00" sentinel (1665 rows) is stored
---   as sent, because calling it "unknown" is a business rule and belongs in dbt.
 --
 -- NO FOREIGN KEY TO events_unpacked
 --   That table is keyed (source_year, event_id), so event_id alone is not a
@@ -125,15 +127,11 @@ COMMENT ON COLUMN ingest.match_entries_payloads_raw.ingested_at IS
 
 
 CREATE TABLE IF NOT EXISTS ingest.match_entries_unpacked (
-    match_id bigint NOT NULL,
     event_id bigint NOT NULL,
     document_code text NOT NULL,
-    start_date_local timestamp,
     first_seen_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     last_seen_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     CONSTRAINT match_entries_unpacked_pkey PRIMARY KEY (event_id, document_code),
-    CONSTRAINT match_entries_unpacked_match_id_check
-        CHECK (match_id >= 0),
     CONSTRAINT match_entries_unpacked_event_id_check
         CHECK (event_id > 0),
     CONSTRAINT match_entries_unpacked_document_code_check
@@ -146,14 +144,9 @@ CREATE TABLE IF NOT EXISTS ingest.match_entries_unpacked (
 COMMENT ON TABLE ingest.match_entries_unpacked IS
     'One row per WTT match per event, unpacked from '
     'ingest.match_entries_payloads_raw. Match ENTRIES: identifies matches, '
-    'does not carry their details. Keyed on (event_id, document_code): the '
-    'upstream id repeats inside and across events (ADR 0010). Narrow on '
-    'purpose: identity, id, start time and presence only.';
-COMMENT ON COLUMN ingest.match_entries_unpacked.match_id IS
-    'Payload key "id" or "iD", renamed to say what it is, cast to bigint. A '
-    'FACT, not the identity: it repeats inside one event for different matches '
-    'and is 0 for team tie cards. Use (event_id, document_code) to identify a '
-    'match, and note the fan-out keys on that pair (ADR 0009).';
+    'does not carry their details or times. Keyed on (event_id, document_code): '
+    'the upstream id repeats inside and across events (ADR 0010). Narrow on '
+    'purpose: identity and presence only.';
 COMMENT ON COLUMN ingest.match_entries_unpacked.event_id IS
     'Payload key "eventId". A STRING upstream, cast to bigint here so it joins '
     'to events_unpacked.event_id without a cast on every query. Leads the key '
@@ -165,12 +158,8 @@ COMMENT ON COLUMN ingest.match_entries_unpacked.document_code IS
     'form (34 chars). Unique within an event and never seen twice in 200,879 '
     'rows. Kept intact; splitting it into gender, draw and round is a business '
     'rule and belongs in dbt.';
-COMMENT ON COLUMN ingest.match_entries_unpacked.start_date_local IS
-    'Payload key "startDateLocal" as timestamp WITHOUT time zone. The API sends '
-    'no offset, so none is invented. NULL when the payload sent blank or no '
-    'value: 424 rows, plus every team tie card in event 2345.';
 COMMENT ON COLUMN ingest.match_entries_unpacked.first_seen_at IS
-    'When this match_id was first unpacked. Written once.';
+    'When this (event_id, document_code) was first unpacked. Written once.';
 COMMENT ON COLUMN ingest.match_entries_unpacked.last_seen_at IS
     'When this match was last present in its event payload. Advances on every '
     'unpack, so a value that stops moving means WTT dropped the match.';

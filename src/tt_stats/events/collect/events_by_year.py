@@ -22,33 +22,40 @@ normal envelope with an empty ``rows`` list, 228 bytes of it. Landing that
 records "asked, nothing there" and the queue stops asking.
 """
 
+from __future__ import annotations
+
 import argparse
-import asyncio
 import hashlib
-import logging
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
-from tt_stats.core.batching import chunks
-from tt_stats.core.clients.wtt_api import (
-    WttClient,
-    WttPayloadError,
-    WttRequestError,
-    WttResponse,
+from tt_stats.core.batching import FetchedItem, collect_in_chunks, reason_counts
+from tt_stats.core.cli import (
+    add_queue_arguments,
+    chunk_count,
+    progress_message,
+    quiet_http_logs,
+    report_collect_run,
+    run_with_progress,
+    validate_queue_arguments,
 )
+from tt_stats.core.clients.wtt_api import WttClient
 from tt_stats.core.config import get_settings
 from tt_stats.core.db import get_connection
 from tt_stats.core.ingest_runs import (
     SOURCE_WTT_EVENTCALENDAR,
     RunRecord,
     record_run,
+    safe_record_run,
     status_for,
 )
 from tt_stats.core.logging_config import configure_logging, get_logger
-from tt_stats.core.progress import RunTiming, plural, progress_bar
 from tt_stats.events.land import land_events_by_year
+
+if TYPE_CHECKING:
+    from psycopg import Connection
 
 logger = get_logger(__name__)
 
@@ -59,7 +66,9 @@ DATE_FORMAT = "%Y-%m-%dT%H:%M:%S"
 #: repeated here because filtering a view does not guarantee its internal order.
 _PENDING_YEARS_SQL = """
 WITH bounds AS (
-    SELECT EXTRACT(YEAR FROM current_date)::int AS current_year
+    SELECT EXTRACT(
+        YEAR FROM (current_timestamp AT TIME ZONE 'UTC')
+    )::int AS current_year
 )
 SELECT p.year, p.reason
 FROM ingest.events_years_pending AS p
@@ -113,34 +122,17 @@ class YearPayloadSummary:
     reason: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
-class _Fetched:
-    """One settled network attempt, before any validation or landing.
-
-    Splitting fetch from settle is what makes chunking possible: a whole chunk
-    is fetched concurrently, then each result is validated and landed in order
-    on the calling coroutine.
-    """
-
-    year: int
-    fetched_at: datetime
-    response: WttResponse | None
-    error: str | None
-    status_code: int | None
-    reason: str | None
-
-
-def pending_years(start_year: int) -> list[tuple[int, str]]:
+def pending_years(
+    connection: Connection[Any],
+    start_year: int,
+) -> list[tuple[int, str]]:
     """Return ``(year, reason)`` pairs the collector should request, in order.
 
     ``start_year`` is the backfill floor from settings. Years already landed and
     now in the past are excluded by the view, so a warm database yields only the
     current year and the next.
     """
-    with get_connection() as connection:
-        rows = connection.execute(
-            _PENDING_YEARS_SQL, {"start_year": start_year}
-        ).fetchall()
+    rows = connection.execute(_PENDING_YEARS_SQL, {"start_year": start_year}).fetchall()
     return [(int(row["year"]), str(row["reason"])) for row in rows]
 
 
@@ -239,91 +231,19 @@ async def collect_events_by_year(
     ``chunk_size`` of ``None`` means "one chunk", which is what the small
     explicit ``--years`` runs want.
     """
-    summaries: list[YearPayloadSummary] = []
-    size = chunk_size if chunk_size is not None else max(len(years), 1)
-    reason_for = reasons or {}
-
-    batches = chunks(list(years), size)
-
-    for index, chunk in enumerate(batches, start=1):
-        chunk_started = datetime.now(tz=UTC)
-        outcomes = await asyncio.gather(
-            *(
-                _fetch_one(year, client=client, reason=reason_for.get(year))
-                for year in chunk
-            ),
-            # A bug in one coroutine must not cancel its siblings; it becomes a
-            # failed year with the exception as the reason.
-            return_exceptions=True,
-        )
-
-        settled: list[YearPayloadSummary] = []
-        for year, outcome in zip(chunk, outcomes, strict=True):
-            if isinstance(outcome, BaseException):
-                fetched = _Fetched(
-                    year=year,
-                    fetched_at=datetime.now(tz=UTC),
-                    response=None,
-                    error=f"{type(outcome).__name__}: {outcome}",
-                    status_code=None,
-                    reason=reason_for.get(year),
-                )
-            else:
-                fetched = outcome
-
-            summary = _settle(fetched, land=land, record=record)
-            settled.append(summary)
-            summaries.append(summary)
-            if progress is not None:
-                progress(summary)
-
-        _log_chunk(index, len(batches), settled, started_at=chunk_started)
-
-    return summaries
-
-
-async def _fetch_one(
-    year: int,
-    *,
-    client: WttClient,
-    reason: str | None,
-) -> _Fetched:
-    """Fetch one year and describe the outcome without raising."""
-    fetched_at = datetime.now(tz=UTC)
-
-    try:
-        response = await client.fetch_events_by_year(year)
-    except WttRequestError as error:
-        return _Fetched(
-            year=year,
-            fetched_at=fetched_at,
-            response=None,
-            error=str(error),
-            status_code=error.status_code,
-            reason=reason,
-        )
-    except WttPayloadError as error:
-        return _Fetched(
-            year=year,
-            fetched_at=fetched_at,
-            response=None,
-            error=str(error),
-            status_code=None,
-            reason=reason,
-        )
-
-    return _Fetched(
-        year=year,
-        fetched_at=fetched_at,
-        response=response,
-        error=None,
-        status_code=response.status_code,
-        reason=reason,
+    return await collect_in_chunks(
+        years,
+        fetch=client.fetch_events_by_year,
+        settle=lambda fetched: _settle(fetched, land=land, record=record),
+        on_chunk=_log_chunk,
+        progress=progress,
+        chunk_size=chunk_size,
+        reasons=reasons,
     )
 
 
 def _settle(
-    fetched: _Fetched,
+    fetched: FetchedItem[int],
     *,
     land: LandingFn | None,
     record: RecordRunFn | None,
@@ -331,13 +251,13 @@ def _settle(
     """Validate, land and record one fetched year."""
     if fetched.response is None:
         summary = _failed_summary(
-            year=fetched.year,
+            year=fetched.key,
             fetched_at=fetched.fetched_at,
             status_code=fetched.status_code,
             message=fetched.error or "request failed",
             reason=fetched.reason,
         )
-        _record_run(summary, record)
+        _record_run(summary, record, started_at=fetched.started_at)
         return summary
 
     response = fetched.response
@@ -367,7 +287,7 @@ def _settle(
         error_message = f"payload shape error: {error}"
 
     summary = YearPayloadSummary(
-        year=fetched.year,
+        year=fetched.key,
         status_code=response.status_code,
         source_original_count=source_original_count,
         source_final_count=source_final_count,
@@ -388,7 +308,7 @@ def _settle(
             )
 
     _log_summary(summary)
-    _record_run(summary, record)
+    _record_run(summary, record, started_at=fetched.started_at)
     return summary
 
 
@@ -419,7 +339,6 @@ def _log_chunk(
     index: int,
     total: int,
     settled: Sequence[YearPayloadSummary],
-    *,
     started_at: datetime,
 ) -> None:
     """Log one checkpoint per chunk, rather than one line per year.
@@ -450,41 +369,26 @@ def _log_chunk(
     )
 
 
-def _progress_message(summary: YearPayloadSummary) -> str:
-    if summary.error:
-        state = "failed"
-    elif summary.received_count == 0:
-        state = "empty"
-    else:
-        state = "ok"
-    reason = f"{summary.reason} " if summary.reason else ""
-    return f"{reason}year={summary.year} | received={summary.received_count} | {state}"
-
-
-def _record_run(summary: YearPayloadSummary, record: RecordRunFn | None) -> None:
+def _record_run(
+    summary: YearPayloadSummary,
+    record: RecordRunFn | None,
+    *,
+    started_at: datetime,
+) -> None:
     """Write the attempt to ``ingest.ingest_runs``, never breaking the collect."""
-    if record is None:
-        return
-
-    try:
-        record(
-            RunRecord(
-                source=SOURCE_WTT_EVENTCALENDAR,
-                entity_key=str(summary.year),
-                status=status_for(summary.error),
-                started_at=summary.fetched_at,
-                http_status=summary.status_code,
-                received_count=summary.received_count,
-                payload_sha256=summary.payload_sha256,
-                error=summary.error,
-            )
-        )
-    except Exception as error:
-        # Recording is diagnostics: losing a row must not lose the payload.
-        logger.warning(
-            "ingest_run_not_recorded",
-            extra={"year": summary.year, "error": str(error)},
-        )
+    safe_record_run(
+        record,
+        RunRecord(
+            source=SOURCE_WTT_EVENTCALENDAR,
+            entity_key=str(summary.year),
+            status=status_for(summary.error),
+            started_at=started_at,
+            http_status=summary.status_code,
+            received_count=summary.received_count,
+            payload_sha256=summary.payload_sha256,
+            error=summary.error,
+        ),
+    )
 
 
 def _log_summary(summary: YearPayloadSummary) -> None:
@@ -526,6 +430,7 @@ async def _run(
     years: Sequence[int],
     progress: ProgressFn | None,
     *,
+    connection: Connection[Any],
     chunk_size: int,
     reasons: Mapping[int, str] | None,
 ) -> list[YearPayloadSummary]:
@@ -534,18 +439,13 @@ async def _run(
             years,
             client=client,
             progress=progress,
-            land=land_events_by_year,
-            record=record_run,
+            land=lambda summary, payload: land_events_by_year(
+                connection, summary, payload
+            ),
+            record=lambda run: record_run(connection, run),
             chunk_size=chunk_size,
             reasons=reasons,
         )
-
-
-def _reason_counts(queue: Sequence[tuple[int, str]]) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for _, reason in queue:
-        counts[reason] = counts.get(reason, 0) + 1
-    return counts
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -564,128 +464,79 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=None,
         help="Explicit years to fetch, bypassing the pending view.",
     )
-    parser.add_argument(
-        "--limit",
-        type=int,
-        default=None,
-        help="Fetch at most this many years from the queue, in queue order.",
-    )
-    parser.add_argument(
-        "--chunk-size",
-        type=int,
-        default=None,
-        help="Years fetched per batch. Defaults to Settings.chunk_size.",
-    )
+    add_queue_arguments(parser, unit="year")
     args = parser.parse_args(argv)
-
-    # Argparse-style validation, before any Settings or database work: a typo in
-    # a limit should not need a database password to be reported.
-    if args.limit is not None and args.limit < 1:
-        parser.error("--limit must be at least 1")
-    if args.chunk_size is not None and args.chunk_size < 1:
-        parser.error("--chunk-size must be at least 1")
+    validate_queue_arguments(parser, args)
 
     configure_logging()
     settings = get_settings()
+    quiet_http_logs(settings)
 
-    reasons: dict[int, str] = {}
-    if args.years is not None:
-        years = list(args.years)
-        logger.info("events_collect_manual", extra={"years": len(years)})
-    else:
-        queue = pending_years(settings.events_start_year)
-        if args.limit is not None:
-            queue = queue[: args.limit]
-        years = [year for year, _ in queue]
-        reasons = dict(queue)
+    chunk_size = args.chunk_size or settings.chunk_size
+    started_at = datetime.now(tz=UTC)
+
+    with get_connection(autocommit=True) as connection:
+        reasons: dict[int, str] = {}
+        if args.years is not None:
+            years = list(args.years)
+            logger.info("events_collect_manual", extra={"years": len(years)})
+        else:
+            queue = pending_years(connection, settings.events_start_year)
+            if args.limit is not None:
+                queue = queue[: args.limit]
+            years = [year for year, _ in queue]
+            reasons = dict(queue)
+            logger.info(
+                "events_collect_queue",
+                extra={
+                    "years": len(years),
+                    "reasons": reason_counts(queue),
+                    "start_year": settings.events_start_year,
+                },
+            )
+
+        if not years:
+            logger.info("events_collect_nothing_pending")
+            print("Nothing pending: every year is already fetched.")  # noqa: T201
+            return 0
+
+        chunks_total = chunk_count(len(years), chunk_size)
         logger.info(
-            "events_collect_queue",
+            "events_collect_started",
             extra={
                 "years": len(years),
-                "reasons": _reason_counts(queue),
-                "start_year": settings.events_start_year,
+                "chunk_size": chunk_size,
+                "chunks": chunks_total,
+                "concurrency": settings.max_concurrent_requests,
             },
         )
 
-    if not years:
-        logger.info("events_collect_nothing_pending")
-        print("Nothing pending: every year is already fetched.")  # noqa: T201
-        return 0
-
-    if settings.log_level.upper() != "DEBUG":
-        # One line per HTTP request would bury the audit trail.
-        logging.getLogger("httpx").setLevel(logging.WARNING)
-        logging.getLogger("httpcore").setLevel(logging.WARNING)
-
-    chunk_size = args.chunk_size or settings.chunk_size
-    chunks_total = -(-len(years) // chunk_size)
-    started_at = datetime.now(tz=UTC)
-    logger.info(
-        "events_collect_started",
-        extra={
-            "years": len(years),
-            "chunk_size": chunk_size,
-            "chunks": chunks_total,
-            "concurrency": settings.max_concurrent_requests,
-        },
-    )
-
-    # The bar owns one stdout line and rewrites it. Routine records are INFO,
-    # so the WARNING-level console handler cannot push it down a line; they
-    # still land in logs/tt_stats.log.
-    with progress_bar(
-        len(years),
-        description=(
-            f"Collecting calendar "
-            f"({chunk_size}/chunk, {settings.max_concurrent_requests} workers)"
-        ),
-        unit="year",
-        disable=settings.log_json,
-    ) as bar:
-
-        def advance(summary: YearPayloadSummary) -> None:
-            bar.set_postfix_str(_progress_message(summary), refresh=False)
-            bar.update(1)
-
-        results = asyncio.run(
-            _run(
+        results = run_with_progress(
+            len(years),
+            description="Collecting calendar",
+            unit="year",
+            chunk_size=chunk_size,
+            settings=settings,
+            message=lambda summary: progress_message(
+                summary, key=f"year={summary.year}", count_label="received"
+            ),
+            run=lambda advance: _run(
                 years,
                 advance,
+                connection=connection,
                 chunk_size=chunk_size,
                 reasons=reasons or None,
-            )
+            ),
         )
 
-    timing = RunTiming(started_at, datetime.now(tz=UTC))
-    failed = [result for result in results if result.error]
-    empty = [
-        result for result in results if not result.error and result.received_count == 0
-    ]
-    events_found = sum(result.received_count for result in results)
-    tally: dict[str, Any] = {
-        "years": len(results),
-        "chunks": chunks_total,
-        "events": events_found,
-        "failed": len(failed),
-        "empty": len(empty),
-        "elapsed_seconds": round(timing.elapsed.total_seconds(), 3),
-        "rate_per_second": round(timing.rate_per_second(len(results)), 3),
-    }
-    if failed:
-        logger.error("events_collect_incomplete", extra=tally)
-    else:
-        logger.info("events_collect_complete", extra=tally)
-
-    # Deliberate stdout write: terminal logging sits at WARNING, so the record
-    # above never reaches the console. This is the run summary, not a log line.
-    print(  # noqa: T201
-        f"{timing.describe(len(results), unit='year')}, "
-        f"{chunks_total:,} {plural(chunks_total, 'chunk')}: "
-        f"{events_found:,} events found, "
-        f"{len(empty):,} {plural(len(empty), 'year')} with no events, "
-        f"{len(failed):,} failed"
+    return report_collect_run(
+        results,
+        started_at=started_at,
+        chunks_total=chunks_total,
+        event="events_collect",
+        unit="year",
+        found_label="events",
     )
-    return 0 if not failed else 1
 
 
 if __name__ == "__main__":

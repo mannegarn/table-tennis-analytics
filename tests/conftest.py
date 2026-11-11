@@ -70,10 +70,11 @@ def test_settings() -> Iterator[Settings]:
 
 @pytest.fixture
 def db_connection(test_settings: Settings) -> Iterator[Connection[Any]]:
-    """Yield a connection bound strictly to the test database.
+    """Yield an autocommit connection bound strictly to the test database.
 
-    Transactions stay under the caller's control, which is how the application
-    code behaves: nothing here wraps a test in a synthetic outer transaction.
+    ``autocommit=True`` matches how the production runners own connections so
+    explicit ``with connection.transaction():`` blocks inside landers and
+    ``record_run`` commit or roll back independently.
     """
-    with get_connection(settings=test_settings) as connection:
+    with get_connection(settings=test_settings, autocommit=True) as connection:
         yield connection

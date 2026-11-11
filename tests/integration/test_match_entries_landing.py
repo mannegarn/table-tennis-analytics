@@ -25,7 +25,7 @@ def _match(match_id: int) -> dict[str, Any]:
     return {
         "id": match_id,
         "eventId": str(EVENT_ID),
-        "documentCode": "TTEMSINGLES-----------R64-002500----------",
+        "documentCode": f"TTEMSINGLES-----------R64-{match_id:04d}00----------",
         "subEventType": "Men Singles",
         "fullResults": "OFFICIAL",
         "startDateLocal": "2025-09-29T18:35:00",
@@ -54,8 +54,8 @@ def test_landing_upserts_one_row_and_is_idempotent(
     payload = [_match(1), _match(2)]
     summary = _summary(payload)
 
-    land_match_entries(summary, payload)
-    land_match_entries(summary, payload)
+    land_match_entries(db_connection, summary, payload)
+    land_match_entries(db_connection, summary, payload)
 
     rows = db_connection.execute(
         """
@@ -74,6 +74,12 @@ def test_landing_upserts_one_row_and_is_idempotent(
     assert row["payload_sha256"] == summary.payload_sha256
     assert row["source"] == "wtt_getofficialresult"
 
+    unpacked = db_connection.execute(
+        "SELECT count(*) AS n FROM ingest.match_entries_unpacked WHERE event_id = %s;",
+        (EVENT_ID,),
+    ).fetchone()
+    assert unpacked == {"n": 2}
+
 
 def test_an_empty_match_list_is_recorded_as_an_answer(
     db_connection: Connection[Any],
@@ -82,7 +88,7 @@ def test_an_empty_match_list_is_recorded_as_an_answer(
     payload: list[dict[str, Any]] = []
     summary = _summary(payload)
 
-    land_match_entries(summary, payload)
+    land_match_entries(db_connection, summary, payload)
 
     row = db_connection.execute(
         """
@@ -104,7 +110,7 @@ def test_landing_refuses_a_failed_summary(
     """A failed fetch must never overwrite a good payload."""
     payload = [_match(1)]
     good = _summary(payload)
-    land_match_entries(good, payload)
+    land_match_entries(db_connection, good, payload)
 
     failed = MatchEntriesSummary(
         event_id=EVENT_ID,
@@ -117,7 +123,7 @@ def test_landing_refuses_a_failed_summary(
     )
 
     with pytest.raises(ValueError, match="cannot land a failed event"):
-        land_match_entries(failed, [])
+        land_match_entries(db_connection, failed, [])
 
     row = db_connection.execute(
         """
@@ -128,3 +134,35 @@ def test_landing_refuses_a_failed_summary(
         (EVENT_ID,),
     ).fetchone()
     assert row == {"received_count": 1}
+
+
+def test_landing_rolls_back_when_summary_count_disagrees_with_payload(
+    db_connection: Connection[Any],
+) -> None:
+    """A summary whose received_count disagrees with the stored JSON must abort."""
+    payload = [_match(1), _match(2)]
+    body = json.dumps(payload).encode("utf-8")
+    mismatched = MatchEntriesSummary(
+        event_id=EVENT_ID,
+        status_code=200,
+        received_count=1,
+        payload_sha256=hashlib.sha256(body).hexdigest(),
+        fetched_at=datetime.now(tz=UTC),
+        error=None,
+        reason="new",
+    )
+
+    with pytest.raises(RuntimeError, match="Unpack validation failed"):
+        land_match_entries(db_connection, mismatched, payload)
+
+    raw = db_connection.execute(
+        "SELECT count(*) AS n FROM ingest.match_entries_payloads_raw "
+        "WHERE event_id = %s;",
+        (EVENT_ID,),
+    ).fetchone()
+    unpacked = db_connection.execute(
+        "SELECT count(*) AS n FROM ingest.match_entries_unpacked WHERE event_id = %s;",
+        (EVENT_ID,),
+    ).fetchone()
+    assert raw == {"n": 0}
+    assert unpacked == {"n": 0}

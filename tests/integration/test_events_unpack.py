@@ -22,6 +22,7 @@ from psycopg import Connection, errors
 
 from tt_stats.events.collect.events_by_year import YearPayloadSummary
 from tt_stats.events.land import land_events_by_year
+from tt_stats.events.land import unpack as events_unpack
 from tt_stats.events.land.unpack import load_unpack_sql, unpack_years
 
 pytestmark = [
@@ -159,11 +160,11 @@ def _sightings(
 
 
 @pytest.fixture
-def landed_year() -> int:
+def landed_year(db_connection: Connection[Any]) -> int:
     """Land the fixture year; the truncate fixture removes every trace of it."""
     payload = _payload()
     digest = hashlib.sha256(FIXTURE.read_bytes()).hexdigest()
-    land_events_by_year(_summary(payload, digest), payload)
+    land_events_by_year(db_connection, _summary(payload, digest), payload)
     return TEST_YEAR
 
 
@@ -221,6 +222,7 @@ def test_re_landing_a_year_advances_last_seen_at_only(
     payload = _payload()
 
     land_events_by_year(
+        db_connection,
         _summary(payload, hashlib.sha256(FIXTURE.read_bytes()).hexdigest()),
         payload,
     )
@@ -277,7 +279,7 @@ def test_landing_tolerates_intra_year_duplicate_events(
 
     assert len(rows) > distinct, "the helper must actually repeat an event"
 
-    land_events_by_year(_summary(payload, _digest(payload)), payload)
+    land_events_by_year(db_connection, _summary(payload, _digest(payload)), payload)
 
     raw = db_connection.execute(
         "SELECT received_count FROM ingest.events_by_year_raw WHERE year = %s;",
@@ -302,7 +304,7 @@ def test_landing_raises_and_rolls_back_when_the_rows_key_is_renamed(
     )
 
     with pytest.raises(RuntimeError, match="Unpack validation failed"):
-        land_events_by_year(summary, payload)
+        land_events_by_year(db_connection, summary, payload)
 
     assert _raw_rows(db_connection) == 0, "the raw upsert must roll back with it"
     assert _counts(db_connection) == {"rows": 0, "events": 0}
@@ -322,7 +324,7 @@ def test_landing_raises_and_rolls_back_when_a_core_field_is_missing(
     summary = _summary(payload, _digest(payload))
 
     with pytest.raises((RuntimeError, errors.NotNullViolation)):
-        land_events_by_year(summary, payload)
+        land_events_by_year(db_connection, summary, payload)
 
     assert _raw_rows(db_connection) == 0, "the raw upsert must roll back with it"
     assert _counts(db_connection) == {"rows": 0, "events": 0}
@@ -336,7 +338,41 @@ def test_landing_raises_when_the_summary_describes_a_different_payload(
     summary = _summary(payload, _digest(payload), received_count=1)
 
     with pytest.raises(RuntimeError, match="Unpack validation failed"):
-        land_events_by_year(summary, payload)
+        land_events_by_year(db_connection, summary, payload)
 
     assert _raw_rows(db_connection) == 0
+    assert _counts(db_connection) == {"rows": 0, "events": 0}
+
+
+def test_standalone_unpack_raises_and_rolls_back_when_sql_writes_nothing(
+    landed_year: int,
+    db_connection: Connection[Any],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``tt-events-unpack`` must enforce the same completeness check as landing."""
+    db_connection.execute(
+        "DELETE FROM ingest.events_unpacked WHERE source_year = %s;",
+        (TEST_YEAR,),
+    )
+    db_connection.commit()
+
+    broken_sql = tmp_path / "broken_unpack.sql"
+    broken_sql.write_text(
+        """
+        INSERT INTO ingest.events_unpacked (
+            source_year, event_id, event_name, start_date, end_date
+        )
+        SELECT
+            year::smallint, 1, 'never', current_date, current_date
+        FROM ingest.events_by_year_raw
+        WHERE year = %(year)s AND false;
+        """,
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(events_unpack, "UNPACK_SQL_PATH", broken_sql)
+
+    with pytest.raises(RuntimeError, match="Unpack validation failed"):
+        unpack_years([TEST_YEAR])
+
     assert _counts(db_connection) == {"rows": 0, "events": 0}

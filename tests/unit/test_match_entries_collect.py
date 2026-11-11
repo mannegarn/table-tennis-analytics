@@ -18,7 +18,6 @@ from tt_stats.matches.collect.match_entries import (
     collect_match_entries,
     extract_rows,
     main,
-    match_id_of,
     validate_rows,
 )
 
@@ -94,23 +93,40 @@ def test_validate_rows_reports_missing_keys() -> None:
     assert "documentCode" in problems[0]
 
 
-def test_validate_rows_accepts_the_capitalised_id_key() -> None:
-    """Upstream sends ``iD`` for some events (3257, 3346) and ``id`` for others."""
+@pytest.mark.parametrize("start_date", ["", None])
+def test_validate_rows_accepts_a_missing_or_blank_start_date(
+    start_date: str | None,
+) -> None:
+    """424 measured rows send blank or omit startDateLocal altogether."""
     row = _match(1)
-    row["iD"] = row.pop("id")
+    if start_date is None:
+        del row["startDateLocal"]
+    else:
+        row["startDateLocal"] = start_date
 
     assert validate_rows([row], event_id=EVENT_ID) == []
-    assert match_id_of(row) == 1
 
 
-def test_validate_rows_rejects_a_row_with_no_id_key() -> None:
+@pytest.mark.parametrize("bad_code", ["", "   ", None])
+def test_validate_rows_rejects_a_blank_or_null_document_code(
+    bad_code: str | None,
+) -> None:
     row = _match(1)
-    del row["id"]
+    row["documentCode"] = bad_code
 
     problems = validate_rows([row], event_id=EVENT_ID)
 
     assert problems
-    assert "no integer id or iD" in problems[0]
+    assert "documentCode" in problems[0]
+
+
+def test_validate_rows_allows_omitted_payload_only_fields() -> None:
+    """``id``/``iD``, ``subEventType`` and ``fullResults`` are payload-only now."""
+    row = _match(1)
+    for key in ("id", "subEventType", "fullResults", "startDateLocal"):
+        del row[key]
+
+    assert validate_rows([row], event_id=EVENT_ID) == []
 
 
 async def test_collect_returns_a_summary() -> None:

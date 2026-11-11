@@ -1,9 +1,8 @@
 """Unit tests for the match-entries unpack statement. No database, no network.
 
 The guardrail tests read the committed SQL as text and assert the decisions the
-measurements forced (ADR 0010): the key is the event plus the document code, the
-id may arrive as ``iD``, and a blank start time becomes NULL rather than a
-sentinel.
+measurements forced (ADR 0010): the key is the event plus the document code, and
+the upstream id and start time stay in the payload instead of becoming columns.
 """
 
 from pathlib import Path
@@ -62,22 +61,15 @@ def test_statement_upserts_on_the_event_and_document_code() -> None:
 
 
 @requires_statement
-def test_statement_accepts_both_id_spellings() -> None:
+def test_statement_leaves_the_id_and_start_time_in_the_payload() -> None:
     body = _body()
 
-    assert "->> 'id'" in body, "most payloads spell the id lowercase"
-    assert "->> 'iD'" in body, (
-        "854 rows in 7 payloads spell it 'iD'; uppercase would hide the difference"
+    assert "->> 'id'" not in body, (
+        "the id is neither unique nor global, and nothing reads it"
     )
-    assert body.index("coalesce") < body.index("->> 'iD'")
-
-
-@requires_statement
-def test_statement_turns_a_blank_start_time_into_null() -> None:
-    body = _upper()
-
-    assert "NULLIF(BTRIM(E.VALUE ->> 'STARTDATELOCAL'), '')::TIMESTAMP" in body, (
-        "424 rows send no start time; NULL is honest, a sentinel is not"
+    assert "->> 'iD'" not in body, "the iD spelling is payload-only too"
+    assert "->> 'startDateLocal'" not in body, (
+        "424 rows send no start time and 1665 send a sentinel; dbt owns that rule"
     )
 
 

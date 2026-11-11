@@ -12,8 +12,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
-from tt_stats.core.db import get_connection
+from tt_stats.core.logging_config import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from psycopg import Connection
+
+logger = get_logger(__name__)
 
 SOURCE_WTT_EVENTCALENDAR = "wtt_eventcalendar"
 SOURCE_WTT_MATCH_ENTRIES = "wtt_getofficialresult"
@@ -45,16 +53,15 @@ class RunRecord:
     error: str | None = None
 
 
-def record_run(record: RunRecord) -> None:
-    """Insert one attempt into ``ingest.ingest_runs``.
+def record_run(connection: Connection[Any], record: RunRecord) -> None:
+    """Insert one attempt into ``ingest.ingest_runs`` in its own transaction.
 
-    Deliberately independent of whatever the caller is doing: its own
-    autocommit connection and its own explicit transaction. A run that failed
-    mid-landing has already rolled its data back by the time this is called, so
-    the audit row is the only thing that commits - and it must commit even if
-    the caller's transaction is aborted.
+    The caller passes a persistent ``autocommit=True`` connection. A run that
+    failed mid-landing has already rolled its transaction back on that
+    connection before this is called, so this transaction still commits even
+    when the landing transaction failed.
     """
-    with get_connection(autocommit=True) as connection, connection.transaction():
+    with connection.transaction():
         connection.execute(
             """
             INSERT INTO ingest.ingest_runs (
@@ -81,4 +88,26 @@ def record_run(record: RunRecord) -> None:
                 record.payload_sha256,
                 record.error,
             ),
+        )
+
+
+def safe_record_run(
+    record: Callable[[RunRecord], None] | None,
+    run: RunRecord,
+) -> None:
+    """Write an attempt via ``record``, swallowing diagnostic write failures."""
+    if record is None:
+        return
+
+    try:
+        record(run)
+    except Exception as error:
+        # Recording is diagnostics: losing a row must not lose the payload.
+        logger.warning(
+            "ingest_run_not_recorded",
+            extra={
+                "source": run.source,
+                "entity_key": run.entity_key,
+                "error": str(error),
+            },
         )

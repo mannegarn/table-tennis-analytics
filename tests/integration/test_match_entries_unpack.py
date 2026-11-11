@@ -1,12 +1,12 @@
 """Integration tests: a landed match list unpacks into one row per match.
 
 Runs against ``tt_stats_test``, truncated around every test by the autouse
-fixture, so nothing here needs cleanup. Event and match ids sit in the private
-range the events tests use, so a test can never touch collected data.
+fixture, so nothing here needs cleanup. Event ids sit in the private range the
+events tests use, so a test can never touch collected data.
 
-The cases are the measurements that shaped ADR 0010: an id repeats inside an
-event, repeats across events, may be 0, and the document code is what actually
-identifies a match.
+The cases are the measurements that shaped ADR 0010: the document code is what
+identifies a match, and the upstream id - which repeats inside an event and
+across events, and may be 0 - is left in the payload.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ import hashlib
 import json
 import time
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import psycopg
@@ -23,6 +24,7 @@ from psycopg import Connection, errors
 
 from tt_stats.matches.collect.match_entries import MatchEntriesSummary
 from tt_stats.matches.land import land_match_entries
+from tt_stats.matches.land import unpack as matches_unpack
 from tt_stats.matches.land.unpack import unpack_events
 
 pytestmark = pytest.mark.integration
@@ -76,8 +78,8 @@ def _summary(event_id: int, payload: Payload) -> MatchEntriesSummary:
     )
 
 
-def _land(event_id: int, payload: Payload) -> None:
-    land_match_entries(_summary(event_id, payload), payload)
+def _land(connection: Connection[Any], event_id: int, payload: Payload) -> None:
+    land_match_entries(connection, _summary(event_id, payload), payload)
 
 
 def _unpacked(
@@ -86,8 +88,7 @@ def _unpacked(
 ) -> list[dict[str, Any]]:
     rows = connection.execute(
         """
-        SELECT match_id, event_id, document_code, start_date_local,
-               first_seen_at, last_seen_at
+        SELECT event_id, document_code, first_seen_at, last_seen_at
         FROM ingest.match_entries_unpacked
         WHERE event_id = %s
         ORDER BY document_code;
@@ -111,6 +112,7 @@ def _raw_count(connection: Connection[Any], event_id: int = EVENT_ID) -> int:
 
 def test_landing_unpacks_one_row_per_match(db_connection: Connection[Any]) -> None:
     _land(
+        db_connection,
         EVENT_ID,
         [
             _row(documentCode=MEN_SINGLES),
@@ -127,50 +129,22 @@ def test_landing_unpacks_one_row_per_match(db_connection: Connection[Any]) -> No
 def test_unpacked_columns_match_the_payload(
     db_connection: Connection[Any],
 ) -> None:
-    _land(EVENT_ID, [_row()])
+    _land(db_connection, EVENT_ID, [_row()])
 
     row = _unpacked(db_connection)[0]
 
-    assert row["match_id"] == MATCH_ID
     assert row["event_id"] == EVENT_ID
     assert row["document_code"] == MEN_SINGLES
-    assert str(row["start_date_local"]) == "2025-09-29 18:35:00"
     assert row["first_seen_at"] is not None
     assert row["last_seen_at"] >= row["first_seen_at"]
 
 
-def test_the_id_spelled_i_d_is_accepted(db_connection: Connection[Any]) -> None:
-    """854 rows in 7 payloads carry ``iD`` instead of ``id``."""
-    row = _without("id")
-    row["iD"] = MATCH_ID + 7
-
-    _land(EVENT_ID, [row])
-
-    assert _unpacked(db_connection)[0]["match_id"] == MATCH_ID + 7
-
-
-@pytest.mark.parametrize("start_time", ["", None])
-def test_a_blank_or_missing_start_time_becomes_null(
-    db_connection: Connection[Any],
-    start_time: str | None,
-) -> None:
-    """424 rows carry no start time; NULL is honest, a sentinel is not."""
-    row = (
-        _without("startDateLocal")
-        if start_time is None
-        else _row(startDateLocal=start_time)
-    )
-
-    _land(EVENT_ID, [row])
-
-    assert _unpacked(db_connection)[0]["start_date_local"] is None
-
-
-def test_a_team_card_with_id_zero_is_kept(
+def test_a_team_card_without_an_id_or_a_date_is_kept(
     db_connection: Connection[Any],
 ) -> None:
     """Event 2345 sends 183 tie cards with no id and no date."""
     _land(
+        db_connection,
         EVENT_ID,
         [
             _row(
@@ -182,11 +156,7 @@ def test_a_team_card_with_id_zero_is_kept(
         ],
     )
 
-    row = _unpacked(db_connection)[0]
-
-    assert row["match_id"] == 0
-    assert row["document_code"] == TEAM_CARD
-    assert row["start_date_local"] is None
+    assert _unpacked(db_connection)[0]["document_code"] == TEAM_CARD
 
 
 def test_two_document_codes_sharing_one_id_are_two_matches(
@@ -194,6 +164,7 @@ def test_two_document_codes_sharing_one_id_are_two_matches(
 ) -> None:
     """Event 2411 sends id 59820 as both QFNL000100 and QFNL000200."""
     _land(
+        db_connection,
         EVENT_ID,
         [
             _row(documentCode=MEN_SINGLES),
@@ -208,36 +179,31 @@ def test_the_same_match_id_in_two_events_is_kept_twice(
     db_connection: Connection[Any],
 ) -> None:
     """132 ids appear under two or three events, so the key needs the event."""
-    _land(EVENT_ID, [_row(eventId=str(EVENT_ID))])
-    _land(OTHER_EVENT_ID, [_row(eventId=str(OTHER_EVENT_ID))])
+    _land(db_connection, EVENT_ID, [_row(eventId=str(EVENT_ID))])
+    _land(db_connection, OTHER_EVENT_ID, [_row(eventId=str(OTHER_EVENT_ID))])
 
     assert len(_unpacked(db_connection, EVENT_ID)) == 1
     assert len(_unpacked(db_connection, OTHER_EVENT_ID)) == 1
     assert _unpacked(db_connection, OTHER_EVENT_ID)[0]["event_id"] == OTHER_EVENT_ID
 
 
-def test_a_repeated_document_code_unpacks_once_keeping_the_latest_start(
+def test_a_repeated_document_code_unpacks_once(
     db_connection: Connection[Any],
 ) -> None:
-    """Insurance: the tie-break must be deterministic, not whichever row wins."""
-    _land(
-        EVENT_ID,
-        [
-            _row(startDateLocal="2025-09-29T18:35:00"),
-            _row(startDateLocal="2025-09-30T09:00:00"),
-        ],
-    )
+    """DISTINCT ON collapses a duplicate code instead of failing the upsert."""
+    _land(db_connection, EVENT_ID, [_row(), _row()])
 
-    rows = _unpacked(db_connection)
-
-    assert len(rows) == 1
-    assert str(rows[0]["start_date_local"]) == "2025-09-30 09:00:00"
+    assert len(_unpacked(db_connection)) == 1
 
 
 def test_re_running_the_unpack_is_idempotent(
     db_connection: Connection[Any],
 ) -> None:
-    _land(EVENT_ID, [_row(), _row(documentCode=WOMEN_SINGLES, id=MATCH_ID + 1)])
+    _land(
+        db_connection,
+        EVENT_ID,
+        [_row(), _row(documentCode=WOMEN_SINGLES, id=MATCH_ID + 1)],
+    )
     before = _unpacked(db_connection)
 
     time.sleep(0.05)
@@ -259,7 +225,7 @@ def test_re_running_the_unpack_is_idempotent(
 def test_dry_run_reports_counts_but_writes_nothing(
     db_connection: Connection[Any],
 ) -> None:
-    _land(EVENT_ID, [_row()])
+    _land(db_connection, EVENT_ID, [_row()])
     db_connection.execute(
         "DELETE FROM ingest.match_entries_unpacked WHERE event_id = %s;",
         (EVENT_ID,),
@@ -275,8 +241,8 @@ def test_dry_run_reports_counts_but_writes_nothing(
 def test_the_backfill_covers_every_landed_event(
     db_connection: Connection[Any],
 ) -> None:
-    _land(EVENT_ID, [_row()])
-    _land(OTHER_EVENT_ID, [_row()])
+    _land(db_connection, EVENT_ID, [_row()])
+    _land(db_connection, OTHER_EVENT_ID, [_row()])
     db_connection.execute("DELETE FROM ingest.match_entries_unpacked;")
     db_connection.commit()
 
@@ -298,7 +264,7 @@ def test_an_empty_match_list_is_a_success(
     db_connection: Connection[Any],
 ) -> None:
     """2307 landed payloads hold ``[]``; zero rows unpacked is correct."""
-    _land(EVENT_ID, [])
+    _land(db_connection, EVENT_ID, [])
 
     assert _unpacked(db_connection) == []
     assert _raw_count(db_connection) == 1
@@ -308,7 +274,7 @@ def test_landing_rolls_back_when_the_document_code_is_missing(
     db_connection: Connection[Any],
 ) -> None:
     with pytest.raises(errors.NotNullViolation):
-        _land(EVENT_ID, [_without("documentCode")])
+        _land(db_connection, EVENT_ID, [_without("documentCode")])
 
     assert _raw_count(db_connection) == 0, "the raw upsert must roll back with it"
     assert _unpacked(db_connection) == []
@@ -319,15 +285,7 @@ def test_landing_rolls_back_when_the_payload_is_not_an_array(
 ) -> None:
     """``jsonb_array_elements`` raises here instead of silently unpacking nothing."""
     with pytest.raises(psycopg.Error):
-        _land(EVENT_ID, {"rows": [_row()]})
-
-    assert _raw_count(db_connection) == 0
-    assert _unpacked(db_connection) == []
-
-
-def test_a_negative_match_id_is_refused(db_connection: Connection[Any]) -> None:
-    with pytest.raises(errors.CheckViolation):
-        _land(EVENT_ID, [_row(id=-1)])
+        _land(db_connection, EVENT_ID, {"rows": [_row()]})
 
     assert _raw_count(db_connection) == 0
     assert _unpacked(db_connection) == []
@@ -351,18 +309,53 @@ def test_the_schema_keys_on_the_event_and_the_document_code(
     assert [row["column_name"] for row in rows] == ["document_code", "event_id"]
 
 
-def test_start_date_local_is_nullable_and_the_id_check_allows_zero(
+def test_the_unpacked_table_holds_identity_and_presence_only(
     db_connection: Connection[Any],
 ) -> None:
-    row = db_connection.execute(
+    columns = db_connection.execute(
         """
-        SELECT is_nullable
+        SELECT column_name
         FROM information_schema.columns
         WHERE table_schema = 'ingest'
           AND table_name = 'match_entries_unpacked'
-          AND column_name = 'start_date_local';
+        ORDER BY ordinal_position;
         """
-    ).fetchone()
+    ).fetchall()
 
-    assert row is not None
-    assert row["is_nullable"] == "YES"
+    assert [row["column_name"] for row in columns] == [
+        "event_id",
+        "document_code",
+        "first_seen_at",
+        "last_seen_at",
+    ]
+
+
+def test_standalone_unpack_raises_and_rolls_back_when_sql_writes_nothing(
+    db_connection: Connection[Any],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``tt-matches-unpack`` must enforce the same completeness check as landing."""
+    _land(db_connection, EVENT_ID, [_row()])
+    db_connection.execute(
+        "DELETE FROM ingest.match_entries_unpacked WHERE event_id = %s;",
+        (EVENT_ID,),
+    )
+    db_connection.commit()
+
+    broken_sql = tmp_path / "broken_unpack.sql"
+    broken_sql.write_text(
+        """
+        INSERT INTO ingest.match_entries_unpacked (event_id, document_code)
+        SELECT event_id, 'never'
+        FROM ingest.match_entries_payloads_raw
+        WHERE event_id = %(event_id)s AND false;
+        """,
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(matches_unpack, "UNPACK_SQL_PATH", broken_sql)
+
+    with pytest.raises(RuntimeError, match="Unpack validation failed"):
+        unpack_events([EVENT_ID])
+
+    assert _unpacked(db_connection) == []

@@ -32,6 +32,7 @@ def _add_event(
     *,
     start_offset: int,
     end_offset: int,
+    source_year: int | None = None,
 ) -> None:
     """Insert an unpacked event relative to today, then commit it."""
     today = _today()
@@ -43,7 +44,7 @@ def _add_event(
         VALUES (%s, %s, %s, %s, %s);
         """,
         (
-            today.year,
+            today.year if source_year is None else source_year,
             event_id,
             f"Event {event_id}",
             today + timedelta(days=start_offset),
@@ -77,9 +78,12 @@ def _add_payload(
 def _queue(connection: Connection[Any]) -> list[tuple[int, str]]:
     rows = connection.execute(
         """
-        SELECT event_id, reason, end_date
+        SELECT event_id, reason, start_date, end_date
         FROM ingest.match_entries_pending
-        ORDER BY (end_date + 1 >= current_date) DESC, end_date DESC, event_id;
+        ORDER BY
+            (reason = 'live') DESC,
+            GREATEST(start_date, end_date) DESC,
+            event_id;
         """
     ).fetchall()
     return [(int(row["event_id"]), str(row["reason"])) for row in rows]
@@ -180,6 +184,39 @@ def test_pending_events_returns_the_queue_and_applies_the_limit(
     _add_event(db_connection, 11, start_offset=-30, end_offset=-20)
     _add_event(db_connection, 12, start_offset=-3, end_offset=+1)
 
-    assert pending_events() == [(12, "live"), (11, "new")]
-    assert pending_events(1) == [(12, "live")]
-    assert pending_events(0) == []
+    assert pending_events(db_connection) == [(12, "live"), (11, "new")]
+    assert pending_events(db_connection, 1) == [(12, "live")]
+    assert pending_events(db_connection, 0) == []
+
+
+def test_an_event_in_two_calendars_is_queued_only_once(
+    db_connection: Connection[Any],
+) -> None:
+    """A New Year straddling tournament appears in two years but is fetched once."""
+    today = _today()
+    _add_event(
+        db_connection,
+        13,
+        start_offset=-3,
+        end_offset=+2,
+        source_year=today.year - 1,
+    )
+    _add_event(
+        db_connection,
+        13,
+        start_offset=-3,
+        end_offset=+2,
+        source_year=today.year,
+    )
+
+    assert pending_events(db_connection) == [(13, "live")]
+
+
+def test_an_inverted_date_range_does_not_expire_before_its_start_date(
+    db_connection: Connection[Any],
+) -> None:
+    """Upstream sends end_date < start_date (e.g. 1992); live window uses GREATEST."""
+    _add_event(db_connection, 14, start_offset=0, end_offset=-365)
+    _add_payload(db_connection, 14, fetched_at=datetime.now(tz=UTC))
+
+    assert _reason_for(db_connection, 14) == "live"

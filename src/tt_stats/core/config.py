@@ -6,6 +6,11 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from tt_stats.core.clients.wtt_routes import (
+    DEFAULT_WTT_API_KEY,
+    DEFAULT_WTT_USER_AGENT,
+)
+
 
 def project_root() -> Path:
     """Return the repository root for a source or editable checkout.
@@ -74,12 +79,8 @@ class Settings(BaseSettings):
     events_start_year: int = 1926
 
     # WTT API client.
-    wtt_api_key: str = "S_WTT_882jjh7basdj91834783mds8j2jsd81"
-    user_agent: str = (
-        "Mozilla/5.0 (Linux; Android 11.0; Surface Duo) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/140.0.0.0 Mobile Safari/537.36"
-    )
+    wtt_api_key: str = DEFAULT_WTT_API_KEY
+    user_agent: str = DEFAULT_WTT_USER_AGENT
     verify_ssl: bool = True
 
     # Local scratch area for captures, logs and notebooks. Defaults to the

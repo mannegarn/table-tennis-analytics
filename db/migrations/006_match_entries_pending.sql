@@ -6,9 +6,10 @@
 --   is debuggable from a log line alone.
 --
 -- THE RULES
---   p = current_date, w = end_date + 1 (a one-day grace, so an event that ended
---   yesterday still counts as live, and a fetch taken on the final day is not
---   treated as complete).
+--   p = today in UTC, w = GREATEST(start_date, end_date) + 1 (a one-day grace,
+--   so an event that ended yesterday still counts as live, a fetch taken on the
+--   final day is not treated as complete, and an upstream inverted date range
+--   where end_date < start_date cannot expire before start_date).
 --
 --     start_date > p                      -> not in the queue at all
 --     p <= w                              -> live, fetched every run
@@ -19,6 +20,12 @@
 --   The grace is used by both the live test and the stale test, so the two
 --   cannot disagree: an event cannot be "finished" and "possibly fetched mid-
 --   tournament" at the same time.
+--
+-- DEDUPLICATION ACROSS YEARS
+--   events_unpacked is keyed on (source_year, event_id) so a tournament that
+--   straddles New Year can appear in both years' calendars. This queue is per
+--   event_id, so the events CTE collapses multi-year sightings to the most
+--   recently unpacked copy before joining the raw payloads.
 --
 -- NO YEAR FLOOR
 --   Measured: WTT has no match data before late 2021 - eighteen sampled event
@@ -42,7 +49,17 @@
 
 CREATE OR REPLACE VIEW ingest.match_entries_pending AS
 WITH bounds AS (
-    SELECT current_date AS today
+    SELECT (current_timestamp AT TIME ZONE 'UTC')::date AS today
+),
+events AS (
+    SELECT DISTINCT ON (e.event_id)
+        e.event_id,
+        e.event_name,
+        e.start_date,
+        e.end_date,
+        GREATEST(e.start_date, e.end_date) + 1 AS window_end
+    FROM ingest.events_unpacked AS e
+    ORDER BY e.event_id, e.last_seen_at DESC, e.source_year DESC
 )
 SELECT
     e.event_id,
@@ -50,20 +67,20 @@ SELECT
     e.start_date,
     e.end_date,
     CASE
-        WHEN e.end_date + 1 >= b.today THEN 'live'
+        WHEN e.window_end >= b.today THEN 'live'
         WHEN r.event_id IS NULL THEN 'new'
         ELSE 'stale'
     END::text AS reason,
     r.fetched_at,
     r.received_count AS previous_received_count
-FROM ingest.events_unpacked AS e
+FROM events AS e
 CROSS JOIN bounds AS b
 LEFT JOIN ingest.match_entries_payloads_raw AS r ON r.event_id = e.event_id
 WHERE e.start_date <= b.today
   AND (
-        e.end_date + 1 >= b.today
+        e.window_end >= b.today
      OR r.event_id IS NULL
-     OR r.fetched_at::date <= e.end_date + 1
+     OR (r.fetched_at AT TIME ZONE 'UTC')::date <= e.window_end
   );
 
 COMMENT ON VIEW ingest.match_entries_pending IS

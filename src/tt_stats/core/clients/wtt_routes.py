@@ -22,6 +22,13 @@ WTT_MATCH_ENTRIES_URL = f"{_LIVE_EVENTS_BASE_URL}/api/cms/GetOfficialResult"
 #: men's, women's, doubles and mixed draws.
 MATCH_ENTRIES_DOCUMENT_CODE = "TTE"
 
+DEFAULT_WTT_API_KEY = "S_WTT_882jjh7basdj91834783mds8j2jsd81"
+DEFAULT_WTT_USER_AGENT = (
+    "Mozilla/5.0 (Linux; Android 11.0; Surface Duo) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/140.0.0.0 Mobile Safari/537.36"
+)
+
 _COMMON_HEADERS = {
     "accept": "application/json, text/plain, */*",
     "origin": "https://www.worldtabletennis.com",
@@ -42,7 +49,10 @@ _COMMON_HEADERS = {
 
 
 def get_events_year_route(
-    year: int, *, api_key: str, user_agent: str
+    year: int,
+    *,
+    api_key: str = DEFAULT_WTT_API_KEY,
+    user_agent: str = DEFAULT_WTT_USER_AGENT,
 ) -> dict[str, Any]:
     """Build the POST request for one year of the WTT event calendar.
 
@@ -84,8 +94,8 @@ def get_events_year_route(
 def get_match_entries_route(
     event_id: int,
     *,
-    api_key: str,
-    user_agent: str,
+    api_key: str = DEFAULT_WTT_API_KEY,
+    user_agent: str = DEFAULT_WTT_USER_AGENT,
 ) -> dict[str, Any]:
     """Build the GET request for one event's match list.
 
