@@ -20,7 +20,7 @@ import argparse
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from tt_stats.core.cli import add_dry_run_argument
+from tt_stats.core.cli import add_dry_run_argument, report_unpack_run
 from tt_stats.core.logging_config import configure_logging, get_logger
 from tt_stats.core.sql_files import load_sql
 from tt_stats.core.unpacking import unpack_each
@@ -257,23 +257,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     results = unpack_events(args.event_ids, dry_run=args.dry_run)
-    events = len(results)
-    rows = sum(touched for _, touched in results)
-    empty = sum(1 for _, touched in results if touched == 0)
-    logger.info(
-        "unpack_complete",
-        extra={
-            "events": events,
-            "rows": rows,
-            "events_without_matches": empty,
-            "dry_run": args.dry_run,
-        },
+    return report_unpack_run(
+        results,
+        unit="event",
+        found_label="matches",
+        dry_run=args.dry_run,
     )
-    # Deliberate stdout write: terminal logging sits at WARNING, so the log
-    # line above never reaches the console. This is the CLI's user-facing
-    # confirmation, not application logging.
-    print(  # noqa: T201
-        f"Unpack complete: {events} events, {rows} rows "
-        f"({empty} without matches, dry_run={args.dry_run})"
-    )
-    return 0

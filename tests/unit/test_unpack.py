@@ -8,9 +8,10 @@ from pathlib import Path
 
 import pytest
 
+from tt_stats.core.sql_files import executable_sql
+from tt_stats.events.land import unpack
 from tt_stats.events.land.unpack import (
     UNPACK_SQL_PATH,
-    executable_sql,
     load_unpack_sql,
 )
 
@@ -20,11 +21,6 @@ requires_statement = pytest.mark.skipif(
     STATEMENT is None,
     reason="unpack_events.sql is still a scaffold",
 )
-
-
-def test_executable_sql_strips_line_and_block_comments() -> None:
-    assert executable_sql("-- only a comment\n/* and a block */\n") == ""
-    assert executable_sql("-- comment\nSELECT 1;\n") == "SELECT 1;"
 
 
 def test_unpack_file_exists() -> None:
@@ -51,7 +47,7 @@ def test_statement_is_a_single_dml_insert() -> None:
 
     assert "ingest.events_unpacked" in body
     assert body.upper().startswith("INSERT"), "expected one INSERT statement"
-    for forbidden in ("CREATE", "ALTER", "DROP", "TRUNCATE"):
+    for forbidden in ("CREATE", "ALTER", "DROP", "TRUNCATE", "DELETE"):
         assert forbidden not in body.upper(), f"{forbidden} does not belong here"
 
 
@@ -117,3 +113,14 @@ def test_statement_has_no_tier_or_category_filter() -> None:
         assert forbidden not in body, (
             f"{forbidden} suggests business filtering; that belongs in dbt"
         )
+
+
+def test_main_refuses_to_run_while_the_statement_is_a_scaffold(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scaffold = tmp_path / "scaffold.sql"
+    scaffold.write_text("-- nothing but a comment\n", encoding="utf-8")
+    monkeypatch.setattr(unpack, "UNPACK_SQL_PATH", scaffold)
+
+    assert unpack.main([]) == 1

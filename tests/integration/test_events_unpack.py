@@ -355,7 +355,6 @@ def test_standalone_unpack_raises_and_rolls_back_when_sql_writes_nothing(
         "DELETE FROM ingest.events_unpacked WHERE source_year = %s;",
         (TEST_YEAR,),
     )
-    db_connection.commit()
 
     broken_sql = tmp_path / "broken_unpack.sql"
     broken_sql.write_text(

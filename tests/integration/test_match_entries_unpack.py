@@ -230,7 +230,6 @@ def test_dry_run_reports_counts_but_writes_nothing(
         "DELETE FROM ingest.match_entries_unpacked WHERE event_id = %s;",
         (EVENT_ID,),
     )
-    db_connection.commit()
 
     results = unpack_events([EVENT_ID], dry_run=True)
 
@@ -244,7 +243,6 @@ def test_the_backfill_covers_every_landed_event(
     _land(db_connection, EVENT_ID, [_row()])
     _land(db_connection, OTHER_EVENT_ID, [_row()])
     db_connection.execute("DELETE FROM ingest.match_entries_unpacked;")
-    db_connection.commit()
 
     results = unpack_events()
 
@@ -341,7 +339,6 @@ def test_standalone_unpack_raises_and_rolls_back_when_sql_writes_nothing(
         "DELETE FROM ingest.match_entries_unpacked WHERE event_id = %s;",
         (EVENT_ID,),
     )
-    db_connection.commit()
 
     broken_sql = tmp_path / "broken_unpack.sql"
     broken_sql.write_text(

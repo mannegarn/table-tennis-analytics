@@ -18,21 +18,22 @@ logger = get_logger(__name__)
 def get_connection(
     *,
     settings: Settings | None = None,
-    autocommit: bool = False,
+    autocommit: bool = True,
     row_factory: RowFactory[Any] | None = dict_row,
 ) -> Generator[Connection[Any]]:
-    """Yield a PostgreSQL connection with transaction safety.
+    """Yield a PostgreSQL connection configured for explicit transactions.
 
-    psycopg's connection context manager commits on a clean exit and rolls
-    back when an exception propagates, so callers get correct transaction
-    behaviour without manual ``commit`` or ``rollback`` calls.
+    ``autocommit`` defaults to ``True`` so read queries do not leave the session
+    idle in an open transaction, and each ``with connection.transaction():``
+    block commits or rolls back its own unit of work independently across a
+    persistent connection.
 
     Args:
         settings: Configuration to connect with. Defaults to the cached
             process settings; passing one keeps callers testable without
             patching the environment.
-        autocommit: When True, statements commit immediately. Useful for
-            DDL and for simple reads.
+        autocommit: When True (the default), statements outside an explicit
+            ``with connection.transaction():`` block commit immediately.
         row_factory: How rows are returned. Defaults to ``dict_row`` so
             callers can index by column name.
     """
@@ -48,9 +49,8 @@ def get_connection(
 def check_connection() -> bool:
     """Return True if the database is reachable, logging what it finds."""
     try:
-        with get_connection() as connection, connection.cursor() as cursor:
-            cursor.execute("SELECT version() AS version;")
-            row = cursor.fetchone()
+        with get_connection() as connection:
+            row = connection.execute("SELECT version() AS version;").fetchone()
         version = row["version"] if row else "unknown"
         logger.info("Connected to PostgreSQL: %s", version)
         return True

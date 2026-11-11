@@ -29,6 +29,7 @@ from tt_stats.core.batching import FetchedItem, collect_in_chunks, reason_counts
 from tt_stats.core.cli import (
     add_queue_arguments,
     chunk_count,
+    log_chunk_progress,
     progress_message,
     quiet_http_logs,
     report_collect_run,
@@ -273,31 +274,16 @@ def _log_chunk(
     settled: Sequence[MatchEntriesSummary],
     started_at: datetime,
 ) -> None:
-    """Log one checkpoint per chunk, rather than one line per event.
-
-    A backfill is ~3000 events, so per-event records would bury the log. A chunk
-    line still shows progress, throughput and the failure count, and there are
-    only a few dozen of them. Per-event detail moves to DEBUG.
-    """
-    matches = sum(summary.received_count for summary in settled)
-    empty = sum(
-        1 for summary in settled if not summary.error and summary.received_count == 0
-    )
-    failed = sum(1 for summary in settled if summary.error)
-    elapsed = (datetime.now(tz=UTC) - started_at).total_seconds()
-
-    logger.info(
-        "match_entries_chunk",
-        extra={
-            "chunk": index,
-            "chunks": total,
-            "events": len(settled),
-            "matches": matches,
-            "empty": empty,
-            "failed": failed,
-            "chunk_seconds": round(elapsed, 3),
-            "chunk_rate_per_second": round(len(settled) / elapsed, 2) if elapsed else 0,
-        },
+    """Log one checkpoint per chunk, rather than one line per event."""
+    log_chunk_progress(
+        logger,
+        index,
+        total,
+        settled,
+        started_at,
+        event="match_entries_chunk",
+        unit="event",
+        found_label="matches",
     )
 
 

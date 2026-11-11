@@ -55,7 +55,6 @@ def _land_year(connection: Connection[Any], year: int, *, received: int = 0) -> 
             datetime.now(tz=UTC),
         ),
     )
-    connection.commit()
 
 
 def test_a_cold_database_queues_every_year_from_the_floor(
@@ -127,3 +126,16 @@ def test_the_caller_floor_can_narrow_the_backfill(
 ) -> None:
     """`events_start_year` still works as a floor, for narrowing only."""
     assert min(year for year, _ in pending_years(db_connection, 2010)) == 2010
+
+
+def test_pending_years_applies_the_limit_in_priority_order(
+    db_connection: Connection[Any],
+) -> None:
+    """``limit`` takes a prefix of the queue: current year, then next year."""
+    current_year = _current_year()
+
+    assert pending_years(db_connection, FIRST_YEAR, 2) == [
+        (current_year, "current"),
+        (current_year + 1, "next"),
+    ]
+    assert pending_years(db_connection, FIRST_YEAR, 0) == []

@@ -18,9 +18,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from tt_stats.core.cli import add_dry_run_argument
+from tt_stats.core.cli import add_dry_run_argument, report_unpack_run
 from tt_stats.core.logging_config import configure_logging, get_logger
-from tt_stats.core.sql_files import executable_sql as executable_sql
 from tt_stats.core.sql_files import load_sql
 from tt_stats.core.unpacking import unpack_each
 
@@ -72,10 +71,6 @@ def load_unpack_sql(path: Path | None = None) -> str | None:
 
     The path is resolved at call time rather than bound as a default argument, so
     tests can point ``UNPACK_SQL_PATH`` at a temporary SQL file.
-
-    ``executable_sql`` is re-exported from ``core.sql_files`` so callers and
-    tests keep importing both from one place, and the scaffold rule stays
-    identical for every unpack statement in the project.
     """
     return load_sql(path or UNPACK_SQL_PATH)
 
@@ -273,16 +268,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     results = unpack_years(args.years, dry_run=args.dry_run)
-    years = len(results)
-    rows = sum(touched for _, touched in results)
-    logger.info(
-        "unpack_complete",
-        extra={"years": years, "rows": rows, "dry_run": args.dry_run},
+    return report_unpack_run(
+        results,
+        unit="year",
+        found_label="events",
+        dry_run=args.dry_run,
     )
-    # Deliberate stdout write: terminal logging sits at WARNING, so the log
-    # line above never reaches the console. This is the CLI's user-facing
-    # confirmation, not application logging.
-    print(  # noqa: T201
-        f"Unpack complete: {years} years, {rows} rows (dry_run={args.dry_run})"
-    )
-    return 0

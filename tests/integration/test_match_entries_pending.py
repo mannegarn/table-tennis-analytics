@@ -34,7 +34,7 @@ def _add_event(
     end_offset: int,
     source_year: int | None = None,
 ) -> None:
-    """Insert an unpacked event relative to today, then commit it."""
+    """Insert an unpacked event relative to today."""
     today = _today()
     connection.execute(
         """
@@ -51,7 +51,6 @@ def _add_event(
             today + timedelta(days=end_offset),
         ),
     )
-    connection.commit()
 
 
 def _add_payload(
@@ -61,7 +60,7 @@ def _add_payload(
     fetched_at: datetime,
     received: int = 5,
 ) -> None:
-    """Insert a landed match list, then commit it."""
+    """Insert a landed match list."""
     connection.execute(
         """
         INSERT INTO ingest.match_entries_payloads_raw (
@@ -72,7 +71,6 @@ def _add_payload(
         """,
         (event_id, Jsonb([{"id": 1}]), received, _DIGEST, fetched_at),
     )
-    connection.commit()
 
 
 def _queue(connection: Connection[Any]) -> list[tuple[int, str]]:

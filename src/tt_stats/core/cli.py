@@ -116,6 +116,40 @@ def progress_message(summary: SettledSummary, *, key: str, count_label: str) -> 
     return f"{reason}{key} | {count_label}={summary.received_count} | {state}"
 
 
+def log_chunk_progress(
+    target_logger: logging.Logger,
+    index: int,
+    total: int,
+    settled: Sequence[SettledSummary],
+    started_at: datetime,
+    *,
+    event: str,
+    unit: str,
+    found_label: str,
+) -> None:
+    """Log one INFO checkpoint line per settled chunk."""
+    found = sum(summary.received_count for summary in settled)
+    empty = sum(
+        1 for summary in settled if not summary.error and summary.received_count == 0
+    )
+    failed = sum(1 for summary in settled if summary.error)
+    elapsed = (datetime.now(tz=UTC) - started_at).total_seconds()
+
+    target_logger.info(
+        event,
+        extra={
+            "chunk": index,
+            "chunks": total,
+            f"{unit}s": len(settled),
+            found_label: found,
+            "empty": empty,
+            "failed": failed,
+            "chunk_seconds": round(elapsed, 3),
+            "chunk_rate_per_second": round(len(settled) / elapsed, 2) if elapsed else 0,
+        },
+    )
+
+
 def run_with_progress[SummaryT](
     total: int,
     *,
@@ -201,3 +235,33 @@ def report_collect_run(
         f"{failed:,} failed"
     )
     return 0 if not failed else 1
+
+
+def report_unpack_run(
+    results: Sequence[tuple[Any, int]],
+    *,
+    unit: str,
+    found_label: str,
+    dry_run: bool,
+) -> int:
+    """Log and print the end-of-run unpack tally."""
+    items = len(results)
+    rows = sum(touched for _, touched in results)
+    empty = sum(1 for _, touched in results if touched == 0)
+    logger.info(
+        "unpack_complete",
+        extra={
+            f"{unit}s": items,
+            "rows": rows,
+            f"{unit}s_without_{found_label}": empty,
+            "dry_run": dry_run,
+        },
+    )
+    # Deliberate stdout write: terminal logging sits at WARNING, so the log
+    # line above never reaches the console. This is the CLI's user-facing
+    # confirmation, not application logging.
+    print(  # noqa: T201
+        f"Unpack complete: {items} {plural(items, unit)}, {rows} rows "
+        f"({empty} without {found_label}, dry_run={dry_run})"
+    )
+    return 0

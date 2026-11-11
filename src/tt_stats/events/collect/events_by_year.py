@@ -35,6 +35,7 @@ from tt_stats.core.batching import FetchedItem, collect_in_chunks, reason_counts
 from tt_stats.core.cli import (
     add_queue_arguments,
     chunk_count,
+    log_chunk_progress,
     progress_message,
     quiet_http_logs,
     report_collect_run,
@@ -125,6 +126,7 @@ class YearPayloadSummary:
 def pending_years(
     connection: Connection[Any],
     start_year: int,
+    limit: int | None = None,
 ) -> list[tuple[int, str]]:
     """Return ``(year, reason)`` pairs the collector should request, in order.
 
@@ -133,7 +135,8 @@ def pending_years(
     current year and the next.
     """
     rows = connection.execute(_PENDING_YEARS_SQL, {"start_year": start_year}).fetchall()
-    return [(int(row["year"]), str(row["reason"])) for row in rows]
+    queue = [(int(row["year"]), str(row["reason"])) for row in rows]
+    return queue[:limit] if limit is not None else queue
 
 
 def _envelope(payload: object) -> dict[str, Any]:
@@ -250,13 +253,18 @@ def _settle(
 ) -> YearPayloadSummary:
     """Validate, land and record one fetched year."""
     if fetched.response is None:
-        summary = _failed_summary(
+        summary = YearPayloadSummary(
             year=fetched.key,
-            fetched_at=fetched.fetched_at,
             status_code=fetched.status_code,
-            message=fetched.error or "request failed",
+            source_original_count=None,
+            source_final_count=None,
+            received_count=0,
+            payload_sha256=None,
+            fetched_at=fetched.fetched_at,
+            error=fetched.error or "request failed",
             reason=fetched.reason,
         )
+        _log_summary(summary)
         _record_run(summary, record, started_at=fetched.started_at)
         return summary
 
@@ -312,60 +320,22 @@ def _settle(
     return summary
 
 
-def _failed_summary(
-    *,
-    year: int,
-    fetched_at: datetime,
-    status_code: int | None,
-    message: str,
-    reason: str | None = None,
-) -> YearPayloadSummary:
-    summary = YearPayloadSummary(
-        year=year,
-        status_code=status_code,
-        source_original_count=None,
-        source_final_count=None,
-        received_count=0,
-        payload_sha256=None,
-        fetched_at=fetched_at,
-        error=message,
-        reason=reason,
-    )
-    _log_summary(summary)
-    return summary
-
-
 def _log_chunk(
     index: int,
     total: int,
     settled: Sequence[YearPayloadSummary],
     started_at: datetime,
 ) -> None:
-    """Log one checkpoint per chunk, rather than one line per year.
-
-    A full backfill is ~100 years, so per-year records are tolerable but noisy.
-    One line per chunk keeps progress, throughput and failures visible, and
-    matches the shape of the match-entries collector.
-    """
-    received = sum(summary.received_count for summary in settled)
-    empty = sum(
-        1 for summary in settled if not summary.error and summary.received_count == 0
-    )
-    failed = sum(1 for summary in settled if summary.error)
-    elapsed = (datetime.now(tz=UTC) - started_at).total_seconds()
-
-    logger.info(
-        "events_chunk",
-        extra={
-            "chunk": index,
-            "chunks": total,
-            "years": len(settled),
-            "events": received,
-            "empty": empty,
-            "failed": failed,
-            "chunk_seconds": round(elapsed, 3),
-            "chunk_rate_per_second": round(len(settled) / elapsed, 2) if elapsed else 0,
-        },
+    """Log one checkpoint per chunk, rather than one line per year."""
+    log_chunk_progress(
+        logger,
+        index,
+        total,
+        settled,
+        started_at,
+        event="events_chunk",
+        unit="year",
+        found_label="events",
     )
 
 
@@ -481,9 +451,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             years = list(args.years)
             logger.info("events_collect_manual", extra={"years": len(years)})
         else:
-            queue = pending_years(connection, settings.events_start_year)
-            if args.limit is not None:
-                queue = queue[: args.limit]
+            queue = pending_years(connection, settings.events_start_year, args.limit)
             years = [year for year, _ in queue]
             reasons = dict(queue)
             logger.info(

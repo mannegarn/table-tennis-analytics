@@ -196,7 +196,7 @@ def test_events_unpacked_rejects_a_bad_row(
     end_date: str,
     source_year: int,
 ) -> None:
-    with pytest.raises(errors.CheckViolation), db_connection:
+    with pytest.raises(errors.CheckViolation):
         db_connection.execute(
             INSERT,
             (source_year, TEST_EVENT_ID, event_name, start_date, end_date),
@@ -221,7 +221,6 @@ def test_events_unpacked_keeps_an_upstream_inverted_date_range(
             "1991-12-13",
         ),
     )
-    db_connection.commit()
 
     row = db_connection.execute(
         """
@@ -240,7 +239,7 @@ def test_events_unpacked_keeps_an_upstream_inverted_date_range(
 def test_events_unpacked_requires_a_name(
     db_connection: Connection[Any],
 ) -> None:
-    with pytest.raises(errors.NotNullViolation), db_connection:
+    with pytest.raises(errors.NotNullViolation):
         db_connection.execute(
             """
             INSERT INTO ingest.events_unpacked (
