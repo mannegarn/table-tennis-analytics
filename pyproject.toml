@@ -21,6 +21,8 @@ tt-events-collect = "tt_stats.events.collect.events_by_year:main"
 tt-events-unpack = "tt_stats.events.land.unpack:main"
 tt-matches-collect = "tt_stats.matches.collect.match_entries:main"
 tt-matches-unpack = "tt_stats.matches.land.unpack:main"
+tt-event-sponsors-collect = "tt_stats.event_sponsors.collect.event_sponsors:main"
+tt-event-sponsors-unpack = "tt_stats.event_sponsors.land.unpack:main"
 
 [dependency-groups]
 dev = [

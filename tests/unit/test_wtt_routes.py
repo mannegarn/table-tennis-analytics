@@ -3,6 +3,7 @@
 import json
 
 from tt_stats.core.clients.wtt_routes import (
+    get_event_sponsors_route,
     get_events_year_route,
     get_match_entries_route,
 )
@@ -53,6 +54,24 @@ def test_match_entries_params_carry_the_event_and_document_code() -> None:
 
 def test_match_entries_headers_carry_auth_and_user_agent() -> None:
     route = get_match_entries_route(3098, api_key="test-key", user_agent="test-agent")
+
+    assert route["headers"]["secapimkey"] == "test-key"
+    assert route["headers"]["user-agent"] == "test-agent"
+
+
+def test_event_sponsors_route_is_a_get_with_event_id_in_the_path() -> None:
+    route = get_event_sponsors_route(3238, api_key="test-key", user_agent="test-agent")
+
+    assert route["method"] == "GET"
+    assert route["url"].endswith(
+        "/liveeventsapi/api/cms/GetEventEquipmentwithLogo/3238"
+    )
+    assert "params" not in route
+    assert "json_payload" not in route
+
+
+def test_event_sponsors_headers_carry_auth_and_user_agent() -> None:
+    route = get_event_sponsors_route(3238, api_key="test-key", user_agent="test-agent")
 
     assert route["headers"]["secapimkey"] == "test-key"
     assert route["headers"]["user-agent"] == "test-agent"

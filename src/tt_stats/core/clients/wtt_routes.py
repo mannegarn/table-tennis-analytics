@@ -17,6 +17,14 @@ WTT_CALENDAR_URL = (
 _LIVE_EVENTS_BASE_URL = "https://wttwebsiteprodapi-liveevents.trafficmanager.net"
 WTT_MATCH_ENTRIES_URL = f"{_LIVE_EVENTS_BASE_URL}/api/cms/GetOfficialResult"
 
+#: Frontdoor host serving the event equipment / sponsor logo endpoint.
+_VM_FRONTDOOR_BASE_URL = (
+    "https://wtt-website-api-vm-frontdoor-hhaec5epbhdyfugz.a01.azurefd.net"
+)
+WTT_EVENT_SPONSORS_URL_PREFIX = (
+    f"{_VM_FRONTDOOR_BASE_URL}/liveeventsapi/api/cms/GetEventEquipmentwithLogo"
+)
+
 #: Every match-list request uses the same document code. Measured against a
 #: 2025 event (306 rows) and late-2021 events (215-368 rows): one code covers
 #: men's, women's, doubles and mixed draws.
@@ -117,6 +125,36 @@ def get_match_entries_route(
             "EventId": str(event_id),
             "DocumentCode": MATCH_ENTRIES_DOCUMENT_CODE,
         },
+        "headers": {
+            **_COMMON_HEADERS,
+            "secapimkey": api_key,
+            "user-agent": user_agent,
+        },
+    }
+
+
+def get_event_sponsors_route(
+    event_id: int,
+    *,
+    api_key: str = DEFAULT_WTT_API_KEY,
+    user_agent: str = DEFAULT_WTT_USER_AGENT,
+) -> dict[str, Any]:
+    """Build the GET request for one event's sponsor and equipment list.
+
+    The event id is part of the URL path rather than a query parameter, and the
+    response is a bare JSON array of sponsor objects.
+
+    Args:
+        event_id: WTT EventId to fetch sponsors for.
+        api_key: Value for the ``secapimkey`` header.
+        user_agent: User agent advertised to the site.
+
+    Returns:
+        A mapping with ``method``, ``url`` and ``headers``.
+    """
+    return {
+        "method": "GET",
+        "url": f"{WTT_EVENT_SPONSORS_URL_PREFIX}/{event_id}",
         "headers": {
             **_COMMON_HEADERS,
             "secapimkey": api_key,

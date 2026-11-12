@@ -45,6 +45,29 @@ EXPECTED_MATCH_ENTRY_UNPACKED_COLUMNS = {
     "last_seen_at",
 }
 
+EXPECTED_EVENT_SPONSORS_RAW_COLUMNS = {
+    "event_id",
+    "payload",
+    "http_status",
+    "received_count",
+    "payload_sha256",
+    "source",
+    "fetched_at",
+    "ingested_at",
+}
+
+EXPECTED_EVENT_SPONSORS_UNPACKED_COLUMNS = {
+    "event_id",
+    "event_sponsor_id",
+    "sponsor_type_id",
+    "sponsor_type_name",
+    "logo",
+    "dark_logo",
+    "sponsor_link",
+    "first_seen_at",
+    "last_seen_at",
+}
+
 
 def test_migrations_create_the_raw_table(
     db_connection: Connection[Any],
@@ -85,6 +108,9 @@ def test_migrations_create_the_raw_table(
         "004_events_years_pending",
         "005_match_entries",
         "006_match_entries_pending",
+        "007_event_sponsors_raw",
+        "008_event_sponsors_pending",
+        "009_event_sponsors_unpacked",
     }
     assert [row["schema_name"] for row in schemas] == ["analytics", "ingest"]
 
@@ -156,3 +182,53 @@ def test_migrations_create_the_match_entries_tables(
     assert unpacked["event_id"]["data_type"] == "bigint"
     assert unpacked["event_id"]["is_nullable"] == "NO"
     assert unpacked["document_code"]["is_nullable"] == "NO"
+
+
+def test_migrations_create_the_event_sponsors_table(
+    db_connection: Connection[Any],
+) -> None:
+    """The event_sponsors_raw table exists with event_id as its primary key."""
+    raw = _columns(db_connection, "event_sponsors_raw")
+
+    assert set(raw) == EXPECTED_EVENT_SPONSORS_RAW_COLUMNS
+    assert raw["payload"]["data_type"] == "jsonb"
+    assert raw["event_id"]["data_type"] == "bigint"
+    assert raw["event_id"]["is_nullable"] == "NO"
+
+    raw_key = db_connection.execute(
+        """
+        SELECT kcu.column_name
+        FROM information_schema.table_constraints AS tc
+        JOIN information_schema.key_column_usage AS kcu
+          ON kcu.constraint_name = tc.constraint_name
+         AND kcu.table_schema = tc.table_schema
+        WHERE tc.table_schema = 'ingest'
+          AND tc.table_name = 'event_sponsors_raw'
+          AND tc.constraint_type = 'PRIMARY KEY';
+        """
+    ).fetchall()
+    assert [row["column_name"] for row in raw_key] == ["event_id"]
+
+    unpacked = _columns(db_connection, "event_sponsors_unpacked")
+    assert set(unpacked) == EXPECTED_EVENT_SPONSORS_UNPACKED_COLUMNS
+    assert unpacked["event_id"]["is_nullable"] == "NO"
+    assert unpacked["event_sponsor_id"]["is_nullable"] == "NO"
+    assert unpacked["sponsor_type_name"]["is_nullable"] == "YES"
+
+    unpacked_key = db_connection.execute(
+        """
+        SELECT kcu.column_name
+        FROM information_schema.table_constraints AS tc
+        JOIN information_schema.key_column_usage AS kcu
+          ON kcu.constraint_name = tc.constraint_name
+         AND kcu.table_schema = tc.table_schema
+        WHERE tc.table_schema = 'ingest'
+          AND tc.table_name = 'event_sponsors_unpacked'
+          AND tc.constraint_type = 'PRIMARY KEY'
+        ORDER BY kcu.ordinal_position;
+        """
+    ).fetchall()
+    assert [row["column_name"] for row in unpacked_key] == [
+        "event_id",
+        "event_sponsor_id",
+    ]

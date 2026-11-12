@@ -15,7 +15,7 @@ TEST_DATABASE_NAME ?= tt_stats_test
 
 .DEFAULT_GOAL := help
 
-.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-collect events-unpack events-unpack-preview matches-collect matches-unpack matches-unpack-preview test test-integration dbt-debug lint format typecheck check hooks-install hooks-run
+.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-collect events-unpack events-unpack-preview matches-collect matches-unpack matches-unpack-preview event-sponsors-collect event-sponsors-unpack event-sponsors-unpack-preview test test-integration dbt-debug lint format typecheck check hooks-install hooks-run
 
 help: ## Show available commands
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -81,6 +81,15 @@ matches-unpack: ## Unpack landed match lists into ingest.match_entries_unpacked
 
 matches-unpack-preview: ## Run the match unpack with EVENT_IDS, then roll it back
 	uv run tt-matches-unpack $(if $(EVENT_IDS),--event-ids $(EVENT_IDS),) --dry-run
+
+event-sponsors-collect: ## Collect sponsor details for pending events into ingest.event_sponsors_raw
+	uv run tt-event-sponsors-collect $(if $(EVENT_IDS),--event-ids $(EVENT_IDS),)$(if $(LIMIT), --limit $(LIMIT),)
+
+event-sponsors-unpack: ## Unpack landed sponsor payloads into ingest.event_sponsors_unpacked
+	uv run tt-event-sponsors-unpack $(if $(EVENT_IDS),--event-ids $(EVENT_IDS),)
+
+event-sponsors-unpack-preview: ## Run the sponsor unpack with EVENT_IDS, then roll it back
+	uv run tt-event-sponsors-unpack $(if $(EVENT_IDS),--event-ids $(EVENT_IDS),) --dry-run
 
 test: ## Run the test suite
 	uv run pytest

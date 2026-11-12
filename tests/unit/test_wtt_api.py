@@ -63,6 +63,44 @@ async def test_fetch_match_entries_accepts_an_empty_list() -> None:
     assert response.status_code == 200
 
 
+async def test_fetch_event_sponsors_puts_event_id_in_the_url_path() -> None:
+    seen: list[httpx.Request] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(
+            200,
+            json=[{"eventId": 3238, "eventSponsorId": 5845}],
+        )
+
+    async with WttClient(
+        settings=_settings(), transport=httpx.MockTransport(handler)
+    ) as client:
+        response = await client.fetch_event_sponsors(3238)
+
+    request = seen[0]
+    assert request.method == "GET"
+    assert request.url.path.endswith(
+        "/liveeventsapi/api/cms/GetEventEquipmentwithLogo/3238"
+    )
+    assert dict(request.url.params) == {}
+    assert response.status_code == 200
+    assert response.data == [{"eventId": 3238, "eventSponsorId": 5845}]
+
+
+async def test_fetch_event_sponsors_accepts_an_empty_list() -> None:
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=[])
+
+    async with WttClient(
+        settings=_settings(), transport=httpx.MockTransport(handler)
+    ) as client:
+        response = await client.fetch_event_sponsors(3238)
+
+    assert response.data == []
+    assert response.status_code == 200
+
+
 async def test_get_retries_a_transient_failure_then_succeeds() -> None:
     calls = 0
 

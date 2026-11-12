@@ -25,6 +25,7 @@ from tenacity import (
 )
 
 from tt_stats.core.clients.wtt_routes import (
+    get_event_sponsors_route,
     get_events_year_route,
     get_match_entries_route,
 )
@@ -171,6 +172,22 @@ class WttClient:
             headers=route["headers"],
         )
 
+    async def fetch_event_sponsors(self, event_id: int) -> WttResponse:
+        """Fetch one event's sponsor and equipment list.
+
+        The response is a bare JSON array, empty (``[]``) when an event has no
+        listed sponsors or equipment.
+        """
+        route = get_event_sponsors_route(
+            event_id,
+            api_key=self._settings.wtt_api_key,
+            user_agent=self._settings.user_agent,
+        )
+        return await self.get_json(
+            url=route["url"],
+            headers=route["headers"],
+        )
+
     async def post_json(
         self,
         *,
@@ -191,7 +208,7 @@ class WttClient:
         self,
         *,
         url: str,
-        params: Mapping[str, str],
+        params: Mapping[str, str] | None = None,
         headers: Mapping[str, str],
     ) -> WttResponse:
         """GET a JSON resource and return the parsed response.
@@ -292,7 +309,7 @@ class WttClient:
         self,
         *,
         url: str,
-        params: Mapping[str, str],
+        params: Mapping[str, str] | None = None,
         headers: Mapping[str, str],
     ) -> WttResponse:
         async with self._semaphore:

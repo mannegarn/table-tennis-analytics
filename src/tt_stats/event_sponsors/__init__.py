@@ -1,0 +1,1 @@
+"""Event sponsors ingestion domain."""
