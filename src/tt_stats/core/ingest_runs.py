@@ -27,6 +27,7 @@ logger = get_logger(__name__)
 SOURCE_WTT_EVENTCALENDAR = "wtt_eventcalendar"
 SOURCE_WTT_MATCH_ENTRIES = "wtt_getofficialresult"
 SOURCE_WTT_MATCH_DETAILS = "wtt_matchcentre"
+SOURCE_WTT_MATCH_COMMENTARY = "wtt_match_commentary"
 SOURCE_WTT_EVENT_SPONSORS = "wtt_geteventequipmentwithlogo"
 
 STATUS_SUCCEEDED = "succeeded"

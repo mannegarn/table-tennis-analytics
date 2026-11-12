@@ -24,6 +24,9 @@ _VM_FRONTDOOR_BASE_URL = (
 WTT_EVENT_SPONSORS_URL_PREFIX = (
     f"{_VM_FRONTDOOR_BASE_URL}/liveeventsapi/api/cms/GetEventEquipmentwithLogo"
 )
+WTT_MATCH_COMMENTARY_URL_PREFIX = (
+    f"{_VM_FRONTDOOR_BASE_URL}/primary/api/match/commentary"
+)
 
 #: Web frontdoor host serving the matchcentre matchdata JSON documents.
 _WEB_FRONTDOOR_BASE_URL = "https://wtt-web-frontdoor-cthahjeqhbh6aqe3.a01.azurefd.net"
@@ -188,6 +191,25 @@ def get_match_details_route(
     return {
         "method": "GET",
         "url": f"{WTT_MATCH_DETAILS_URL_PREFIX}/{event_id}/{document_code}.json",
+        "headers": {
+            **_COMMON_HEADERS,
+            "secapimkey": api_key,
+            "user-agent": user_agent,
+        },
+    }
+
+
+def get_match_commentary_route(
+    event_id: int,
+    document_code: str,
+    *,
+    api_key: str = DEFAULT_WTT_API_KEY,
+    user_agent: str = DEFAULT_WTT_USER_AGENT,
+) -> dict[str, Any]:
+    """Build the GET request for one match's commentary stream."""
+    return {
+        "method": "GET",
+        "url": f"{WTT_MATCH_COMMENTARY_URL_PREFIX}/{event_id}/{document_code}",
         "headers": {
             **_COMMON_HEADERS,
             "secapimkey": api_key,

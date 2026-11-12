@@ -15,7 +15,7 @@ TEST_DATABASE_NAME ?= tt_stats_test
 
 .DEFAULT_GOAL := help
 
-.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-collect events-unpack events-unpack-preview matches-collect matches-unpack matches-unpack-preview match-details-collect event-sponsors-collect event-sponsors-unpack event-sponsors-unpack-preview test test-integration dbt-debug lint format typecheck check hooks-install hooks-run
+.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-collect events-unpack events-unpack-preview matches-collect matches-unpack matches-unpack-preview match-details-collect match-commentary-collect event-sponsors-collect event-sponsors-unpack event-sponsors-unpack-preview test test-integration dbt-debug lint format typecheck check hooks-install hooks-run
 
 help: ## Show available commands
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -84,6 +84,9 @@ matches-unpack-preview: ## Run the match unpack with EVENT_IDS, then roll it bac
 
 match-details-collect: ## Collect matchcentre details for pending matches into ingest.match_details_raw
 	uv run tt-match-details-collect $(if $(EVENT_IDS),--event-ids $(EVENT_IDS),)$(if $(LIMIT), --limit $(LIMIT),)
+
+match-commentary-collect: ## Collect match commentary for pending matches into ingest.match_commentary_raw
+	uv run tt-match-commentary-collect $(if $(EVENT_IDS),--event-ids $(EVENT_IDS),)$(if $(LIMIT), --limit $(LIMIT),)
 
 event-sponsors-collect: ## Collect sponsor details for pending events into ingest.event_sponsors_raw
 	uv run tt-event-sponsors-collect $(if $(EVENT_IDS),--event-ids $(EVENT_IDS),)$(if $(LIMIT), --limit $(LIMIT),)

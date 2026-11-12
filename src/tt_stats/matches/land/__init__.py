@@ -1,5 +1,9 @@
 """Landing and unpacking for the matches domain."""
 
+from tt_stats.matches.land.match_commentary import (
+    land_match_commentary,
+    land_match_commentary_chunk,
+)
 from tt_stats.matches.land.match_details import (
     land_match_details,
     land_match_details_chunk,
@@ -12,6 +16,8 @@ from tt_stats.matches.land.unpack import (
 )
 
 __all__ = [
+    "land_match_commentary",
+    "land_match_commentary_chunk",
     "land_match_details",
     "land_match_details_chunk",
     "land_match_entries",

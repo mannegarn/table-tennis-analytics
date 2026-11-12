@@ -113,6 +113,8 @@ def test_migrations_create_the_raw_table(
         "009_event_sponsors_unpacked",
         "010_match_details",
         "011_match_details_pending",
+        "012_match_commentary",
+        "013_match_commentary_pending",
     }
     assert [row["schema_name"] for row in schemas] == ["analytics", "ingest"]
 
