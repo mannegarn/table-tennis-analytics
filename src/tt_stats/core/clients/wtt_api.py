@@ -27,6 +27,7 @@ from tenacity import (
 from tt_stats.core.clients.wtt_routes import (
     get_event_sponsors_route,
     get_events_year_route,
+    get_match_details_route,
     get_match_entries_route,
 )
 from tt_stats.core.config import Settings, get_settings
@@ -180,6 +181,21 @@ class WttClient:
         """
         route = get_event_sponsors_route(
             event_id,
+            api_key=self._settings.wtt_api_key,
+            user_agent=self._settings.user_agent,
+        )
+        return await self.get_json(
+            url=route["url"],
+            headers=route["headers"],
+        )
+
+    async def fetch_match_details(
+        self, event_id: int, document_code: str
+    ) -> WttResponse:
+        """Fetch one match's matchcentre JSON document."""
+        route = get_match_details_route(
+            event_id,
+            document_code,
             api_key=self._settings.wtt_api_key,
             user_agent=self._settings.user_agent,
         )

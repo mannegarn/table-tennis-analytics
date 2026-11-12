@@ -10,6 +10,7 @@ the raw table, and eligibility stays derived in the pending view (ADR 0005).
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -25,6 +26,7 @@ logger = get_logger(__name__)
 
 SOURCE_WTT_EVENTCALENDAR = "wtt_eventcalendar"
 SOURCE_WTT_MATCH_ENTRIES = "wtt_getofficialresult"
+SOURCE_WTT_MATCH_DETAILS = "wtt_matchcentre"
 SOURCE_WTT_EVENT_SPONSORS = "wtt_geteventequipmentwithlogo"
 
 STATUS_SUCCEEDED = "succeeded"
@@ -62,8 +64,34 @@ def record_run(connection: Connection[Any], record: RunRecord) -> None:
     connection before this is called, so this transaction still commits even
     when the landing transaction failed.
     """
-    with connection.transaction():
-        connection.execute(
+    record_runs(connection, [record])
+
+
+def record_runs(
+    connection: Connection[Any],
+    records: Sequence[RunRecord],
+) -> None:
+    """Insert a batch of attempts into ``ingest.ingest_runs`` in one transaction."""
+    if not records:
+        return
+
+    finished_at = datetime.now(tz=UTC)
+    params = [
+        (
+            record.source,
+            record.entity_key,
+            record.status,
+            record.started_at,
+            finished_at,
+            record.http_status,
+            record.received_count,
+            record.payload_sha256,
+            record.error,
+        )
+        for record in records
+    ]
+    with connection.transaction(), connection.cursor() as cursor:
+        cursor.executemany(
             """
             INSERT INTO ingest.ingest_runs (
                 source,
@@ -78,17 +106,24 @@ def record_run(connection: Connection[Any], record: RunRecord) -> None:
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
             """,
-            (
-                record.source,
-                record.entity_key,
-                record.status,
-                record.started_at,
-                datetime.now(tz=UTC),
-                record.http_status,
-                record.received_count,
-                record.payload_sha256,
-                record.error,
-            ),
+            params,
+        )
+
+
+def safe_record_runs(
+    record_many: Callable[[Sequence[RunRecord]], None] | None,
+    runs: Sequence[RunRecord],
+) -> None:
+    """Write a batch of attempts via ``record_many``, swallowing write failures."""
+    if record_many is None or not runs:
+        return
+
+    try:
+        record_many(runs)
+    except Exception as error:
+        logger.warning(
+            "ingest_runs_not_recorded",
+            extra={"count": len(runs), "error": str(error)},
         )
 
 

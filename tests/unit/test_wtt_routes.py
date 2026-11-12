@@ -5,6 +5,7 @@ import json
 from tt_stats.core.clients.wtt_routes import (
     get_event_sponsors_route,
     get_events_year_route,
+    get_match_details_route,
     get_match_entries_route,
 )
 
@@ -73,5 +74,19 @@ def test_event_sponsors_route_is_a_get_with_event_id_in_the_path() -> None:
 def test_event_sponsors_headers_carry_auth_and_user_agent() -> None:
     route = get_event_sponsors_route(3238, api_key="test-key", user_agent="test-agent")
 
+    assert route["headers"]["secapimkey"] == "test-key"
+    assert route["headers"]["user-agent"] == "test-agent"
+
+
+def test_match_details_route_is_a_get_with_event_and_document_in_path() -> None:
+    code = "TTEWSINGLES-----------RND1002700----------"
+    route = get_match_details_route(
+        3257, code, api_key="test-key", user_agent="test-agent"
+    )
+
+    assert route["method"] == "GET"
+    assert route["url"].endswith(f"/matchdata/matchcentre/3257/{code}.json")
+    assert "params" not in route
+    assert "json_payload" not in route
     assert route["headers"]["secapimkey"] == "test-key"
     assert route["headers"]["user-agent"] == "test-agent"

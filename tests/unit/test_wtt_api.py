@@ -101,6 +101,27 @@ async def test_fetch_event_sponsors_accepts_an_empty_list() -> None:
     assert response.status_code == 200
 
 
+async def test_fetch_match_details_puts_event_and_document_in_path() -> None:
+    seen: list[httpx.Request] = []
+    code = "TTEWSINGLES-----------RND1002700----------"
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"eventId": "3257", "documentCode": code})
+
+    async with WttClient(
+        settings=_settings(), transport=httpx.MockTransport(handler)
+    ) as client:
+        response = await client.fetch_match_details(3257, code)
+
+    request = seen[0]
+    assert request.method == "GET"
+    assert request.url.path.endswith(f"/matchdata/matchcentre/3257/{code}.json")
+    assert dict(request.url.params) == {}
+    assert response.status_code == 200
+    assert response.data == {"eventId": "3257", "documentCode": code}
+
+
 async def test_get_retries_a_transient_failure_then_succeeds() -> None:
     calls = 0
 
