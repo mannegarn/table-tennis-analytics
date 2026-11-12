@@ -173,6 +173,24 @@ async def collect_match_details(
     def _settle(fetched: FetchedItem[MatchKey]) -> MatchDetailsSummary:
         event_id, document_code = fetched.key
         if fetched.response is None:
+            if fetched.status_code == 404:
+                summary = MatchDetailsSummary(
+                    event_id=event_id,
+                    document_code=document_code,
+                    status_code=404,
+                    received_count=0,
+                    payload_sha256=hashlib.sha256(b"").hexdigest(),
+                    fetched_at=fetched.fetched_at,
+                    error=None,
+                    reason=fetched.reason,
+                )
+                chunk_land_buffer.append((summary, {}))
+                _log_summary(summary)
+                chunk_run_buffer.append(
+                    _to_run_record(summary, started_at=fetched.started_at)
+                )
+                return summary
+
             summary = MatchDetailsSummary(
                 event_id=event_id,
                 document_code=document_code,

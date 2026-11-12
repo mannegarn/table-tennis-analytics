@@ -133,7 +133,7 @@ async def test_failed_match_is_recorded_but_excluded_from_chunk_landing() -> Non
     async def handler(request: httpx.Request) -> httpx.Response:
         eid, code = _requested_key(request)
         if code == "FAIL":
-            return httpx.Response(404, json={"error": "not found"})
+            return httpx.Response(500, json={"error": "server error"})
         return httpx.Response(200, json=_payload(eid, code))
 
     async with WttClient(
