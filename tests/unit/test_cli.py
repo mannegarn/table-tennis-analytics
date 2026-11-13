@@ -161,9 +161,9 @@ def test_log_chunk_progress_and_report_collect_run_emit_expected_tallies(
     )
 
     assert code == 0
-    assert (
-        "4 matches found, 1 event with no matches, 0 failed" in capsys.readouterr().out
-    )
+    out = capsys.readouterr().out
+    assert "2 succeeded (1 with data, 1 empty), 4 matches found" in out
+    assert "0 failed" in out
 
     failed_code = report_collect_run(
         [*settled, _Summary(key=3, received_count=0, error="boom")],

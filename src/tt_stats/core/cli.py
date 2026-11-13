@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sys
+from collections import Counter
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -166,21 +168,36 @@ def run_with_progress[SummaryT](
     execute. The bar owns one stdout line and rewrites it; routine records are
     INFO, so the WARNING-level console handler cannot push it down a line.
     """
-    with progress_bar(
-        total,
-        description=(
-            f"{description} "
-            f"({chunk_size}/chunk, {settings.max_concurrent_requests} workers)"
-        ),
-        unit=unit,
-        disable=settings.log_json,
-    ) as bar:
+    quiet_console = sys.stderr.isatty() and not settings.log_json
+    console_handlers = [
+        (h, h.level)
+        for h in logging.getLogger().handlers
+        if quiet_console
+        and type(h) is logging.StreamHandler
+        and h.stream in (sys.stdout, sys.stderr)
+    ]
+    for handler, _ in console_handlers:
+        handler.setLevel(logging.CRITICAL)
 
-        def advance(summary: SummaryT) -> None:
-            bar.set_postfix_str(message(summary), refresh=False)
-            bar.update(1)
+    try:
+        with progress_bar(
+            total,
+            description=(
+                f"{description} "
+                f"({chunk_size}/chunk, {settings.max_concurrent_requests} workers)"
+            ),
+            unit=unit,
+            disable=settings.log_json,
+        ) as bar:
 
-        return asyncio.run(run(advance))
+            def advance(summary: SummaryT) -> None:
+                bar.set_postfix_str(message(summary), refresh=False)
+                bar.update(1)
+
+            return asyncio.run(run(advance))
+    finally:
+        for handler, previous_level in console_handlers:
+            handler.setLevel(previous_level)
 
 
 def report_collect_run(
@@ -225,15 +242,28 @@ def report_collect_run(
     else:
         logger.info(f"{event}_complete", extra=tally)
 
+    succeeded = len(results) - failed
+    with_data = succeeded - empty
+    reasons = Counter(r.reason or "manual" for r in results)
+    reason_summary = ", ".join(
+        f"{count:,} {name}" for name, count in reasons.most_common()
+    )
+    reason_part = f" ({reason_summary})" if reason_summary else ""
+
     # Deliberate stdout write: terminal logging sits at WARNING, so the record
     # above never reaches the console. This is the run summary, not a log line.
     print(  # noqa: T201
         f"{timing.describe(len(results), unit=unit)}, "
-        f"{chunks_total:,} {plural(chunks_total, 'chunk')}: "
-        f"{found:,} {found_label} found, "
-        f"{empty:,} {plural(empty, unit)} with no {found_label}, "
-        f"{failed:,} failed"
+        f"{chunks_total:,} {plural(chunks_total, 'chunk')}{reason_part}:"
     )
+    print(  # noqa: T201
+        f"  {succeeded:,} succeeded ({with_data:,} with data, {empty:,} empty), "
+        f"{found:,} {found_label} found"
+    )
+    if failed:
+        print(f"  {failed:,} failed (see logs/tt_stats.log)")  # noqa: T201
+    else:
+        print("  0 failed")  # noqa: T201
     return 0 if not failed else 1
 
 

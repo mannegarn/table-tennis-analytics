@@ -49,11 +49,15 @@ _BAR_FORMAT = (
 
 
 def plural(count: int, unit: str) -> str:
-    """Return the unit with an ``s`` unless the count is exactly one.
+    """Return the plural form of ``unit`` unless ``count`` is exactly one.
 
-    Shared so summaries cannot print ``1 events``.
+    Shared so summaries cannot print ``1 events`` or ``2 matchs``.
     """
-    return unit if count == 1 else f"{unit}s"
+    if count == 1:
+        return unit
+    if unit.endswith(("s", "x", "z", "ch", "sh")):
+        return f"{unit}es"
+    return f"{unit}s"
 
 
 def format_duration(value: timedelta) -> str:
