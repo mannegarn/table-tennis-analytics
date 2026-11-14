@@ -15,7 +15,7 @@ TEST_DATABASE_NAME ?= tt_stats_test
 
 .DEFAULT_GOAL := help
 
-.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-collect events-unpack events-unpack-preview matches-collect matches-unpack matches-unpack-preview match-details-collect match-commentary-collect event-sponsors-collect event-sponsors-unpack event-sponsors-unpack-preview player-details-collect ittf-players-seed test test-integration dbt-debug lint format typecheck check hooks-install hooks-run
+.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-collect events-unpack events-unpack-preview matches-collect matches-unpack matches-unpack-preview match-details-collect match-commentary-collect event-sponsors-collect event-sponsors-unpack event-sponsors-unpack-preview player-details-collect ittf-players-seed update-summary test test-integration dbt-debug lint format typecheck check hooks-install hooks-run
 
 help: ## Show available commands
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -102,6 +102,9 @@ player-details-collect: ## Collect player details for pending players into inges
 
 ittf-players-seed: ## Seed ingest.ittf_player_profiles from data/20260615_master_players.csv
 	uv run tt-ittf-players-seed
+
+update-summary: ## Generate docs/data-summary.md from the PostgreSQL database
+	uv run tt-update-summary
 
 test: ## Run the test suite
 	uv run pytest

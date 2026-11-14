@@ -423,6 +423,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 chunk_size=chunk_size,
                 reasons=reasons or None,
             ),
+            reasons=reasons or None,
         )
 
     return report_collect_run(
@@ -432,6 +433,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         event="match_entries",
         unit="event",
         found_label="matches",
+        raw_table="ingest.match_entries_payloads_raw",
+        unpacked_table="ingest.match_entries_unpacked",
     )
 
 

@@ -399,6 +399,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 chunk_size=chunk_size,
                 reasons=reasons or None,
             ),
+            reasons=reasons or None,
         )
 
     return report_collect_run(
@@ -408,6 +409,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         event="match_commentary",
         unit="match",
         found_label="lines",
+        raw_table="ingest.match_commentary_raw",
+        unpacked_table="ingest.match_commentary_unpacked",
     )
 
 

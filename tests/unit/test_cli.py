@@ -15,6 +15,7 @@ from tt_stats.core.cli import (
     add_queue_arguments,
     chunk_count,
     log_chunk_progress,
+    print_queue_summary,
     progress_message,
     quiet_http_logs,
     report_collect_run,
@@ -158,12 +159,16 @@ def test_log_chunk_progress_and_report_collect_run_emit_expected_tallies(
         event="test_collect",
         unit="event",
         found_label="matches",
+        raw_table="ingest.match_entries_payloads_raw",
+        unpacked_table="ingest.match_entries_unpacked",
     )
 
     assert code == 0
     out = capsys.readouterr().out
     assert "2 succeeded (1 with data, 1 empty), 4 matches found" in out
     assert "0 failed" in out
+    assert "raw -> ingest.match_entries_payloads_raw" in out
+    assert "unpacked -> ingest.match_entries_unpacked" in out
 
     failed_code = report_collect_run(
         [*settled, _Summary(key=3, received_count=0, error="boom")],
@@ -192,12 +197,13 @@ def test_report_unpack_run_prints_and_logs_summary(
         unit="year",
         found_label="events",
         dry_run=True,
+        target_table="ingest.events_unpacked",
     )
 
     assert code == 0
     assert (
-        "Unpack complete: 2 years, 101 rows (1 without events, dry_run=True)"
-        in capsys.readouterr().out
+        "Unpack complete: 2 years, 101 rows (1 without events) "
+        "-> ingest.events_unpacked [dry-run, rolled back]" in capsys.readouterr().out
     )
     records = [r for r in caplog.records if r.getMessage() == "unpack_complete"]
     assert len(records) == 1
@@ -205,3 +211,10 @@ def test_report_unpack_run_prints_and_logs_summary(
     assert records[0].__dict__["rows"] == 101
     assert records[0].__dict__["years_without_events"] == 1
     assert records[0].__dict__["dry_run"] is True
+
+
+def test_print_queue_summary_formats_reasons(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    print_queue_summary(3, unit="match", reasons={1: "live", 2: "new", 3: "live"})
+    assert "Queue: 3 matches (2 live, 1 new)" in capsys.readouterr().out

@@ -273,4 +273,5 @@ def main(argv: Sequence[str] | None = None) -> int:
         unit="year",
         found_label="events",
         dry_run=args.dry_run,
+        target_table="ingest.events_unpacked",
     )

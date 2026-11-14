@@ -25,7 +25,7 @@ from tt_stats.core.progress import RunTiming, plural, progress_bar
 
 if TYPE_CHECKING:
     import argparse
-    from collections.abc import Callable, Coroutine, Sequence
+    from collections.abc import Callable, Coroutine, Mapping, Sequence
 
     from tt_stats.core.config import Settings
 
@@ -152,6 +152,21 @@ def log_chunk_progress(
     )
 
 
+def print_queue_summary(
+    count: int,
+    *,
+    unit: str,
+    reasons: Mapping[Any, str] | None = None,
+) -> None:
+    """Print a one-line pre-run breakdown of why items are in the queue."""
+    if reasons:
+        counts = Counter(reasons.values())
+        breakdown = ", ".join(f"{n:,} {name}" for name, n in counts.most_common())
+    else:
+        breakdown = f"{count:,} manual"
+    print(f"Queue: {count:,} {plural(count, unit)} ({breakdown})")  # noqa: T201
+
+
 def run_with_progress[SummaryT](
     total: int,
     *,
@@ -161,6 +176,7 @@ def run_with_progress[SummaryT](
     settings: Settings,
     message: Callable[[SummaryT], str],
     run: Callable[[Callable[[SummaryT], None]], Coroutine[Any, Any, list[SummaryT]]],
+    reasons: Mapping[Any, str] | None = None,
 ) -> list[SummaryT]:
     """Drive an async collect under a progress bar and return its summaries.
 
@@ -178,6 +194,9 @@ def run_with_progress[SummaryT](
     ]
     for handler, _ in console_handlers:
         handler.setLevel(logging.CRITICAL)
+
+    if not settings.log_json:
+        print_queue_summary(total, unit=unit, reasons=reasons)
 
     try:
         with progress_bar(
@@ -208,6 +227,8 @@ def report_collect_run(
     event: str,
     unit: str,
     found_label: str,
+    raw_table: str | None = None,
+    unpacked_table: str | None = None,
 ) -> int:
     """Log and print the end-of-run tally, returning the process exit code.
 
@@ -264,6 +285,10 @@ def report_collect_run(
         print(f"  {failed:,} failed (see logs/tt_stats.log)")  # noqa: T201
     else:
         print("  0 failed")  # noqa: T201
+    if raw_table:
+        print(f"  raw -> {raw_table}")  # noqa: T201
+    if unpacked_table:
+        print(f"  unpacked -> {unpacked_table}")  # noqa: T201
     return 0 if not failed else 1
 
 
@@ -273,6 +298,7 @@ def report_unpack_run(
     unit: str,
     found_label: str,
     dry_run: bool,
+    target_table: str | None = None,
 ) -> int:
     """Log and print the end-of-run unpack tally."""
     items = len(results)
@@ -290,8 +316,10 @@ def report_unpack_run(
     # Deliberate stdout write: terminal logging sits at WARNING, so the log
     # line above never reaches the console. This is the CLI's user-facing
     # confirmation, not application logging.
+    target_part = f" -> {target_table}" if target_table else ""
+    dry_part = " [dry-run, rolled back]" if dry_run else ""
     print(  # noqa: T201
-        f"Unpack complete: {items} {plural(items, unit)}, {rows} rows "
-        f"({empty} without {found_label}, dry_run={dry_run})"
+        f"Unpack complete: {items:,} {plural(items, unit)}, {rows:,} rows "
+        f"({empty:,} without {found_label}){target_part}{dry_part}"
     )
     return 0

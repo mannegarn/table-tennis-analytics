@@ -222,6 +222,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         unit="event",
         found_label="sponsors",
         dry_run=args.dry_run,
+        target_table="ingest.event_sponsors_unpacked",
     )
 
 

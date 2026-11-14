@@ -495,6 +495,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 chunk_size=chunk_size,
                 reasons=reasons or None,
             ),
+            reasons=reasons or None,
         )
 
     return report_collect_run(
@@ -504,6 +505,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         event="events_collect",
         unit="year",
         found_label="events",
+        raw_table="ingest.events_by_year_raw",
+        unpacked_table="ingest.events_unpacked",
     )
 
 
