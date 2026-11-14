@@ -25,6 +25,8 @@ tt-match-details-collect = "tt_stats.matches.collect.match_details:main"
 tt-match-commentary-collect = "tt_stats.matches.collect.match_commentary:main"
 tt-event-sponsors-collect = "tt_stats.event_sponsors.collect.event_sponsors:main"
 tt-event-sponsors-unpack = "tt_stats.event_sponsors.land.unpack:main"
+tt-player-details-collect = "tt_stats.players.collect.player_details:main"
+tt-ittf-players-seed = "tt_stats.players.land.ittf_seed:main"
 
 [dependency-groups]
 dev = [

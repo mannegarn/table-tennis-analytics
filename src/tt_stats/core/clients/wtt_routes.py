@@ -32,6 +32,13 @@ WTT_MATCH_COMMENTARY_URL_PREFIX = (
 _WEB_FRONTDOOR_BASE_URL = "https://wtt-web-frontdoor-cthahjeqhbh6aqe3.a01.azurefd.net"
 WTT_MATCH_DETAILS_URL_PREFIX = f"{_WEB_FRONTDOOR_BASE_URL}/matchdata/matchcentre"
 
+#: TTU Connect host serving player profile details.
+_TTU_CONNECT_BASE_URL = (
+    "https://wtt-ttu-connect-frontdoor-g6gwg6e2bgc6gdfm.a01.azurefd.net"
+)
+WTT_PLAYER_DETAILS_URL = f"{_TTU_CONNECT_BASE_URL}/Players/GetPlayers"
+DEFAULT_WTT_TTU_API_KEY = "2bf8b222-532c-4c60-8ebe-eb6fdfebe84a"
+
 #: Every match-list request uses the same document code. Measured against a
 #: 2025 event (306 rows) and late-2021 events (215-368 rows): one code covers
 #: men's, women's, doubles and mixed draws.
@@ -212,6 +219,27 @@ def get_match_commentary_route(
         "url": f"{WTT_MATCH_COMMENTARY_URL_PREFIX}/{event_id}/{document_code}",
         "headers": {
             **_COMMON_HEADERS,
+            "secapimkey": api_key,
+            "user-agent": user_agent,
+        },
+    }
+
+
+def get_player_details_route(
+    player_id: int,
+    *,
+    api_key: str = DEFAULT_WTT_API_KEY,
+    ttu_api_key: str = DEFAULT_WTT_TTU_API_KEY,
+    user_agent: str = DEFAULT_WTT_USER_AGENT,
+) -> dict[str, Any]:
+    """Build the GET request for one player's details by ITTF ID."""
+    return {
+        "method": "GET",
+        "url": WTT_PLAYER_DETAILS_URL,
+        "params": {"IttfId": str(player_id)},
+        "headers": {
+            **_COMMON_HEADERS,
+            "apikey": ttu_api_key,
             "secapimkey": api_key,
             "user-agent": user_agent,
         },

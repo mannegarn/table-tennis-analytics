@@ -388,3 +388,24 @@ async def test_invalid_json_raises_a_payload_error() -> None:
     ) as client:
         with pytest.raises(WttPayloadError):
             await client.fetch_events_by_year(2023)
+
+
+async def test_fetch_player_details_sends_ittf_id_and_ttu_headers() -> None:
+    seen: dict[str, Any] = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        seen["apikey"] = request.headers.get("apikey")
+        seen["secapimkey"] = request.headers.get("secapimkey")
+        return httpx.Response(200, json={"Result": [{"IttfId": "121558"}]})
+
+    async with WttClient(
+        settings=_settings(wtt_api_key="sec-key", wtt_ttu_api_key="ttu-key"),
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        response = await client.fetch_player_details(121558)
+
+    assert response.status_code == 200
+    assert "Players/GetPlayers?IttfId=121558" in seen["url"]
+    assert seen["apikey"] == "ttu-key"
+    assert seen["secapimkey"] == "sec-key"

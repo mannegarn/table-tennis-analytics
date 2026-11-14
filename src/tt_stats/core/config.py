@@ -8,6 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from tt_stats.core.clients.wtt_routes import (
     DEFAULT_WTT_API_KEY,
+    DEFAULT_WTT_TTU_API_KEY,
     DEFAULT_WTT_USER_AGENT,
 )
 
@@ -80,6 +81,7 @@ class Settings(BaseSettings):
 
     # WTT API client.
     wtt_api_key: str = DEFAULT_WTT_API_KEY
+    wtt_ttu_api_key: str = DEFAULT_WTT_TTU_API_KEY
     user_agent: str = DEFAULT_WTT_USER_AGENT
     verify_ssl: bool = True
 

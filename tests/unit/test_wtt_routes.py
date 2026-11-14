@@ -8,6 +8,7 @@ from tt_stats.core.clients.wtt_routes import (
     get_match_commentary_route,
     get_match_details_route,
     get_match_entries_route,
+    get_player_details_route,
 )
 
 
@@ -103,5 +104,22 @@ def test_match_commentary_route_is_a_get_with_event_and_document_in_path() -> No
     assert route["url"].endswith(f"/primary/api/match/commentary/3257/{code}")
     assert "params" not in route
     assert "json_payload" not in route
+    assert route["headers"]["secapimkey"] == "test-key"
+    assert route["headers"]["user-agent"] == "test-agent"
+
+
+def test_player_details_route_targets_ttu_connect_with_ittf_id() -> None:
+    route = get_player_details_route(
+        121558,
+        api_key="test-key",
+        ttu_api_key="ttu-key",
+        user_agent="test-agent",
+    )
+
+    assert route["method"] == "GET"
+    assert route["url"].endswith("/Players/GetPlayers")
+    assert route["params"] == {"IttfId": "121558"}
+    assert "json_payload" not in route
+    assert route["headers"]["apikey"] == "ttu-key"
     assert route["headers"]["secapimkey"] == "test-key"
     assert route["headers"]["user-agent"] == "test-agent"

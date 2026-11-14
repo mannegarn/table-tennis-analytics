@@ -30,6 +30,7 @@ from tt_stats.core.clients.wtt_routes import (
     get_match_commentary_route,
     get_match_details_route,
     get_match_entries_route,
+    get_player_details_route,
 )
 from tt_stats.core.config import Settings, get_settings
 
@@ -217,6 +218,20 @@ class WttClient:
         )
         return await self.get_json(
             url=route["url"],
+            headers=route["headers"],
+        )
+
+    async def fetch_player_details(self, player_id: int) -> WttResponse:
+        """Fetch one player's details from the TTU Connect Players endpoint."""
+        route = get_player_details_route(
+            player_id,
+            api_key=self._settings.wtt_api_key,
+            ttu_api_key=self._settings.wtt_ttu_api_key,
+            user_agent=self._settings.user_agent,
+        )
+        return await self.get_json(
+            url=route["url"],
+            params=route["params"],
             headers=route["headers"],
         )
 

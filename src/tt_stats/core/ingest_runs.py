@@ -29,6 +29,7 @@ SOURCE_WTT_MATCH_ENTRIES = "wtt_getofficialresult"
 SOURCE_WTT_MATCH_DETAILS = "wtt_matchcentre"
 SOURCE_WTT_MATCH_COMMENTARY = "wtt_match_commentary"
 SOURCE_WTT_EVENT_SPONSORS = "wtt_geteventequipmentwithlogo"
+SOURCE_WTT_PLAYER_DETAILS = "wtt_player_details"
 
 STATUS_SUCCEEDED = "succeeded"
 STATUS_FAILED = "failed"

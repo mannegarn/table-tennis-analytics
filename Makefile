@@ -15,7 +15,7 @@ TEST_DATABASE_NAME ?= tt_stats_test
 
 .DEFAULT_GOAL := help
 
-.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-collect events-unpack events-unpack-preview matches-collect matches-unpack matches-unpack-preview match-details-collect match-commentary-collect event-sponsors-collect event-sponsors-unpack event-sponsors-unpack-preview test test-integration dbt-debug lint format typecheck check hooks-install hooks-run
+.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-collect events-unpack events-unpack-preview matches-collect matches-unpack matches-unpack-preview match-details-collect match-commentary-collect event-sponsors-collect event-sponsors-unpack event-sponsors-unpack-preview player-details-collect ittf-players-seed test test-integration dbt-debug lint format typecheck check hooks-install hooks-run
 
 help: ## Show available commands
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -96,6 +96,12 @@ event-sponsors-unpack: ## Unpack landed sponsor payloads into ingest.event_spons
 
 event-sponsors-unpack-preview: ## Run the sponsor unpack with EVENT_IDS, then roll it back
 	uv run tt-event-sponsors-unpack $(if $(EVENT_IDS),--event-ids $(EVENT_IDS),) --dry-run
+
+player-details-collect: ## Collect player details for pending players into ingest.player_details_raw
+	uv run tt-player-details-collect $(if $(PLAYER_IDS),--player-ids $(PLAYER_IDS),)$(if $(LIMIT), --limit $(LIMIT),)
+
+ittf-players-seed: ## Seed ingest.ittf_player_profiles from data/20260615_master_players.csv
+	uv run tt-ittf-players-seed
 
 test: ## Run the test suite
 	uv run pytest

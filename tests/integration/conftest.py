@@ -18,6 +18,9 @@ from tt_stats.core.migrations import apply_migrations
 # The only tables tests write to. Truncating them removes fixture data without
 # the cost of dropping and recreating a schema.
 INGEST_TABLES = (
+    "ingest.ittf_player_profiles",
+    "ingest.player_details_unpacked",
+    "ingest.player_details_raw",
     "ingest.match_commentary_unpacked",
     "ingest.match_commentary_raw",
     "ingest.match_details_players_unpacked",
