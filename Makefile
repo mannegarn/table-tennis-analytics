@@ -128,12 +128,22 @@ event-sponsors-unpack-preview: ## Run the sponsor unpack with EVENT_IDS, then ro
 player-details-collect: ## Collect player details for pending players into ingest.player_details_raw
 	uv run tt-player-details-collect $(strip $(ARGS_players) $(ARGS_limit))
 
-collect-all: ## Run every collector once (unpack included), stopping at the first failure
-	@for step in $(COLLECT_PIPELINE); do \
+collect-all: ## Run every collector once (unpack included); report failures at the end
+	@failed=""; \
+	for step in $(COLLECT_PIPELINE); do \
 		printf '\n==> %s\n' "$$step"; \
-		$(MAKE) --no-print-directory "$$step" || exit 1; \
-	done
-	@printf '\nAll collectors finished.\n'
+		if $(MAKE) --no-print-directory "$$step"; then \
+			printf '    ok\n'; \
+		else \
+			printf '    failed: %s\n' "$$step" >&2; \
+			failed="$$failed $$step"; \
+		fi; \
+	done; \
+	if [ -n "$$failed" ]; then \
+		printf '\nSome collectors reported failures:%s (see logs/tt_stats.log)\n' "$$failed" >&2; \
+		exit 1; \
+	fi; \
+	printf '\nAll collectors finished.\n'
 
 ittf-players-seed: ## Seed ingest.ittf_player_profiles from data/20260615_master_players.csv
 	uv run tt-ittf-players-seed
