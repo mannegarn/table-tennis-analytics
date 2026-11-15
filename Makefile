@@ -22,12 +22,11 @@ ARGS_events := $(if $(EVENT_IDS),--event-ids $(EVENT_IDS))
 ARGS_players := $(if $(PLAYER_IDS),--player-ids $(PLAYER_IDS))
 
 # Every collector, in dependency order: calendars before matches, matches
-# before details, and the summary last. Each collector drains its pending
-# view, so one pass is a full backfill and re-running is cheap.
-COLLECT_PIPELINE := ittf-players-seed events-collect events-unpack \
-	matches-collect matches-unpack event-sponsors-collect \
-	match-details-collect match-commentary-collect player-details-collect \
-	update-summary
+# before details and commentary, players last. No unpack steps here - each
+# collector unpacks what it lands. A collector drains its pending view, so one
+# pass is a full backfill and re-running is cheap.
+COLLECT_PIPELINE := events-collect matches-collect match-details-collect \
+	match-commentary-collect player-details-collect ittf-players-seed
 
 # Abort a recipe whose required variable is empty, instead of running it with a
 # blank argument. The value comes from .env or the command line.
@@ -129,7 +128,7 @@ event-sponsors-unpack-preview: ## Run the sponsor unpack with EVENT_IDS, then ro
 player-details-collect: ## Collect player details for pending players into ingest.player_details_raw
 	uv run tt-player-details-collect $(strip $(ARGS_players) $(ARGS_limit))
 
-collect-all: ## Run every collector once, in dependency order, stopping at the first failure
+collect-all: ## Run every collector once (unpack included), stopping at the first failure
 	@for step in $(COLLECT_PIPELINE); do \
 		printf '\n==> %s\n' "$$step"; \
 		$(MAKE) --no-print-directory "$$step" || exit 1; \
