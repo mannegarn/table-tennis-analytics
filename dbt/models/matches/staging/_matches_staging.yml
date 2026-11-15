@@ -1,0 +1,29 @@
+version: 2
+
+models:
+  - name: stg_match_commentary
+    description: >
+      Thin staging view over ingest.match_commentary_unpacked (6.67M rows).
+      Keeps action identifiers, text, and millisecond-precision utc_time; drops
+      utc_date, local_date/time, source_ts, and ingestion timestamps.
+    columns:
+      - name: event_id
+        description: WTT event identifier.
+        data_tests:
+          - not_null
+      - name: document_code
+        description: WTT match document code within the event.
+        data_tests:
+          - not_null
+      - name: sequence_number
+        description: Action sequence number within the match.
+        data_tests:
+          - not_null
+      - name: commentary_id
+        description: UUID of the commentary action.
+      - name: action_type
+        description: WTT action code (e.g. STP, PT, SSR, SSD, TO, YC).
+      - name: commentary_text
+        description: Human-readable commentary text.
+      - name: utc_time
+        description: UTC time of action in HHMMSSmmm (millisecond precision).
