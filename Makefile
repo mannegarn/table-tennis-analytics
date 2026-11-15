@@ -8,18 +8,43 @@ ifneq (,$(wildcard ./.env))
 endif
 
 COMPOSE := docker compose
+
+# Optional filters, forwarded to the collectors as flags only when set.
 YEARS ?=
 LIMIT ?=
 EVENT_IDS ?=
+PLAYER_IDS ?=
 TEST_DATABASE_NAME ?= tt_stats_test
+
+ARGS_years := $(if $(YEARS),--years $(YEARS))
+ARGS_limit := $(if $(LIMIT),--limit $(LIMIT))
+ARGS_events := $(if $(EVENT_IDS),--event-ids $(EVENT_IDS))
+ARGS_players := $(if $(PLAYER_IDS),--player-ids $(PLAYER_IDS))
+
+# Every collector, in dependency order: calendars before matches, matches
+# before details, and the summary last. Each collector drains its pending
+# view, so one pass is a full backfill and re-running is cheap.
+COLLECT_PIPELINE := ittf-players-seed events-collect events-unpack \
+	matches-collect matches-unpack event-sponsors-collect \
+	match-details-collect match-commentary-collect player-details-collect \
+	update-summary
+
+# Abort a recipe whose required variable is empty, instead of running it with a
+# blank argument. The value comes from .env or the command line.
+define require
+@test -n "$($(1))" || { printf '%s is empty; set it in .env or pass it on the command line\n' '$(1)' >&2; exit 1; }
+endef
 
 .DEFAULT_GOAL := help
 
-.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-collect events-unpack events-unpack-preview matches-collect matches-unpack matches-unpack-preview match-details-collect match-commentary-collect event-sponsors-collect event-sponsors-unpack event-sponsors-unpack-preview player-details-collect ittf-players-seed update-summary test test-integration dbt-debug lint format typecheck check hooks-install hooks-run
+# Collectors share one pending queue and one API; never run them side by side.
+.NOTPARALLEL:
+
+.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-collect events-unpack events-unpack-preview matches-collect matches-unpack matches-unpack-preview match-details-collect match-commentary-collect event-sponsors-collect event-sponsors-unpack event-sponsors-unpack-preview player-details-collect collect-all ittf-players-seed update-summary test test-integration dbt-debug lint format typecheck check hooks-install hooks-run
 
 help: ## Show available commands
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
-		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
+		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
 setup: ## Create .env if missing and install dependencies
 	@test -f .env || cp .env.example .env
@@ -39,9 +64,11 @@ db-logs: ## Tail PostgreSQL logs
 	$(COMPOSE) logs -f postgres
 
 db-psql: ## Open a psql shell against the warehouse
+	$(call require,POSTGRES_DB)
 	$(COMPOSE) exec postgres psql -U $(POSTGRES_USER) -d $(POSTGRES_DB)
 
 db-test-psql: ## Open a psql shell against the integration-test database
+	$(call require,POSTGRES_DB)
 	$(COMPOSE) exec postgres psql -U $(POSTGRES_USER) -d $(TEST_DATABASE_NAME)
 
 db-check: ## Verify the Python to PostgreSQL connection
@@ -65,40 +92,49 @@ db-migrate: ## Apply db/migrations to the warehouse
 	uv run tt-db-migrate
 
 events-collect: ## Collect the pending calendar years into ingest.events_by_year_raw
-	uv run tt-events-collect $(if $(YEARS),--years $(YEARS),)$(if $(LIMIT), --limit $(LIMIT),)
+	uv run tt-events-collect $(strip $(ARGS_years) $(ARGS_limit))
 
 events-unpack: ## Unpack landed calendars into ingest.events_unpacked
-	uv run tt-events-unpack $(if $(YEARS),--years $(YEARS),)
+	uv run tt-events-unpack $(ARGS_years)
 
 events-unpack-preview: ## Run the unpack for one year, then roll it back
 	uv run tt-events-unpack --years $(or $(YEARS),2023) --dry-run
 
 matches-collect: ## Collect match lists for pending events into ingest.match_entries_payloads_raw
-	uv run tt-matches-collect $(if $(EVENT_IDS),--event-ids $(EVENT_IDS),)$(if $(LIMIT), --limit $(LIMIT),)
+	uv run tt-matches-collect $(strip $(ARGS_events) $(ARGS_limit))
 
 matches-unpack: ## Unpack landed match lists into ingest.match_entries_unpacked
-	uv run tt-matches-unpack $(if $(EVENT_IDS),--event-ids $(EVENT_IDS),)
+	uv run tt-matches-unpack $(ARGS_events)
 
 matches-unpack-preview: ## Run the match unpack with EVENT_IDS, then roll it back
-	uv run tt-matches-unpack $(if $(EVENT_IDS),--event-ids $(EVENT_IDS),) --dry-run
+	$(call require,EVENT_IDS)
+	uv run tt-matches-unpack --event-ids $(EVENT_IDS) --dry-run
 
 match-details-collect: ## Collect matchcentre details for pending matches into ingest.match_details_raw
-	uv run tt-match-details-collect $(if $(EVENT_IDS),--event-ids $(EVENT_IDS),)$(if $(LIMIT), --limit $(LIMIT),)
+	uv run tt-match-details-collect $(strip $(ARGS_events) $(ARGS_limit))
 
 match-commentary-collect: ## Collect match commentary for pending matches into ingest.match_commentary_raw
-	uv run tt-match-commentary-collect $(if $(EVENT_IDS),--event-ids $(EVENT_IDS),)$(if $(LIMIT), --limit $(LIMIT),)
+	uv run tt-match-commentary-collect $(strip $(ARGS_events) $(ARGS_limit))
 
 event-sponsors-collect: ## Collect sponsor details for pending events into ingest.event_sponsors_raw
-	uv run tt-event-sponsors-collect $(if $(EVENT_IDS),--event-ids $(EVENT_IDS),)$(if $(LIMIT), --limit $(LIMIT),)
+	uv run tt-event-sponsors-collect $(strip $(ARGS_events) $(ARGS_limit))
 
 event-sponsors-unpack: ## Unpack landed sponsor payloads into ingest.event_sponsors_unpacked
-	uv run tt-event-sponsors-unpack $(if $(EVENT_IDS),--event-ids $(EVENT_IDS),)
+	uv run tt-event-sponsors-unpack $(ARGS_events)
 
 event-sponsors-unpack-preview: ## Run the sponsor unpack with EVENT_IDS, then roll it back
-	uv run tt-event-sponsors-unpack $(if $(EVENT_IDS),--event-ids $(EVENT_IDS),) --dry-run
+	$(call require,EVENT_IDS)
+	uv run tt-event-sponsors-unpack --event-ids $(EVENT_IDS) --dry-run
 
 player-details-collect: ## Collect player details for pending players into ingest.player_details_raw
-	uv run tt-player-details-collect $(if $(PLAYER_IDS),--player-ids $(PLAYER_IDS),)$(if $(LIMIT), --limit $(LIMIT),)
+	uv run tt-player-details-collect $(strip $(ARGS_players) $(ARGS_limit))
+
+collect-all: ## Run every collector once, in dependency order, stopping at the first failure
+	@for step in $(COLLECT_PIPELINE); do \
+		printf '\n==> %s\n' "$$step"; \
+		$(MAKE) --no-print-directory "$$step" || exit 1; \
+	done
+	@printf '\nAll collectors finished.\n'
 
 ittf-players-seed: ## Seed ingest.ittf_player_profiles from data/20260615_master_players.csv
 	uv run tt-ittf-players-seed
