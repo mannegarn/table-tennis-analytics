@@ -1,4 +1,4 @@
--- 016: the ittf_player_profiles domain, owned by ingestion.
+-- 015: the ittf_player_profiles domain, owned by ingestion.
 --
 -- Single table storing extracted style/grip/hand enrichment per player_id,
 -- populated either from a local CSV backfill (e.g. source = '20260615_master_players.csv')

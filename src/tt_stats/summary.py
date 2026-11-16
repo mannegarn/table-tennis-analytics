@@ -238,8 +238,8 @@ def build_summary_markdown(conn: Connection[Any]) -> str:
                 FROM ingest.match_commentary_pending
             ) AS commentary_pending,
             (
-                SELECT COUNT(*)
-                FROM ingest.match_commentary_unpacked
+                SELECT COALESCE(SUM(received_count), 0)
+                FROM ingest.match_commentary_raw
             ) AS commentary_total_rows
         ;
         """,
@@ -264,8 +264,9 @@ def build_summary_markdown(conn: Connection[Any]) -> str:
             (
                 SELECT COUNT(*)
                 FROM seen_players AS sp
-                JOIN ingest.player_details_unpacked AS u
-                  ON u.player_id = sp.player_id
+                JOIN ingest.player_details_raw AS r
+                  ON r.player_id = sp.player_id
+                WHERE r.received_count > 0
             ) AS seen_with_unpacked_details,
             (
                 SELECT COUNT(*)
@@ -273,8 +274,8 @@ def build_summary_markdown(conn: Connection[Any]) -> str:
             ) AS details_pending,
             (SELECT COUNT(*) FROM ingest.player_details_raw) AS total_raw_details,
             (
-                SELECT COUNT(*)
-                FROM ingest.player_details_unpacked
+                SELECT COUNT(*) FILTER (WHERE received_count > 0)
+                FROM ingest.player_details_raw
             ) AS total_unpacked_details,
             (
                 SELECT COUNT(*)
@@ -327,57 +328,7 @@ def build_summary_markdown(conn: Connection[Any]) -> str:
         """,
     )
 
-    # Field completeness for unpacked tables
-    sponsor_fields = _field_completeness_rows(
-        conn,
-        "ingest.event_sponsors_unpacked",
-        [
-            ("sponsor_type_id", "sponsor_type_id"),
-            ("sponsor_type_name", "sponsor_type_name"),
-            ("logo", "logo"),
-            ("dark_logo", "dark_logo"),
-            ("sponsor_link", "sponsor_link"),
-        ],
-    )
-
-    commentary_fields = _field_completeness_rows(
-        conn,
-        "ingest.match_commentary_unpacked",
-        [
-            ("commentary_id", "commentary_id"),
-            ("action_type", "action_type"),
-            ("commentary_text", "commentary_text"),
-            ("utc_date", "utc_date"),
-            ("local_date", "local_date"),
-            ("source_ts", "source_ts"),
-        ],
-    )
-
-    player_fields = _field_completeness_rows(
-        conn,
-        "ingest.player_details_unpacked",
-        [
-            ("player_name", "player_name"),
-            ("country_code", "country_code"),
-            ("country_name", "country_name"),
-            ("nationality_code", "nationality_code"),
-            ("gender", "gender"),
-            ("age", "age"),
-            ("dob", "dob"),
-            ("handedness", "handedness"),
-            ("grip", "grip"),
-            ("style", "style"),
-            ("equipment_sponsor", "equipment_sponsor"),
-            ("blade_type", "blade_type"),
-            ("racket_covering_a", "racket_covering_a"),
-            ("racket_covering_b", "racket_covering_b"),
-            ("active_since", "active_since"),
-            ("earnings_career", "earnings_career"),
-            ("head_shot", "head_shot"),
-            ("bio", "bio"),
-        ],
-    )
-
+    # Field completeness for flat ingest tables
     ittf_fields = _field_completeness_rows(
         conn,
         "ingest.ittf_player_profiles",
@@ -582,36 +533,6 @@ def build_summary_markdown(conn: Connection[Any]) -> str:
         )
     )
 
-    # Sponsors field completeness
-    sections.append(
-        "\n".join(
-            [
-                "## Event Sponsors Field Completeness "
-                "(`ingest.event_sponsors_unpacked`)",
-                "",
-                _md_table(
-                    ["Field", "Total Rows", "Has Data", "Missing / Empty"],
-                    sponsor_fields,
-                ),
-            ]
-        )
-    )
-
-    # Commentary field completeness
-    sections.append(
-        "\n".join(
-            [
-                "## Match Commentary Field Completeness "
-                "(`ingest.match_commentary_unpacked`)",
-                "",
-                _md_table(
-                    ["Field", "Total Rows", "Has Data", "Missing / Empty"],
-                    commentary_fields,
-                ),
-            ]
-        )
-    )
-
     # Players & ITTF enrichment
     ittf_extra = max(
         int(players_stats.get("total_ittf_profiles", 0)) - seen_with_ittf,
@@ -639,13 +560,6 @@ def build_summary_markdown(conn: Connection[Any]) -> str:
         f"{_fmt_int(players_stats.get('total_ittf_profiles'))} "
         f"({_fmt_int(seen_with_ittf)} matched to seen players, "
         f"{_fmt_int(ittf_extra)} not yet seen in WTT matches)",
-        "",
-        "### WTT Player Details Completeness (`ingest.player_details_unpacked`)",
-        "",
-        _md_table(
-            ["Field", "Total Rows", "Has Data", "Missing / Empty"],
-            player_fields,
-        ),
         "",
         "### ITTF Player Profiles Completeness (`ingest.ittf_player_profiles`)",
         "",

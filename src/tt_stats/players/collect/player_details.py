@@ -296,8 +296,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Console entry point used by ``tt-player-details-collect``."""
     parser = argparse.ArgumentParser(
         description=(
-            "Fetch WTT player details into ingest.player_details_raw and "
-            "ingest.player_details_unpacked, committed by chunk."
+            "Fetch WTT player details into ingest.player_details_raw, "
+            "committed by chunk."
         )
     )
     parser.add_argument(
@@ -377,7 +377,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         unit="player",
         found_label="profiles",
         raw_table="ingest.player_details_raw",
-        unpacked_table="ingest.player_details_unpacked",
     )
 
 

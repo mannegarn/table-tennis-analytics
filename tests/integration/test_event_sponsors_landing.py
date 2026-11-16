@@ -72,12 +72,6 @@ def test_landing_upserts_one_row_and_is_idempotent(
     assert row["payload_sha256"] == summary.payload_sha256
     assert row["source"] == "wtt_geteventequipmentwithlogo"
 
-    unpacked = db_connection.execute(
-        "SELECT count(*) AS n FROM ingest.event_sponsors_unpacked WHERE event_id = %s;",
-        (EVENT_ID,),
-    ).fetchone()
-    assert unpacked == {"n": 2}
-
 
 def test_an_empty_sponsor_list_is_recorded_as_an_answer(
     db_connection: Connection[Any],
@@ -132,34 +126,3 @@ def test_landing_refuses_a_failed_summary(
         (EVENT_ID,),
     ).fetchone()
     assert row == {"received_count": 1}
-
-
-def test_landing_rolls_back_when_summary_count_disagrees_with_payload(
-    db_connection: Connection[Any],
-) -> None:
-    """A summary whose received_count disagrees with the stored JSON must abort."""
-    payload = [_sponsor(5845), _sponsor(3251)]
-    body = json.dumps(payload).encode("utf-8")
-    mismatched = EventSponsorsSummary(
-        event_id=EVENT_ID,
-        status_code=200,
-        received_count=1,
-        payload_sha256=hashlib.sha256(body).hexdigest(),
-        fetched_at=datetime.now(tz=UTC),
-        error=None,
-        reason="new",
-    )
-
-    with pytest.raises(RuntimeError, match="Unpack validation failed"):
-        land_event_sponsors(db_connection, mismatched, payload)
-
-    raw = db_connection.execute(
-        "SELECT count(*) AS n FROM ingest.event_sponsors_raw WHERE event_id = %s;",
-        (EVENT_ID,),
-    ).fetchone()
-    unpacked = db_connection.execute(
-        "SELECT count(*) AS n FROM ingest.event_sponsors_unpacked WHERE event_id = %s;",
-        (EVENT_ID,),
-    ).fetchone()
-    assert raw == {"n": 0}
-    assert unpacked == {"n": 0}

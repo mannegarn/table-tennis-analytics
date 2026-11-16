@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING, Any
 from psycopg.types.json import Jsonb
 
 from tt_stats.core.logging_config import get_logger
-from tt_stats.event_sponsors.land.unpack import unpack_event
 
 logger = get_logger(__name__)
 
@@ -77,18 +76,11 @@ def land_event_sponsors(
             ),
         )
 
-        unpacked = unpack_event(
-            connection,
-            summary.event_id,
-            received_count=summary.received_count,
-        )
-
     logger.info(
         "event_sponsors_landed",
         extra={
             "event_id": summary.event_id,
             "reason": summary.reason,
             "received_count": summary.received_count,
-            "unpacked": unpacked,
         },
     )

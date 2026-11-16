@@ -1,4 +1,4 @@
--- 011: the match_details work queue, derived and never stored (ADR 0005).
+-- 010: the match_details work queue, derived and never stored (ADR 0005).
 --
 -- Answers which matches from ingest.match_entries_unpacked deserve a
 -- matchdata/matchcentre request right now, using the event's dates from

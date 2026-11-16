@@ -19,13 +19,10 @@ from tt_stats.core.migrations import apply_migrations
 # the cost of dropping and recreating a schema.
 INGEST_TABLES = (
     "ingest.ittf_player_profiles",
-    "ingest.player_details_unpacked",
     "ingest.player_details_raw",
-    "ingest.match_commentary_unpacked",
     "ingest.match_commentary_raw",
     "ingest.match_details_players_unpacked",
     "ingest.match_details_raw",
-    "ingest.event_sponsors_unpacked",
     "ingest.event_sponsors_raw",
     "ingest.match_entries_unpacked",
     "ingest.match_entries_payloads_raw",

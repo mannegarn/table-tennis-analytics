@@ -84,7 +84,7 @@ def _summary(
     )
 
 
-def test_land_chunk_upserts_raw_and_unpacks_flat_player_row(
+def test_land_chunk_upserts_raw_player_details(
     db_connection: Connection[Any],
 ) -> None:
     payload_1 = _full_payload(PLAYER_1)
@@ -102,7 +102,12 @@ def test_land_chunk_upserts_raw_and_unpacks_flat_player_row(
 
     raw_rows = db_connection.execute(
         """
-        SELECT player_id, http_status, received_count, source
+        SELECT
+            player_id,
+            http_status,
+            received_count,
+            source,
+            payload -> 'Result' -> 0 ->> 'PlayerName' AS player_name
         FROM ingest.player_details_raw
         ORDER BY player_id;
         """
@@ -113,38 +118,15 @@ def test_land_chunk_upserts_raw_and_unpacks_flat_player_row(
             "http_status": 200,
             "received_count": 1,
             "source": "wtt_player_details",
+            "player_name": "WANG Chuqin",
         },
         {
             "player_id": PLAYER_2,
             "http_status": 404,
             "received_count": 0,
             "source": "wtt_player_details",
+            "player_name": None,
         },
-    ]
-
-    unpacked = db_connection.execute(
-        """
-        SELECT
-            player_id,
-            player_name,
-            country_code,
-            gender,
-            age,
-            handedness,
-            grip
-        FROM ingest.player_details_unpacked;
-        """
-    ).fetchall()
-    assert unpacked == [
-        {
-            "player_id": PLAYER_1,
-            "player_name": "WANG Chuqin",
-            "country_code": "CHN",
-            "gender": "M",
-            "age": 26,
-            "handedness": "Left Hand",
-            "grip": "Shakehand",
-        }
     ]
 
 

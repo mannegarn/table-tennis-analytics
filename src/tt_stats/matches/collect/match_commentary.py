@@ -3,8 +3,8 @@
 The endpoint returns a double-encoded JSON string containing an array of
 commentary actions (or an empty array/string when a match has no commentary).
 Each chunk is fetched concurrently, unwrapped into a JSON array, and committed
-to ``ingest.match_commentary_raw``, ``ingest.match_commentary_unpacked``, and
-``ingest.ingest_runs`` at the end of each chunk.
+to ``ingest.match_commentary_raw`` and ``ingest.ingest_runs`` at the end of each
+chunk.
 """
 
 from __future__ import annotations
@@ -330,8 +330,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Console entry point used by ``tt-match-commentary-collect``."""
     parser = argparse.ArgumentParser(
         description=(
-            "Fetch WTT match commentary into ingest.match_commentary_raw and "
-            "ingest.match_commentary_unpacked, committed by chunk."
+            "Fetch WTT match commentary into ingest.match_commentary_raw, "
+            "committed by chunk."
         )
     )
     parser.add_argument(
@@ -410,7 +410,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         unit="match",
         found_label="lines",
         raw_table="ingest.match_commentary_raw",
-        unpacked_table="ingest.match_commentary_unpacked",
     )
 
 

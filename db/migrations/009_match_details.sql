@@ -1,4 +1,4 @@
--- 010: the match_details domain, owned by ingestion.
+-- 009: the match_details domain, owned by ingestion.
 --
 -- Two tables:
 --   ingest.match_details_raw              one row per MATCH (event_id, document_code)

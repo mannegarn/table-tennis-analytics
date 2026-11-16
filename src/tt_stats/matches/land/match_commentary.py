@@ -1,14 +1,12 @@
-"""Land match_commentary payloads in chunked transactions, with SQL unpack."""
+"""Land match_commentary payloads in chunked transactions."""
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from psycopg.types.json import Jsonb
 
 from tt_stats.core.logging_config import get_logger
-from tt_stats.core.sql_files import load_sql
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -19,34 +17,25 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-UNPACK_COMMENTARY_SQL_PATH = (
-    Path(__file__).with_name("sql") / "unpack_match_commentary.sql"
-)
-
 
 def land_match_commentary(
     connection: Connection[Any],
     summary: MatchCommentarySummary,
     payload: Any,
-    *,
-    unpack: bool = True,
 ) -> None:
-    """Upsert one match's decoded commentary payload and unpack it."""
-    land_match_commentary_chunk(connection, [(summary, payload)], unpack=unpack)
+    """Upsert one match's decoded commentary payload."""
+    land_match_commentary_chunk(connection, [(summary, payload)])
 
 
 def land_match_commentary_chunk(
     connection: Connection[Any],
     items: Sequence[tuple[MatchCommentarySummary, Any]],
-    *,
-    unpack: bool = True,
 ) -> None:
     """Upsert a chunk of match_commentary payloads in a single transaction."""
     if not items:
         return
 
     raw_params: list[tuple[Any, ...]] = []
-    unpack_params: list[dict[str, Any]] = []
     for summary, payload in items:
         if summary.error is not None:
             raise ValueError(f"cannot land a failed match: {summary.error}")
@@ -64,14 +53,6 @@ def land_match_commentary_chunk(
                 summary.fetched_at,
             )
         )
-        unpack_params.append(
-            {
-                "event_id": summary.event_id,
-                "document_code": summary.document_code,
-            }
-        )
-
-    unpack_sql = load_sql(UNPACK_COMMENTARY_SQL_PATH) if unpack else None
 
     with connection.transaction(), connection.cursor() as cursor:
         cursor.executemany(
@@ -96,8 +77,5 @@ def land_match_commentary_chunk(
             """,
             raw_params,
         )
-
-        if unpack_sql is not None:
-            cursor.executemany(unpack_sql.encode("utf-8"), unpack_params)
 
     logger.debug("match_commentary_chunk_landed", extra={"matches": len(items)})

@@ -1,4 +1,4 @@
--- 015: the player_details work queue, derived and never stored (ADR 0005).
+-- 014: the player_details work queue, derived and never stored (ADR 0005).
 --
 -- Answers which player_ids seen in ingest.match_details_players_unpacked do
 -- not yet have a row in ingest.player_details_raw.

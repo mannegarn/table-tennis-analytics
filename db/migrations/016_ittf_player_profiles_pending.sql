@@ -1,4 +1,4 @@
--- 017: the ittf_player_profiles work queue, derived and never stored (ADR 0005).
+-- 016: the ittf_player_profiles work queue, derived and never stored (ADR 0005).
 --
 -- Answers which player_ids seen in ingest.match_details_players_unpacked do
 -- not yet have a row in ingest.ittf_player_profiles.

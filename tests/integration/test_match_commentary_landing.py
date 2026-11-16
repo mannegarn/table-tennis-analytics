@@ -1,4 +1,4 @@
-"""Integration tests: chunked landing and unpacking for match_commentary."""
+"""Integration tests: chunked raw landing for match_commentary."""
 
 import hashlib
 import json
@@ -50,7 +50,7 @@ def _summary(payload: list[dict[str, Any]]) -> MatchCommentarySummary:
     )
 
 
-def test_land_chunk_upserts_raw_and_unpacks_commentary_lines(
+def test_land_chunk_upserts_raw_commentary_payload(
     db_connection: Connection[Any],
 ) -> None:
     payload = [
@@ -65,27 +65,14 @@ def test_land_chunk_upserts_raw_and_unpacks_commentary_lines(
 
     raw_row = db_connection.execute(
         """
-        SELECT received_count, source
+        SELECT received_count, source, jsonb_array_length(payload) AS item_count
         FROM ingest.match_commentary_raw
         WHERE event_id = %s AND document_code = %s;
         """,
         (EVENT_ID, DOC_1),
     ).fetchone()
-    assert raw_row == {"received_count": 3, "source": "wtt_match_commentary"}
-
-    unpacked = db_connection.execute(
-        """
-        SELECT sequence_number, action_type, commentary_text
-        FROM ingest.match_commentary_unpacked
-        WHERE event_id = %s AND document_code = %s
-        ORDER BY sequence_number;
-        """,
-        (EVENT_ID, DOC_1),
-    ).fetchall()
-    assert [
-        (r["sequence_number"], r["action_type"], r["commentary_text"]) for r in unpacked
-    ] == [
-        (1, "SL", "Start of Match"),
-        (3, "SSR", "Service change: YOVKOVA Maria to serve"),
-        (7, "PT", "Point won by ERKEBAEVA Asel, Game 1, Game Score 0-1"),
-    ]
+    assert raw_row == {
+        "received_count": 3,
+        "source": "wtt_match_commentary",
+        "item_count": 3,
+    }

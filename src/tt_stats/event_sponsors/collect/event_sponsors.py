@@ -415,7 +415,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         unit="event",
         found_label="sponsors",
         raw_table="ingest.event_sponsors_raw",
-        unpacked_table="ingest.event_sponsors_unpacked",
     )
 
 

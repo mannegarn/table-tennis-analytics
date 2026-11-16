@@ -1,4 +1,4 @@
--- 013: the match_commentary work queue, derived and never stored (ADR 0005).
+-- 012: the match_commentary work queue, derived and never stored (ADR 0005).
 
 CREATE OR REPLACE VIEW ingest.match_commentary_pending AS
 WITH bounds AS (
