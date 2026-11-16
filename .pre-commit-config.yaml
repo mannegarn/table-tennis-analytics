@@ -2,7 +2,8 @@
 #
 # Hooks are split into two groups:
 #   1. Generic file hygiene, from the official pre-commit-hooks repo.
-#   2. Python and SQL tooling via `uv run`, so ruff, mypy and sqlfluff use
+#   2. gitleaks, scanning staged changes for secrets.
+#   3. Python and SQL tooling via `uv run`, so ruff, mypy and sqlfluff use
 #      exactly the versions locked in the project rather than a separate pinned
 #      copy.
 #
@@ -35,7 +36,13 @@ repos:
         args: ["--pytest-test-first"]
       - id: trailing-whitespace
 
-  # 2. Python and SQL linting, formatting and type checking
+  # 2. Secret scanning: API keys, tokens and passwords in staged changes.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
+  # 3. Python and SQL linting, formatting and type checking
   - repo: local
     hooks:
       - id: ruff-check
