@@ -2,8 +2,9 @@
 #
 # Hooks are split into two groups:
 #   1. Generic file hygiene, from the official pre-commit-hooks repo.
-#   2. Python tooling via `uv run`, so ruff and mypy use exactly the versions
-#      locked in the project rather than a separate pinned copy.
+#   2. Python and SQL tooling via `uv run`, so ruff, mypy and sqlfluff use
+#      exactly the versions locked in the project rather than a separate pinned
+#      copy.
 #
 # Install the git hooks once the repository is a git repo:
 #   make hooks-install
@@ -34,7 +35,7 @@ repos:
         args: ["--pytest-test-first"]
       - id: trailing-whitespace
 
-  # 2. Python linting, formatting and type checking
+  # 2. Python and SQL linting, formatting and type checking
   - repo: local
     hooks:
       - id: ruff-check
@@ -57,6 +58,22 @@ repos:
         language: system
         types: [python]
         pass_filenames: false
+
+      # Two sqlfluff hooks because the templater cannot be set per directory:
+      # dbt and db/ are jinja, the psycopg unpack statements use placeholders.
+      - id: sqlfluff-dbt
+        name: sqlfluff (dbt, db)
+        entry: uv run sqlfluff lint
+        language: system
+        files: ^(dbt/(models|tests|macros)|db)/.*\.sql$
+        require_serial: true
+
+      - id: sqlfluff-src
+        name: sqlfluff (src)
+        entry: uv run sqlfluff lint --templater placeholder
+        language: system
+        files: ^src/.*\.sql$
+        require_serial: true
 
       - id: pytest
         name: pytest
