@@ -1,4 +1,9 @@
-{{ config(materialized='table') }}
+{{ config(
+    materialized='table',
+    indexes=[
+        {'columns': ['event_id', 'document_code'], 'type': 'btree'},
+    ],
+) }}
 
 select
     c.event_id,
