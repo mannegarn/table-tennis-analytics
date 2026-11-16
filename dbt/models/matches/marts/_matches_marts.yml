@@ -1,0 +1,54 @@
+version: 2
+
+models:
+  - name: fct_match_commentary
+    description: >
+      Fact table of match commentary actions at grain (event_id, document_code,
+      sequence_number), enriched with human-readable action_name and
+      action_category from the action_types seed.
+    columns:
+      - name: event_id
+        description: WTT event identifier.
+        data_tests:
+          - not_null
+      - name: document_code
+        description: WTT match document code within the event.
+        data_tests:
+          - not_null
+      - name: sequence_number
+        description: Action sequence number within the match.
+        data_tests:
+          - not_null
+      - name: commentary_id
+        description: UUID of the commentary action.
+        data_tests:
+          - not_null
+      - name: action_type
+        description: Raw WTT action code (e.g. STP, PT, SSR, YC).
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('action_types')
+                field: action_type
+      - name: action_name
+        description: Human-readable action label from dbt/seeds/action_types.csv.
+        data_tests:
+          - not_null
+      - name: action_category
+        description: High-level action grouping (scoring, service, match_flow, discipline, other).
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["scoring", "service", "match_flow", "discipline", "other"]
+      - name: commentary_text
+        description: Human-readable commentary text (nullable for 350 MPOINT rows; placeholder text for silent actions).
+      - name: has_commentary_text
+        description: True when commentary_text is present and not the default placeholder string.
+        data_tests:
+          - not_null
+      - name: utc_time
+        description: UTC time of action (9-digit HHMMSSmmm for match actions; 13-digit epoch ms for OT rows).
+        data_tests:
+          - not_null

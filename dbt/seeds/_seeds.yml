@@ -1,0 +1,24 @@
+version: 2
+
+seeds:
+  - name: action_types
+    description: >
+      Lookup table mapping WTT match commentary action_type codes to
+      human-readable action_name labels and broad action_category groupings.
+    columns:
+      - name: action_type
+        description: Raw WTT action code from match commentary (e.g. STP, PT, SSR).
+        data_tests:
+          - not_null
+          - unique
+      - name: action_name
+        description: Human-readable label for the action code.
+        data_tests:
+          - not_null
+      - name: action_category
+        description: High-level grouping (scoring, service, match_flow, discipline, other).
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["scoring", "service", "match_flow", "discipline", "other"]
