@@ -3,6 +3,7 @@
     indexes=[
         {'columns': ['event_id', 'document_code'], 'type': 'btree'},
     ],
+    post_hook="create index if not exists idx_fct_commentary_match_action on {{ this }} (event_id, document_code) include (action_type)",
 ) }}
 
 select
