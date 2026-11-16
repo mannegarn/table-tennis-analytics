@@ -369,7 +369,8 @@ class WttClient:
         """Sleep a random fraction of a second, so bursts do not align."""
         if self._settings.request_jitter_seconds > 0:
             await asyncio.sleep(
-                random.uniform(0, self._settings.request_jitter_seconds)
+                # Request spacing, not a secret: a PRNG is the right tool.
+                random.uniform(0, self._settings.request_jitter_seconds)  # noqa: S311
             )
 
     def _parse(self, response: httpx.Response) -> WttResponse:
