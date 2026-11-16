@@ -1,11 +1,21 @@
-{{ config(materialized='view') }}
+{{ config(materialized='table') }}
 
-select
-    event_id,
-    nullif(btrim(document_code), '') as document_code,
-    sequence_number,
-    nullif(btrim(commentary_id), '') as commentary_id,
-    nullif(btrim(action_type), '') as action_type,
-    nullif(btrim(commentary_text), '') as commentary_text,
-    nullif(btrim(utc_time), '') as utc_time
-from {{ source('ingest', 'match_commentary_unpacked') }}
+select distinct on (
+    r.event_id,
+    r.document_code,
+    (e.value -> 'data' ->> 'SEQUENCENUMBER')::integer
+)
+    r.event_id,
+    r.document_code,
+    (e.value -> 'data' ->> 'SEQUENCENUMBER')::integer as sequence_number,
+    nullif(btrim(e.value ->> 'id'), '') as commentary_id,
+    nullif(btrim(e.value -> 'data' ->> 'ACTIONTYPE'), '') as action_type,
+    nullif(btrim(e.value -> 'data' ->> 'COMMENTARYTEXT'), '') as commentary_text,
+    nullif(btrim(e.value -> 'data' ->> 'UTCTIME'), '') as utc_time
+from {{ source('ingest', 'match_commentary_raw') }} as r
+cross join lateral jsonb_array_elements(r.payload) as e
+where e.value -> 'data' ->> 'SEQUENCENUMBER' ~ '^[0-9]+$'
+order by
+    r.event_id,
+    r.document_code,
+    (e.value -> 'data' ->> 'SEQUENCENUMBER')::integer

@@ -3,13 +3,19 @@ version: 2
 sources:
   - name: ingest
     schema: ingest
-    description: Raw and operationally unpacked tables populated by the ingestion pipeline.
+    description: Raw JSONB payloads and CSV/HTML profiles populated by the ingestion pipeline.
     tables:
+      - name: events_by_year_raw
+        description: One raw WTT GetEventsCalendar response per calendar year (JSONB array of page objects with rows).
+      - name: event_sponsors_raw
+        description: One raw WTT GetEventEquipmentwithLogo response per event_id (JSONB bare array of sponsor objects).
+      - name: match_entries_payloads_raw
+        description: One raw WTT GetOfficialResult response per event_id (JSONB bare array of match entry objects).
+      - name: match_details_raw
+        description: One raw WTT matchcentre response per (event_id, document_code), or '{}' when empty.
+      - name: match_commentary_raw
+        description: One raw WTT match commentary response per (event_id, document_code), decoded to a JSONB array.
+      - name: player_details_raw
+        description: One raw WTT GetPlayers response per player_id.
       - name: ittf_player_profiles
         description: Player style, grip, and hand enrichment per player_id from ITTF master CSV or HTML.
-      - name: event_sponsors_unpacked
-        description: One row per sponsor per event, unpacked from ingest.event_sponsors_raw.
-      - name: player_details_unpacked
-        description: One flat WTT profile row per player_id, unpacked from ingest.player_details_raw.
-      - name: match_commentary_unpacked
-        description: One row per commentary action inside a match, unpacked from ingest.match_commentary_raw.

@@ -32,9 +32,10 @@ models:
 
   - name: stg_wtt_players
     description: >
-      Thin staging view over ingest.player_details_unpacked. Drops 0%-filled fields,
-      ingestion timestamps, and currently redundant columns (player_family_name_first,
-      nationality_code/name, headshot_r/l). Trims blank strings to NULL and casts dob to date.
+      Unpacked WTT player profile table from ingest.player_details_raw. Drops
+      0%-filled fields and currently redundant columns (player_family_name_first,
+      nationality_code/name, headshot_r/l), trims blank strings to NULL, and casts
+      dob to date.
     columns:
       - name: player_id
         description: WTT/ITTF player identifier.

@@ -1,11 +1,62 @@
 version: 2
 
 models:
+  - name: stg_events
+    description: >
+      Unpacked event calendar rows from ingest.events_by_year_raw (1 row per
+      source_year, event_id; deduplicates intra-year repeats and drops UI/CMS noise).
+    columns:
+      - name: source_year
+        description: Calendar year whose WTT payload listed this event.
+        data_tests:
+          - not_null
+      - name: event_id
+        description: WTT event identifier.
+        data_tests:
+          - not_null
+      - name: event_name
+        description: Event name as sent by WTT.
+        data_tests:
+          - not_null
+      - name: event_code
+        description: Optional WTT event code.
+      - name: event_type_id
+        description: WTT event category identifier.
+        data_tests:
+          - not_null
+      - name: event_type
+        description: WTT event category label (e.g. WTTC, WTT Star Contender).
+        data_tests:
+          - not_null
+      - name: event_tier_name
+        description: Modern WTT event tier label (nullable for historical events).
+      - name: start_date
+        description: Scheduled start date (no timezone upstream).
+        data_tests:
+          - not_null
+      - name: end_date
+        description: Scheduled end date (no timezone upstream).
+        data_tests:
+          - not_null
+      - name: country
+        description: Host country name.
+        data_tests:
+          - not_null
+      - name: city
+        description: Host city name (nullable).
+      - name: continent_code
+        description: Host continent slug.
+        data_tests:
+          - not_null
+      - name: subcontinent
+        description: Host subcontinent label.
+        data_tests:
+          - not_null
+
   - name: stg_event_sponsors
     description: >
-      Thin staging view over ingest.event_sponsors_unpacked. Keeps sponsor fields
-      for each (event_id, event_sponsor_id), trimming blank strings to NULL and
-      dropping ingestion timestamps.
+      Unpacked sponsor rows from ingest.event_sponsors_raw (1 row per event_id,
+      event_sponsor_id), trimming blank strings to NULL.
     columns:
       - name: event_id
         description: WTT event identifier.
