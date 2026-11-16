@@ -1,0 +1,15 @@
+# SQL linting. Two invocations share this file (see `make lint-sql`):
+#   - dbt models, dbt tests and db/ use the jinja templater (dbt builtins on).
+#   - src/**/sql uses the placeholder templater for psycopg %(name)s params.
+# The templater cannot be switched per directory, hence the two runs.
+
+[sqlfluff]
+dialect = postgres
+templater = jinja
+max_line_length = 100
+# RF04: `year` and `source` are deliberate column names.
+# ST06: column order follows the source payload, not sqlfluff's preference.
+exclude_rules = RF04, ST06
+
+[sqlfluff:templater:placeholder]
+param_style = pyformat

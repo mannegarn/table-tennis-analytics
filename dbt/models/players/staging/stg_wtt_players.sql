@@ -22,8 +22,6 @@ select distinct on (r.player_id)
     nullif(btrim(e.value ->> 'Grip'), '') as grip,
     nullif(btrim(e.value ->> 'HeadShot'), '') as head_shot
 from {{ source('ingest', 'player_details_raw') }} as r
-cross join lateral jsonb_array_elements(
-    coalesce(r.payload -> 'Result', '[]'::jsonb)
-) as e
+cross join lateral jsonb_array_elements(coalesce(r.payload -> 'Result', '[]'::jsonb)) as e
 where jsonb_typeof(r.payload -> 'Result') = 'array'
 order by r.player_id

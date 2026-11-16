@@ -41,7 +41,7 @@ endef
 # Collectors share one pending queue and one API; never run them side by side.
 .NOTPARALLEL:
 
-.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-collect events-unpack events-unpack-preview matches-collect matches-unpack matches-unpack-preview match-details-collect match-commentary-collect event-sponsors-collect player-details-collect collect-all ittf-players-seed update-summary test test-integration dbt-debug dbt-run dbt-test dbt-clean lint format typecheck check hooks-install hooks-run
+.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-collect events-unpack events-unpack-preview matches-collect matches-unpack matches-unpack-preview match-details-collect match-commentary-collect event-sponsors-collect player-details-collect collect-all ittf-players-seed update-summary test test-integration dbt-debug dbt-run dbt-test dbt-clean lint lint-sql format typecheck check hooks-install hooks-run
 
 help: ## Show available commands
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -200,10 +200,15 @@ format: ## Format with ruff
 typecheck: ## Type check with mypy
 	uv run mypy
 
+lint-sql: ## Lint SQL with sqlfluff (dbt + db as jinja, src as psycopg placeholders)
+	uv run sqlfluff lint dbt/models dbt/tests dbt/macros db
+	uv run sqlfluff lint src --templater placeholder
+
 check: ## Run lint and type checks (same tools as pre-commit)
 	uv run ruff check .
 	uv run ruff format --check .
 	uv run mypy
+	$(MAKE) --no-print-directory lint-sql
 
 hooks-install: ## Install git hooks, then run them once (requires git init)
 	uv run pre-commit install --install-hooks

@@ -1,0 +1,9 @@
+# The unpack statements use a deliberate hand-aligned, heavily commented layout
+# (aligned AS, comment blocks between columns), so the layout rules are off.
+#   AL09: self-aliases are kept so every column reads `expr AS name`.
+#   CP02: EXCLUDED is written upper-case on purpose.
+#   RF02: false positive, the %(year)s placeholder renders as a bare `year`.
+# Nested exclude_rules replace the root list, so RF04 and ST06 are repeated.
+
+[sqlfluff]
+exclude_rules = RF04, ST06, LT01, LT02, AL09, CP02, RF02

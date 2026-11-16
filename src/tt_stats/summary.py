@@ -8,7 +8,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from psycopg import Connection
+from psycopg import Connection, sql
+from psycopg.abc import Query
 
 from tt_stats.core.config import project_root
 from tt_stats.core.db import get_connection
@@ -50,7 +51,7 @@ def _md_table(headers: Sequence[str], rows: Sequence[Sequence[str]]) -> str:
     return "\n".join([header_line, sep_line, *body_lines])
 
 
-def _fetch_one(conn: Connection[Any], query: str) -> dict[str, Any]:
+def _fetch_one(conn: Connection[Any], query: Query) -> dict[str, Any]:
     """Execute a query expected to return one row."""
     row = conn.execute(query).fetchone()
     if row is None:
@@ -58,7 +59,7 @@ def _fetch_one(conn: Connection[Any], query: str) -> dict[str, Any]:
     return dict(row)
 
 
-def _fetch_all(conn: Connection[Any], query: str) -> list[dict[str, Any]]:
+def _fetch_all(conn: Connection[Any], query: Query) -> list[dict[str, Any]]:
     """Execute a query returning zero or more rows."""
     return [dict(row) for row in conn.execute(query).fetchall()]
 
@@ -81,17 +82,27 @@ def _field_completeness_rows(
     columns: Sequence[tuple[str, str]],
 ) -> list[list[str]]:
     """Compute non-null, non-blank counts for each column in a table."""
-    total_row = _fetch_one(conn, f"SELECT COUNT(*) AS total FROM {table};")
+    # Identifiers are composed, never formatted into the string, so a table or
+    # column name can never be read as SQL.
+    table_ident = sql.Identifier(*table.split("."))
+    total_row = _fetch_one(
+        conn, sql.SQL("SELECT COUNT(*) AS total FROM {};").format(table_ident)
+    )
     total = int(total_row.get("total", 0))
     if total == 0:
         return [[label, "0", "0 (0.0%)", "0 (0.0%)"] for _, label in columns]
 
     exprs = [
-        f"COUNT(*) FILTER (WHERE {col} IS NOT NULL AND btrim({col}::text) <> '') "
-        f"AS {col}_filled"
+        sql.SQL(
+            "COUNT(*) FILTER (WHERE {col} IS NOT NULL AND btrim({col}::text) <> '') "
+            "AS {alias}"
+        ).format(col=sql.Identifier(col), alias=sql.Identifier(f"{col}_filled"))
         for col, _ in columns
     ]
-    counts = _fetch_one(conn, f"SELECT {', '.join(exprs)} FROM {table};")
+    counts = _fetch_one(
+        conn,
+        sql.SQL("SELECT {} FROM {};").format(sql.SQL(", ").join(exprs), table_ident),
+    )
     rows: list[list[str]] = []
     for col, label in columns:
         filled = int(counts.get(f"{col}_filled", 0))
@@ -133,7 +144,10 @@ def build_summary_markdown(conn: Connection[Any]) -> str:
         schema_name = str(table_row["schema_name"])
         table_name = str(table_row["table_name"])
         count_row = _fetch_one(
-            conn, f'SELECT COUNT(*) AS exact_rows FROM "{schema_name}"."{table_name}";'
+            conn,
+            sql.SQL("SELECT COUNT(*) AS exact_rows FROM {};").format(
+                sql.Identifier(schema_name, table_name)
+            ),
         )
         table_row["exact_rows"] = int(count_row.get("exact_rows", 0))
 

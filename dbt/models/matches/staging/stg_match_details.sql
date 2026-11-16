@@ -6,8 +6,9 @@ with source as (
         document_code,
         payload
     from {{ source('ingest', 'match_details_raw') }}
-    where payload <> '{}'::jsonb
-      and jsonb_typeof(payload) = 'object'
+    where
+        payload <> '{}'::jsonb
+        and jsonb_typeof(payload) = 'object'
 )
 
 select

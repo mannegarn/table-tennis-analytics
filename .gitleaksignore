@@ -1,0 +1,10 @@
+# Findings gitleaks should not report again, one fingerprint per line
+# (commit:file:rule:line). Anything not listed here still fails the scan.
+#
+# These four are the API keys the public WTT website sends from the browser.
+# They are defaults in wtt_routes.py (and in two early probe scripts that are
+# no longer tracked), not credentials issued to this project.
+588a81e84241ce6bf7affc3f6c5d218f5d603148:src/tt_stats/core/clients/wtt_routes.py:generic-api-key:40
+eb1f9afdb886b7ce3766a8650d402ac224cac777:src/tt_stats/core/clients/wtt_routes.py:generic-api-key:25
+e959a2bf1079f3670569f84e70160eecd763c3ad:scripts/probe_match_entries.py:generic-api-key:45
+350bcaf4c352d04151974c473bd38629fb382969:scripts/probe_events_by_year.py:generic-api-key:45
