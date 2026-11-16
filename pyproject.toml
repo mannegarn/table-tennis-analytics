@@ -37,6 +37,7 @@ dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
     "ruff>=0.8",
+    "sqlfluff>=3.4",
     "types-tqdm>=4.70.0.20260906",
 ]
 
@@ -76,7 +77,12 @@ select = [
     "RUF", # ruff-specific
     "PT",  # flake8-pytest-style
     "T20", # flake8-print: no print statements, use the logger
+    "S",   # flake8-bandit: security checks (SQL built from strings, weak hashes, ...)
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# pytest is built on bare asserts.
+"tests/**" = ["S101"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["tt_stats"]
