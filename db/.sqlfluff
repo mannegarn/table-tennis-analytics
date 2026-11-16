@@ -1,0 +1,8 @@
+# Applied migrations are checksummed in ingest.schema_version, so reformatting
+# one makes `make db-migrate` refuse to run. Their existing layout is therefore
+# frozen: the style rules they predate are switched off here, and everything
+# else (parsing, aliasing, references, ambiguity) still applies.
+# Nested exclude_rules replace the root list, so RF04 and ST06 are repeated.
+
+[sqlfluff]
+exclude_rules = RF04, ST06, LT01, LT02, LT05, LT08, LT14, ST09, CP03, AM03, AM05
