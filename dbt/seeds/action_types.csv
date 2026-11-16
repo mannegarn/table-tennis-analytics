@@ -1,0 +1,24 @@
+action_type,action_name,action_category
+STP,Start Point,scoring
+PT,Point Won,scoring
+DPT,Delete Point,scoring
+GPOINT,Game Point,scoring
+MPOINT,Match Point,scoring
+PPT,Penalty Point,scoring
+SD,Sudden Death,scoring
+SSR,Service Change,service
+SSD,Doubles Service Order,service
+LET,Let,service
+SWP,Swap Ends,service
+SL,Match Start List,match_flow
+LV,Match Live,match_flow
+UGR,Umpire Game Ready,match_flow
+IM,Game Won,match_flow
+OF,Official Match Result,match_flow
+TO,Timeout,match_flow
+EXPD,Expedite System,match_flow
+SE,Scoring / Set Event,match_flow
+YC,Yellow Card,discipline
+YR1,Yellow-Red Card (1-Point Penalty),discipline
+YR2,Yellow-Red Card (2-Point Penalty),discipline
+OT,Other,other

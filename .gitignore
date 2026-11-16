@@ -18,6 +18,7 @@ dbt/.user.yml
 # Data
 data/
 *.csv
+!dbt/seeds/*.csv
 *.parquet
 
 # Local scratch scripts and their captured payloads. API probes are throwaway
