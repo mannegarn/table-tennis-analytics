@@ -1,0 +1,90 @@
+# Continuous integration: the same checks as the local git hooks, run on a
+# clean machine so they cannot be skipped with --no-verify.
+#
+#   quality  ruff, mypy, sqlfluff          (make check)
+#   test     pytest against a real Postgres, then dbt parse
+#   secrets  gitleaks over the full git history
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint, format, types, SQL
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - run: make check
+      - name: Audit dependencies
+        run: uv export --no-hashes --no-emit-project | uvx pip-audit -r /dev/stdin
+
+  test:
+    name: Tests and dbt parse
+    runs-on: ubuntu-latest
+    # Throwaway credentials for the service container below; nothing real.
+    env:
+      POSTGRES_USER: tt
+      POSTGRES_PASSWORD: ci_only_password
+      POSTGRES_DB: tt_stats
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      PGPASSWORD: ci_only_password
+      LOG_TO_FILE: "false"
+    services:
+      postgres:
+        image: postgres:16.4-alpine
+        env:
+          POSTGRES_USER: tt
+          POSTGRES_PASSWORD: ci_only_password
+          POSTGRES_DB: tt_stats
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tt -d tt_stats"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      # Service containers cannot mount db/init, so run the same scripts by hand.
+      - name: Bootstrap databases
+        run: |
+          psql -h localhost -U tt -d tt_stats -v ON_ERROR_STOP=1 -f db/init/000_create_test_db.sql
+          psql -h localhost -U tt -d tt_stats -v ON_ERROR_STOP=1 -f db/init/001_bootstrap.sql
+      # Integration tests run against tt_stats_test; live-API tests stay skipped
+      # because TT_LIVE_API_TESTS is not set.
+      - run: uv run pytest
+      # Compiles every model and resolves every ref/source without a build.
+      - run: uv run dbt parse --project-dir dbt --profiles-dir dbt
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      # Same gitleaks version as the pre-commit hook, scanning all history.
+      - name: gitleaks
+        run: >-
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.30.1
+          git /repo --redact --no-banner
