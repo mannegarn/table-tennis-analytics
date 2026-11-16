@@ -14,19 +14,21 @@ YEARS ?=
 LIMIT ?=
 EVENT_IDS ?=
 PLAYER_IDS ?=
+SELECT ?=
 TEST_DATABASE_NAME ?= tt_stats_test
 
 ARGS_years := $(if $(YEARS),--years $(YEARS))
 ARGS_limit := $(if $(LIMIT),--limit $(LIMIT))
 ARGS_events := $(if $(EVENT_IDS),--event-ids $(EVENT_IDS))
 ARGS_players := $(if $(PLAYER_IDS),--player-ids $(PLAYER_IDS))
+ARGS_select := $(if $(SELECT),--select $(SELECT))
 
-# Every collector, in dependency order: calendars before matches, matches
-# before details and commentary, players last. No unpack steps here - each
-# collector unpacks what it lands. A collector drains its pending view, so one
-# pass is a full backfill and re-running is cheap.
-COLLECT_PIPELINE := events-collect matches-collect match-details-collect \
-	match-commentary-collect player-details-collect ittf-players-seed
+# Every collector, in dependency order: calendars first, then sponsors and
+# match entries, then match details & commentary in parallel (both read
+# match_entries_unpacked), and players last (reads match_details_players_unpacked).
+COLLECT_PRE := events-collect event-sponsors-collect matches-collect
+COLLECT_PARALLEL := match-details-collect match-commentary-collect
+COLLECT_POST := player-details-collect ittf-players-seed
 
 # Abort a recipe whose required variable is empty, instead of running it with a
 # blank argument. The value comes from .env or the command line.
@@ -39,7 +41,7 @@ endef
 # Collectors share one pending queue and one API; never run them side by side.
 .NOTPARALLEL:
 
-.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-collect events-unpack events-unpack-preview matches-collect matches-unpack matches-unpack-preview match-details-collect match-commentary-collect event-sponsors-collect event-sponsors-unpack event-sponsors-unpack-preview player-details-collect collect-all ittf-players-seed update-summary test test-integration dbt-debug lint format typecheck check hooks-install hooks-run
+.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-collect events-unpack events-unpack-preview matches-collect matches-unpack matches-unpack-preview match-details-collect match-commentary-collect event-sponsors-collect player-details-collect collect-all ittf-players-seed update-summary test test-integration dbt-debug dbt-run dbt-test dbt-clean lint format typecheck check hooks-install hooks-run
 
 help: ## Show available commands
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -118,19 +120,39 @@ match-commentary-collect: ## Collect match commentary for pending matches into i
 event-sponsors-collect: ## Collect sponsor details for pending events into ingest.event_sponsors_raw
 	uv run tt-event-sponsors-collect $(strip $(ARGS_events) $(ARGS_limit))
 
-event-sponsors-unpack: ## Unpack landed sponsor payloads into ingest.event_sponsors_unpacked
-	uv run tt-event-sponsors-unpack $(ARGS_events)
-
-event-sponsors-unpack-preview: ## Run the sponsor unpack with EVENT_IDS, then roll it back
-	$(call require,EVENT_IDS)
-	uv run tt-event-sponsors-unpack --event-ids $(EVENT_IDS) --dry-run
-
 player-details-collect: ## Collect player details for pending players into ingest.player_details_raw
 	uv run tt-player-details-collect $(strip $(ARGS_players) $(ARGS_limit))
 
-collect-all: ## Run every collector once (unpack included); report failures at the end
+collect-all: ## Run every collector (details + commentary in parallel); report failures at the end
 	@failed=""; \
-	for step in $(COLLECT_PIPELINE); do \
+	for step in $(COLLECT_PRE); do \
+		printf '\n==> %s\n' "$$step"; \
+		if $(MAKE) --no-print-directory "$$step"; then \
+			printf '    ok\n'; \
+		else \
+			printf '    failed: %s\n' "$$step" >&2; \
+			failed="$$failed $$step"; \
+		fi; \
+	done; \
+	printf '\n==> parallel: %s\n' "$(COLLECT_PARALLEL)"; \
+	pids=""; \
+	names=""; \
+	for step in $(COLLECT_PARALLEL); do \
+		$(MAKE) --no-print-directory "$$step" & \
+		pids="$$pids $$!"; \
+		names="$$names $$step"; \
+	done; \
+	set -- $$names; \
+	for pid in $$pids; do \
+		step="$$1"; shift; \
+		if wait "$$pid"; then \
+			printf '    ok: %s\n' "$$step"; \
+		else \
+			printf '    failed: %s\n' "$$step" >&2; \
+			failed="$$failed $$step"; \
+		fi; \
+	done; \
+	for step in $(COLLECT_POST); do \
 		printf '\n==> %s\n' "$$step"; \
 		if $(MAKE) --no-print-directory "$$step"; then \
 			printf '    ok\n'; \
@@ -159,6 +181,15 @@ test-integration: ## Run only integration tests
 
 dbt-debug: ## Verify dbt can reach the warehouse
 	uv run dbt debug --project-dir dbt --profiles-dir dbt
+
+dbt-run: ## Build dbt models in the analytics schema (optional: SELECT=model)
+	uv run dbt run --project-dir dbt --profiles-dir dbt $(ARGS_select)
+
+dbt-test: ## Run dbt data tests against the analytics schema (optional: SELECT=model)
+	uv run dbt test --project-dir dbt --profiles-dir dbt $(ARGS_select)
+
+dbt-clean: ## Remove dbt compiled artifacts and logs (dbt/target, dbt/logs)
+	uv run dbt clean --project-dir dbt --profiles-dir dbt
 
 lint: ## Lint with ruff
 	uv run ruff check .
