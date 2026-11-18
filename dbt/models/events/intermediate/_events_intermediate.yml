@@ -1,0 +1,30 @@
+version: 2
+
+models:
+  - name: int_event_equipment_sponsors
+    description: >
+      Event-level table and ball sponsors (1 row per event_id). Prioritizes the
+      user-maintained event_sponsors_manual seed and falls back to normalized
+      sponsor_link domain matching against stg_event_sponsors.
+    columns:
+      - name: event_id
+        description: WTT event identifier.
+        data_tests:
+          - not_null
+          - unique
+      - name: ball_sponsor
+        description: Canonical official ball brand (nullable).
+      - name: table_sponsor
+        description: Canonical official table brand (nullable).
+      - name: ball_sponsor_source
+        description: Provenance of ball_sponsor (manual_csv, sponsor_link, or NULL).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["manual_csv", "sponsor_link"]
+      - name: table_sponsor_source
+        description: Provenance of table_sponsor (manual_csv, sponsor_link, or NULL).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["manual_csv", "sponsor_link"]

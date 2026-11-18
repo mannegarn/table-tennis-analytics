@@ -25,3 +25,16 @@ clean-targets: ["target", "dbt_packages", "logs"]
 models:
   tt_stats:
     +materialized: table
+
+seeds:
+  tt_stats:
+    event_sponsors_manual:
+      +column_types:
+        event_id: integer
+        ball_sponsor: varchar
+        table_sponsor: varchar
+        event_name: varchar
+    sponsor_domains:
+      +column_types:
+        domain: varchar
+        sponsor_name: varchar
