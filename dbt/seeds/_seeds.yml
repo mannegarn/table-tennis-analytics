@@ -22,3 +22,35 @@ seeds:
           - accepted_values:
               arguments:
                 values: ["scoring", "service", "match_flow", "discipline", "other"]
+
+  - name: sponsor_domains
+    description: >
+      Normalized bare-domain lookup mapping equipment sponsor website domains
+      to canonical brand names (derived from data/sponsor_links_map.json).
+    columns:
+      - name: domain
+        description: Lowercase bare domain without protocol, www., path, or query string.
+        data_tests:
+          - not_null
+          - unique
+      - name: sponsor_name
+        description: Canonical equipment brand name (e.g. DHS, Butterfly, Double Fish).
+        data_tests:
+          - not_null
+
+  - name: event_sponsors_manual
+    description: >
+      User-maintained, YouTube-verified table and ball sponsor overrides per event.
+      Takes precedence over automated sponsor_link extraction.
+    columns:
+      - name: event_id
+        description: WTT event identifier.
+        data_tests:
+          - not_null
+          - unique
+      - name: ball_sponsor
+        description: Verified official ball brand for the event (nullable).
+      - name: table_sponsor
+        description: Verified official table brand for the event (nullable).
+      - name: event_name
+        description: Optional human-readable event name for reference while editing the CSV.

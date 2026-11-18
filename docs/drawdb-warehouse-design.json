@@ -1,0 +1,2355 @@
+{
+  "title": "Table Tennis Analytics Warehouse",
+  "database": "postgresql",
+  "tables": [
+    {
+      "id": "tbl_dim_events",
+      "name": "marts.dim_events",
+      "areaId": "area_marts",
+      "x": 80,
+      "y": 100,
+      "width": 270,
+      "color": "#175e7a",
+      "comment": "Unified tournament dimension (1 row per event_sk)",
+      "fields": [
+        {
+          "id": "de_event_sk",
+          "name": "event_sk",
+          "type": "BIGINT",
+          "default": "",
+          "check": "",
+          "primary": true,
+          "unique": true,
+          "notNull": true,
+          "increment": false,
+          "comment": "Deterministic 60-bit surrogate key"
+        },
+        {
+          "id": "de_source_system",
+          "name": "source_system",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "wtt, ttbl, pro_a, tleague, superliga, mltt"
+        },
+        {
+          "id": "de_source_event_id",
+          "name": "source_event_id",
+          "type": "BIGINT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "Upstream event or season ID"
+        },
+        {
+          "id": "de_source_year",
+          "name": "source_year",
+          "type": "SMALLINT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "de_event_name",
+          "name": "event_name",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "Whitespace-normalized"
+        },
+        {
+          "id": "de_event_type_id",
+          "name": "event_type_id",
+          "type": "INTEGER",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "de_event_type",
+          "name": "event_type",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "de_event_tier_name",
+          "name": "event_tier_name",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "de_start_date",
+          "name": "start_date",
+          "type": "DATE",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "de_end_date",
+          "name": "end_date",
+          "type": "DATE",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "de_duration_days",
+          "name": "duration_days",
+          "type": "INTEGER",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": "NULL when start_date > end_date"
+        },
+        {
+          "id": "de_country",
+          "name": "country",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "de_city",
+          "name": "city",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "de_continent_code",
+          "name": "continent_code",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "de_subcontinent",
+          "name": "subcontinent",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "de_ball_sponsor",
+          "name": "ball_sponsor",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "de_table_sponsor",
+          "name": "table_sponsor",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "de_has_matches",
+          "name": "has_matches",
+          "type": "BOOLEAN",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "de_has_match_details",
+          "name": "has_match_details",
+          "type": "BOOLEAN",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "de_has_sponsors",
+          "name": "has_sponsors",
+          "type": "BOOLEAN",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        }
+      ],
+      "indices": [
+        {
+          "name": "idx_dim_events_source_natural",
+          "unique": true,
+          "fields": [
+            "source_system",
+            "source_event_id"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tbl_fct_matches",
+      "name": "marts.fct_singles",
+      "areaId": "area_marts",
+      "x": 460,
+      "y": 100,
+      "width": 300,
+      "color": "#1d4ed8",
+      "comment": "Unified singles fact (grain: 1 row per singles match entry; doubles/team excluded; LIVE excluded; default results kept and flagged)",
+      "fields": [
+        {
+          "id": "fm_match_sk",
+          "name": "match_sk",
+          "type": "BIGINT",
+          "default": "",
+          "check": "",
+          "primary": true,
+          "unique": true,
+          "notNull": true,
+          "increment": false,
+          "comment": "Deterministic 60-bit surrogate key"
+        },
+        {
+          "id": "fm_event_sk",
+          "name": "event_sk",
+          "type": "BIGINT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "FK -> dim_events.event_sk"
+        },
+        {
+          "id": "fm_source_system",
+          "name": "source_system",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "fm_source_event_id",
+          "name": "source_event_id",
+          "type": "BIGINT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "fm_document_code",
+          "name": "document_code",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "WTT document_code or league source_match_id"
+        },
+        {
+          "id": "fm_sub_event_type",
+          "name": "sub_event_type",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": "e.g. Men Singles, Women Doubles"
+        },
+        {
+          "id": "fm_sub_event_name",
+          "name": "sub_event_name",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "fm_discipline",
+          "name": "discipline",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "singles only in this table (doubles -> fct_doubles later)"
+        },
+        {
+          "id": "fm_match_format",
+          "name": "match_format",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "best_of_5, best_of_7, fixed_3_sets (MLTT)"
+        },
+        {
+          "id": "fm_scoring_rule",
+          "name": "scoring_rule",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "games_won, points_won"
+        },
+        {
+          "id": "fm_best_of",
+          "name": "best_of",
+          "type": "INTEGER",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": "From matchConfig.bestOfXGames (NOT bestOf)"
+        },
+        {
+          "id": "fm_start_date_utc",
+          "name": "start_date_utc",
+          "type": "TIMESTAMPTZ",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "fm_start_date_local",
+          "name": "start_date_local",
+          "type": "TIMESTAMP",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "fm_duration",
+          "name": "duration",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "fm_venue_name",
+          "name": "venue_name",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "fm_table_number",
+          "name": "table_number",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "fm_result_status",
+          "name": "result_status",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": "OFFICIAL only (LIVE rows excluded)"
+        },
+        {
+          "id": "fm_c1_p1",
+          "name": "p1_player_sk",
+          "type": "BIGINT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "Singles player 1 FK -> dim_players.player_sk (looked up via identity map)"
+        },
+        {
+          "id": "fm_c2_p1",
+          "name": "p2_player_sk",
+          "type": "BIGINT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "Singles player 2 FK -> dim_players.player_sk (looked up via identity map)"
+        },
+        {
+          "id": "fm_games_p1",
+          "name": "games_won_p1",
+          "type": "SMALLINT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": "NULL for default results (upstream scores fabricated)"
+        },
+        {
+          "id": "fm_games_p2",
+          "name": "games_won_p2",
+          "type": "SMALLINT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": "NULL for default results (upstream scores fabricated)"
+        },
+        {
+          "id": "fm_pts_p1",
+          "name": "points_won_p1",
+          "type": "SMALLINT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": "NULL for default results"
+        },
+        {
+          "id": "fm_pts_p2",
+          "name": "points_won_p2",
+          "type": "SMALLINT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": "NULL for default results"
+        },
+        {
+          "id": "fm_winner_side",
+          "name": "winner_side",
+          "type": "SMALLINT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": "1, 2, or NULL (draw or no result; see result_type/has_result)"
+        },
+        {
+          "id": "fm_p1_src",
+          "name": "p1_source_player_sk",
+          "type": "BIGINT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "Stable hash of source_system|source_player_id; never changes after identity resolution"
+        },
+        {
+          "id": "fm_p2_src",
+          "name": "p2_source_player_sk",
+          "type": "BIGINT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "Stable hash of source_system|source_player_id"
+        },
+        {
+          "id": "fm_age_cat",
+          "name": "age_category",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "senior, U11, U13, U15, U17, U19, U21 (parsed from document_code)"
+        },
+        {
+          "id": "fm_is_youth",
+          "name": "is_youth",
+          "type": "BOOLEAN",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "fm_result_type",
+          "name": "result_type",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "played, walkover, injury, retired, disqualified, no_score"
+        },
+        {
+          "id": "fm_is_default",
+          "name": "is_default_result",
+          "type": "BOOLEAN",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "WO / INJ / RET / DSQ (kept in table for for/against analysis)"
+        },
+        {
+          "id": "fm_def_side",
+          "name": "defaulting_side",
+          "type": "SMALLINT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": "Side that lost by default (1 or 2); NULL when not a default. Assumes loser is the defaulting player: verify"
+        },
+        {
+          "id": "fm_def_player",
+          "name": "defaulting_player_sk",
+          "type": "BIGINT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": "FK -> dim_players.player_sk of the defaulting player"
+        },
+        {
+          "id": "fm_rating_ok",
+          "name": "is_rating_eligible",
+          "type": "BOOLEAN",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "False for default results and no_score. Flag, not a filter"
+        },
+        {
+          "id": "fm_has_result",
+          "name": "has_result",
+          "type": "BOOLEAN",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "Only ~11% of entries have a score payload"
+        },
+        {
+          "id": "fm_score_raw",
+          "name": "overall_score_raw",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": "Original score text incl. suffix, e.g. \"3-0 WO\""
+        },
+        {
+          "id": "fm_has_commentary",
+          "name": "has_commentary",
+          "type": "BOOLEAN",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "fm_commentary_count",
+          "name": "commentary_count",
+          "type": "INTEGER",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        }
+      ],
+      "indices": [
+        {
+          "name": "idx_fct_singles_event_sk",
+          "unique": false,
+          "fields": [
+            "event_sk"
+          ]
+        },
+        {
+          "name": "idx_fct_singles_source_natural",
+          "unique": true,
+          "fields": [
+            "source_system",
+            "source_event_id",
+            "document_code"
+          ]
+        },
+        {
+          "name": "idx_fct_singles_players",
+          "unique": false,
+          "fields": [
+            "p1_player_sk",
+            "p2_player_sk"
+          ]
+        },
+        {
+          "name": "idx_fct_singles_defaulting_player",
+          "unique": false,
+          "fields": [
+            "defaulting_player_sk"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tbl_dim_players",
+      "name": "marts.dim_players",
+      "areaId": "area_marts",
+      "x": 900,
+      "y": 100,
+      "width": 270,
+      "color": "#175e7a",
+      "comment": "Master player dimension (WTT + ITTF + league profiles)",
+      "fields": [
+        {
+          "id": "dp_player_sk",
+          "name": "player_sk",
+          "type": "BIGINT",
+          "default": "",
+          "check": "",
+          "primary": true,
+          "unique": true,
+          "notNull": true,
+          "increment": false,
+          "comment": "Master player surrogate key"
+        },
+        {
+          "id": "dp_ittf_id",
+          "name": "ittf_id",
+          "type": "BIGINT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": "Nullable for league-only players"
+        },
+        {
+          "id": "dp_player_name",
+          "name": "player_name",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "dp_given_name",
+          "name": "player_given_name",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "dp_family_name",
+          "name": "player_family_name",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "dp_country_code",
+          "name": "country_code",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "dp_country_name",
+          "name": "country_name",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "dp_org_code",
+          "name": "organization_code",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "dp_gender",
+          "name": "gender",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": "M or F"
+        },
+        {
+          "id": "dp_dob",
+          "name": "dob",
+          "type": "DATE",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "dp_hand",
+          "name": "hand",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": "Enriched: WTT -> ITTF -> Pro A"
+        },
+        {
+          "id": "dp_grip",
+          "name": "grip",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": "Enriched: WTT -> ITTF"
+        },
+        {
+          "id": "dp_style",
+          "name": "style",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": "Enriched: ITTF -> Pro A"
+        },
+        {
+          "id": "dp_head_shot",
+          "name": "head_shot",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        }
+      ],
+      "indices": [
+        {
+          "name": "idx_dim_players_ittf_id",
+          "unique": false,
+          "fields": [
+            "ittf_id"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tbl_fct_match_games",
+      "name": "marts.fct_match_games",
+      "areaId": "area_marts",
+      "x": 80,
+      "y": 920,
+      "width": 270,
+      "color": "#1d4ed8",
+      "comment": "Per-game/set scores (1 row per match_sk, game_number)",
+      "fields": [
+        {
+          "id": "fmg_match_sk",
+          "name": "match_sk",
+          "type": "BIGINT",
+          "default": "",
+          "check": "",
+          "primary": true,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "FK -> fct_matches.match_sk"
+        },
+        {
+          "id": "fmg_game_number",
+          "name": "game_number",
+          "type": "SMALLINT",
+          "default": "",
+          "check": "",
+          "primary": true,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "1..7 (or 1..3 for MLTT)"
+        },
+        {
+          "id": "fmg_p1_points",
+          "name": "p1_points",
+          "type": "SMALLINT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "fmg_p2_points",
+          "name": "p2_points",
+          "type": "SMALLINT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "fmg_winner_side",
+          "name": "winner_side",
+          "type": "SMALLINT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": "1 or 2"
+        }
+      ],
+      "indices": []
+    },
+    {
+      "id": "tbl_fct_match_commentary",
+      "name": "marts.fct_match_commentary",
+      "areaId": "area_marts",
+      "x": 900,
+      "y": 700,
+      "width": 290,
+      "color": "#1d4ed8",
+      "comment": "Point-by-point match actions (1 row per match_sk, sequence_number)",
+      "fields": [
+        {
+          "id": "fmc_match_sk",
+          "name": "match_sk",
+          "type": "BIGINT",
+          "default": "",
+          "check": "",
+          "primary": true,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "FK -> fct_matches.match_sk"
+        },
+        {
+          "id": "fmc_seq",
+          "name": "sequence_number",
+          "type": "INTEGER",
+          "default": "",
+          "check": "",
+          "primary": true,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "fmc_event_id",
+          "name": "event_id",
+          "type": "BIGINT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "fmc_doc_code",
+          "name": "document_code",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "fmc_comm_id",
+          "name": "commentary_id",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "fmc_action_type",
+          "name": "action_type",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "FK -> action_types.action_type"
+        },
+        {
+          "id": "fmc_action_name",
+          "name": "action_name",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "fmc_action_cat",
+          "name": "action_category",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "fmc_comm_text",
+          "name": "commentary_text",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "fmc_has_text",
+          "name": "has_commentary_text",
+          "type": "BOOLEAN",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "fmc_utc_time",
+          "name": "utc_time",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        }
+      ],
+      "indices": [
+        {
+          "name": "idx_fct_commentary_match_key",
+          "unique": false,
+          "fields": [
+            "event_id",
+            "document_code"
+          ]
+        },
+        {
+          "name": "idx_fct_commentary_match_action",
+          "unique": false,
+          "fields": [
+            "event_id",
+            "document_code",
+            "action_type"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tbl_int_sponsors",
+      "name": "int_event_equipment_sponsors",
+      "areaId": "area_intermediate",
+      "x": 80,
+      "y": 1700,
+      "width": 290,
+      "color": "#6b46c1",
+      "comment": "Event-level ball & table sponsor enrichment (manual CSV -> link domain)",
+      "fields": [
+        {
+          "id": "ies_event_id",
+          "name": "event_id",
+          "type": "BIGINT",
+          "default": "",
+          "check": "",
+          "primary": true,
+          "unique": true,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "ies_ball",
+          "name": "ball_sponsor",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "ies_table",
+          "name": "table_sponsor",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "ies_ball_src",
+          "name": "ball_sponsor_source",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": "manual_csv or sponsor_link"
+        },
+        {
+          "id": "ies_table_src",
+          "name": "table_sponsor_source",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": "manual_csv or sponsor_link"
+        }
+      ],
+      "indices": []
+    },
+    {
+      "id": "tbl_int_player_map",
+      "name": "int_player_identity_map",
+      "areaId": "area_intermediate",
+      "x": 470,
+      "y": 1700,
+      "width": 310,
+      "color": "#6b46c1",
+      "comment": "Cross-source player identity crosswalk to master player_sk",
+      "fields": [
+        {
+          "id": "ipm_sys",
+          "name": "source_system",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": true,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "ipm_pid",
+          "name": "source_player_id",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": true,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "ipm_psk",
+          "name": "player_sk",
+          "type": "BIGINT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "FK -> dim_players.player_sk"
+        },
+        {
+          "id": "ipm_ittf",
+          "name": "ittf_id",
+          "type": "BIGINT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "ipm_name",
+          "name": "source_player_name",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "ipm_method",
+          "name": "match_method",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "ittf_id, exact_name_country_dob, manual_override, source_only"
+        },
+        {
+          "id": "ipm_override",
+          "name": "override_id",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        }
+      ],
+      "indices": []
+    },
+    {
+      "id": "tbl_seed_action_types",
+      "name": "action_types",
+      "areaId": "area_seeds",
+      "x": 1000,
+      "y": 1700,
+      "width": 260,
+      "color": "#2f855a",
+      "comment": "Seed CSV: commentary action code labels",
+      "fields": [
+        {
+          "id": "sat_type",
+          "name": "action_type",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": true,
+          "unique": true,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "sat_name",
+          "name": "action_name",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "sat_cat",
+          "name": "action_category",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        }
+      ],
+      "indices": []
+    },
+    {
+      "id": "tbl_seed_sponsor_domains",
+      "name": "sponsor_domains",
+      "areaId": "area_seeds",
+      "x": 1320,
+      "y": 1700,
+      "width": 260,
+      "color": "#2f855a",
+      "comment": "Seed CSV: normalized brand website domain mapping",
+      "fields": [
+        {
+          "id": "ssd_dom",
+          "name": "domain",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": true,
+          "unique": true,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "ssd_name",
+          "name": "sponsor_name",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        }
+      ],
+      "indices": []
+    },
+    {
+      "id": "tbl_seed_sponsors_manual",
+      "name": "event_sponsors_manual",
+      "areaId": "area_seeds",
+      "x": 1000,
+      "y": 1910,
+      "width": 260,
+      "color": "#2f855a",
+      "comment": "Seed CSV: YouTube-verified table and ball sponsors",
+      "fields": [
+        {
+          "id": "ssm_eid",
+          "name": "event_id",
+          "type": "INTEGER",
+          "default": "",
+          "check": "",
+          "primary": true,
+          "unique": true,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "ssm_ball",
+          "name": "ball_sponsor",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "ssm_table",
+          "name": "table_sponsor",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "ssm_ename",
+          "name": "event_name",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        }
+      ],
+      "indices": []
+    },
+    {
+      "id": "tbl_seed_player_overrides",
+      "name": "player_identity_overrides",
+      "areaId": "area_seeds",
+      "x": 1320,
+      "y": 1880,
+      "width": 280,
+      "color": "#2f855a",
+      "comment": "Future Seed CSV: manual cross-source player identity overrides",
+      "fields": [
+        {
+          "id": "spo_sys",
+          "name": "source_system",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": true,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "spo_pid",
+          "name": "source_player_id",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": true,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "spo_ittf",
+          "name": "target_ittf_id",
+          "type": "BIGINT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "spo_psk",
+          "name": "target_player_sk",
+          "type": "BIGINT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "spo_notes",
+          "name": "notes",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        }
+      ],
+      "indices": []
+    },
+    {
+      "id": "tbl_raw_events",
+      "name": "ingest_wtt.events_by_year_raw",
+      "areaId": "area_ingest",
+      "x": 1420,
+      "y": 100,
+      "width": 270,
+      "color": "#b7791f",
+      "comment": "Raw WTT calendar JSONB payloads by year",
+      "fields": [
+        {
+          "id": "re_year",
+          "name": "year",
+          "type": "SMALLINT",
+          "default": "",
+          "check": "",
+          "primary": true,
+          "unique": true,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "re_payload",
+          "name": "payload",
+          "type": "JSONB",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "re_fetched",
+          "name": "fetched_at",
+          "type": "TIMESTAMPTZ",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        }
+      ],
+      "indices": []
+    },
+    {
+      "id": "tbl_raw_sponsors",
+      "name": "ingest_wtt.event_sponsors_raw",
+      "areaId": "area_ingest",
+      "x": 1720,
+      "y": 100,
+      "width": 270,
+      "color": "#b7791f",
+      "comment": "Raw WTT event sponsor JSONB payloads",
+      "fields": [
+        {
+          "id": "rs_eid",
+          "name": "event_id",
+          "type": "BIGINT",
+          "default": "",
+          "check": "",
+          "primary": true,
+          "unique": true,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "rs_payload",
+          "name": "payload",
+          "type": "JSONB",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "rs_fetched",
+          "name": "fetched_at",
+          "type": "TIMESTAMPTZ",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        }
+      ],
+      "indices": []
+    },
+    {
+      "id": "tbl_raw_entries",
+      "name": "ingest_wtt.match_entries_payloads_raw",
+      "areaId": "area_ingest",
+      "x": 1420,
+      "y": 310,
+      "width": 270,
+      "color": "#b7791f",
+      "comment": "Raw WTT match entry JSONB arrays per event",
+      "fields": [
+        {
+          "id": "rme_eid",
+          "name": "event_id",
+          "type": "BIGINT",
+          "default": "",
+          "check": "",
+          "primary": true,
+          "unique": true,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "rme_payload",
+          "name": "payload",
+          "type": "JSONB",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "rme_fetched",
+          "name": "fetched_at",
+          "type": "TIMESTAMPTZ",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        }
+      ],
+      "indices": []
+    },
+    {
+      "id": "tbl_raw_details",
+      "name": "ingest_wtt.match_details_raw",
+      "areaId": "area_ingest",
+      "x": 1720,
+      "y": 310,
+      "width": 270,
+      "color": "#b7791f",
+      "comment": "Raw WTT match details JSONB objects per match",
+      "fields": [
+        {
+          "id": "rmd_eid",
+          "name": "event_id",
+          "type": "BIGINT",
+          "default": "",
+          "check": "",
+          "primary": true,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "rmd_doc",
+          "name": "document_code",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": true,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "rmd_payload",
+          "name": "payload",
+          "type": "JSONB",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "rmd_fetched",
+          "name": "fetched_at",
+          "type": "TIMESTAMPTZ",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        }
+      ],
+      "indices": []
+    },
+    {
+      "id": "tbl_raw_commentary",
+      "name": "ingest_wtt.match_commentary_raw",
+      "areaId": "area_ingest",
+      "x": 1420,
+      "y": 550,
+      "width": 270,
+      "color": "#b7791f",
+      "comment": "Raw WTT point-by-point commentary JSONB payloads",
+      "fields": [
+        {
+          "id": "rmc_eid",
+          "name": "event_id",
+          "type": "BIGINT",
+          "default": "",
+          "check": "",
+          "primary": true,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "rmc_doc",
+          "name": "document_code",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": true,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "rmc_payload",
+          "name": "payload",
+          "type": "JSONB",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "rmc_fetched",
+          "name": "fetched_at",
+          "type": "TIMESTAMPTZ",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        }
+      ],
+      "indices": []
+    },
+    {
+      "id": "tbl_raw_wtt_players",
+      "name": "ingest_wtt.player_details_raw",
+      "areaId": "area_ingest",
+      "x": 1720,
+      "y": 550,
+      "width": 270,
+      "color": "#b7791f",
+      "comment": "Raw WTT player profile JSONB payloads",
+      "fields": [
+        {
+          "id": "rwp_pid",
+          "name": "player_id",
+          "type": "BIGINT",
+          "default": "",
+          "check": "",
+          "primary": true,
+          "unique": true,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "rwp_payload",
+          "name": "payload",
+          "type": "JSONB",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "rwp_fetched",
+          "name": "fetched_at",
+          "type": "TIMESTAMPTZ",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        }
+      ],
+      "indices": []
+    },
+    {
+      "id": "tbl_raw_ittf_players",
+      "name": "ingest_ittf.ittf_player_profiles",
+      "areaId": "area_ingest",
+      "x": 1420,
+      "y": 790,
+      "width": 270,
+      "color": "#b7791f",
+      "comment": "ITTF player hand/grip/style (feeds staging_ittf -> marts_ittf view)",
+      "fields": [
+        {
+          "id": "rip_pid",
+          "name": "player_id",
+          "type": "BIGINT",
+          "default": "",
+          "check": "",
+          "primary": true,
+          "unique": true,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "rip_hand",
+          "name": "hand",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "rip_grip",
+          "name": "grip",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "rip_style",
+          "name": "style",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        }
+      ],
+      "indices": []
+    },
+    {
+      "id": "tbl_raw_future_league",
+      "name": "ingest_<league>.matches_raw",
+      "areaId": "area_ingest",
+      "x": 1720,
+      "y": 790,
+      "width": 270,
+      "color": "#9c4221",
+      "comment": "Template for ingest_pro_a, ingest_ttbl, ingest_tleague, ingest_superliga, ingest_mltt",
+      "fields": [
+        {
+          "id": "rfl_sid",
+          "name": "season_id",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": true,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "rfl_mid",
+          "name": "source_match_id",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": true,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "rfl_payload",
+          "name": "payload",
+          "type": "JSONB",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "rfl_fetched",
+          "name": "fetched_at",
+          "type": "TIMESTAMPTZ",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        }
+      ],
+      "indices": []
+    },
+    {
+      "id": "tbl_dim_matches",
+      "name": "marts.dim_matches",
+      "areaId": "area_marts",
+      "x": 80,
+      "y": 1200,
+      "width": 300,
+      "color": "#1d4ed8",
+      "comment": "All disciplines (singles, doubles, mixed, team); 1 row per match_sk; FK target for commentary",
+      "indices": [
+        {
+          "name": "idx_dim_matches_source_natural",
+          "unique": true,
+          "fields": [
+            "source_system",
+            "source_event_id",
+            "document_code"
+          ]
+        },
+        {
+          "name": "idx_dim_matches_event_sk",
+          "unique": false,
+          "fields": [
+            "event_sk"
+          ]
+        }
+      ],
+      "fields": [
+        {
+          "id": "dmt_match_sk",
+          "name": "match_sk",
+          "type": "BIGINT",
+          "default": "",
+          "check": "",
+          "primary": true,
+          "unique": true,
+          "notNull": true,
+          "increment": false,
+          "comment": "Deterministic 60-bit surrogate key"
+        },
+        {
+          "id": "dmt_event_sk",
+          "name": "event_sk",
+          "type": "BIGINT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "FK -> dim_events.event_sk"
+        },
+        {
+          "id": "dmt_source_system",
+          "name": "source_system",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "dmt_source_event_id",
+          "name": "source_event_id",
+          "type": "BIGINT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "dmt_document_code",
+          "name": "document_code",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "WTT document_code or league source_match_id"
+        },
+        {
+          "id": "dmt_discipline",
+          "name": "discipline",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "singles, doubles, mixed_doubles, team"
+        },
+        {
+          "id": "dmt_age",
+          "name": "age_category",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "senior, U11..U21"
+        },
+        {
+          "id": "dmt_live",
+          "name": "is_live",
+          "type": "BOOLEAN",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "True for LIVE rows: excluded from fct_singles / fct_match_games"
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "id": "rel_matches_events",
+      "name": "fk_fct_matches_event_sk",
+      "startTableId": "tbl_fct_matches",
+      "startFieldId": "fm_event_sk",
+      "endTableId": "tbl_dim_events",
+      "endFieldId": "de_event_sk",
+      "cardinality": "many_to_one",
+      "updateConstraint": "No action",
+      "deleteConstraint": "No action"
+    },
+    {
+      "id": "rel_matches_p1",
+      "name": "fk_fct_matches_c1_p1",
+      "startTableId": "tbl_fct_matches",
+      "startFieldId": "fm_c1_p1",
+      "endTableId": "tbl_dim_players",
+      "endFieldId": "dp_player_sk",
+      "cardinality": "many_to_one",
+      "updateConstraint": "No action",
+      "deleteConstraint": "No action"
+    },
+    {
+      "id": "rel_matches_p2",
+      "name": "fk_fct_matches_c2_p1",
+      "startTableId": "tbl_fct_matches",
+      "startFieldId": "fm_c2_p1",
+      "endTableId": "tbl_dim_players",
+      "endFieldId": "dp_player_sk",
+      "cardinality": "many_to_one",
+      "updateConstraint": "No action",
+      "deleteConstraint": "No action"
+    },
+    {
+      "id": "rel_games_matches",
+      "name": "fk_fct_match_games_match_sk",
+      "startTableId": "tbl_fct_match_games",
+      "startFieldId": "fmg_match_sk",
+      "endTableId": "tbl_fct_matches",
+      "endFieldId": "fm_match_sk",
+      "cardinality": "many_to_one",
+      "updateConstraint": "No action",
+      "deleteConstraint": "No action"
+    },
+    {
+      "id": "rel_commentary_matches",
+      "name": "fk_fct_commentary_match_sk",
+      "startTableId": "tbl_fct_match_commentary",
+      "startFieldId": "fmc_match_sk",
+      "endTableId": "tbl_dim_matches",
+      "endFieldId": "dmt_match_sk",
+      "cardinality": "many_to_one",
+      "updateConstraint": "No action",
+      "deleteConstraint": "No action"
+    },
+    {
+      "id": "rel_commentary_actions",
+      "name": "fk_fct_commentary_action_type",
+      "startTableId": "tbl_fct_match_commentary",
+      "startFieldId": "fmc_action_type",
+      "endTableId": "tbl_seed_action_types",
+      "endFieldId": "sat_type",
+      "cardinality": "many_to_one",
+      "updateConstraint": "No action",
+      "deleteConstraint": "No action"
+    },
+    {
+      "id": "rel_events_sponsors",
+      "name": "fk_dim_events_sponsors",
+      "startTableId": "tbl_dim_events",
+      "startFieldId": "de_source_event_id",
+      "endTableId": "tbl_int_sponsors",
+      "endFieldId": "ies_event_id",
+      "cardinality": "one_to_one",
+      "updateConstraint": "No action",
+      "deleteConstraint": "No action"
+    },
+    {
+      "id": "rel_sponsors_manual",
+      "name": "fk_int_sponsors_manual",
+      "startTableId": "tbl_int_sponsors",
+      "startFieldId": "ies_event_id",
+      "endTableId": "tbl_seed_sponsors_manual",
+      "endFieldId": "ssm_eid",
+      "cardinality": "one_to_one",
+      "updateConstraint": "No action",
+      "deleteConstraint": "No action"
+    },
+    {
+      "id": "rel_player_map_dim",
+      "name": "fk_int_player_map_dim",
+      "startTableId": "tbl_int_player_map",
+      "startFieldId": "ipm_psk",
+      "endTableId": "tbl_dim_players",
+      "endFieldId": "dp_player_sk",
+      "cardinality": "many_to_one",
+      "updateConstraint": "No action",
+      "deleteConstraint": "No action"
+    },
+    {
+      "id": "rel_dim_matches_event_sk",
+      "name": "fk_dim_matches_event_sk",
+      "startTableId": "tbl_dim_matches",
+      "startFieldId": "dmt_event_sk",
+      "endTableId": "tbl_dim_events",
+      "endFieldId": "de_event_sk",
+      "cardinality": "many_to_one",
+      "updateConstraint": "No action",
+      "deleteConstraint": "No action"
+    },
+    {
+      "id": "rel_fct_singles_match_sk",
+      "name": "fk_fct_singles_match_sk",
+      "startTableId": "tbl_fct_matches",
+      "startFieldId": "fm_match_sk",
+      "endTableId": "tbl_dim_matches",
+      "endFieldId": "dmt_match_sk",
+      "cardinality": "one_to_one",
+      "updateConstraint": "No action",
+      "deleteConstraint": "No action"
+    },
+    {
+      "id": "rel_fct_singles_defaulting",
+      "name": "fk_fct_singles_defaulting",
+      "startTableId": "tbl_fct_matches",
+      "startFieldId": "fm_def_player",
+      "endTableId": "tbl_dim_players",
+      "endFieldId": "dp_player_sk",
+      "cardinality": "many_to_one",
+      "updateConstraint": "No action",
+      "deleteConstraint": "No action"
+    }
+  ],
+  "notes": [
+    {
+      "id": 1,
+      "x": 1700,
+      "y": 1640,
+      "width": 320,
+      "height": 150,
+      "title": "Surrogate Key Formula",
+      "content": "('x' || left(md5(source_system::text || '|' || natural_key::text), 15))::bit(60)::bigint\nImplemented as a macro casting every part to text. WTT player_id is hashed as 'ittf|'||id. Facts carry stable source_player_sk plus resolved player_sk.",
+      "color": "#fcf7ac"
+    },
+    {
+      "id": 2,
+      "x": 1700,
+      "y": 1810,
+      "width": 320,
+      "height": 160,
+      "title": "level_source Schema & Folder Pattern",
+      "content": "Both Postgres schemas and dbt folders use level_source: ingest_<src> -> staging_<src> (views) -> marts_<src> (marts_wtt, marts_ittf view, marts_pro_a) -> unified marts (UNION ALL).",
+      "color": "#fcf7ac"
+    },
+    {
+      "id": 3,
+      "x": 1700,
+      "y": 1990,
+      "width": 320,
+      "height": 170,
+      "title": "fct_singles scope & result types",
+      "content": "fct_singles is strictly 1v1: sub_event_type like '%Singles' AND no second player on either side (NOT NULL alone also passes doubles). Team ties and LIVE matches are excluded. Walkovers/injury/retirement/DSQ are KEPT, flagged via result_type, is_default_result, defaulting_side and is_rating_eligible; their game scores are fabricated upstream so games/points are NULL. MLTT uses match_format='fixed_3_sets', scoring_rule='points_won'.",
+      "color": "#fcf7ac"
+    },
+    {
+      "id": 4,
+      "x": 1700,
+      "y": 2190,
+      "width": 320,
+      "height": 200,
+      "title": "Match cleaning rules",
+      "content": "See docs/database-design.md section 10. Only ~11% of entries have scores. 82% of singles are youth (age_category parsed from document_code). LIVE excluded. comp_x_scores unreliable: use results_game_scores. Competitor 1 wins ~62% (side order not random).",
+      "color": "#fcf7ac"
+    }
+  ],
+  "subjectAreas": [
+    {
+      "id": "area_marts",
+      "name": "Analytics Marts (Unified Star Schema)",
+      "x": 40,
+      "y": 40,
+      "width": 1280,
+      "height": 1570,
+      "color": "#175e7a"
+    },
+    {
+      "id": "area_intermediate",
+      "name": "Intermediate (Identity & Enrichment)",
+      "x": 40,
+      "y": 1640,
+      "width": 860,
+      "height": 420,
+      "color": "#6b46c1"
+    },
+    {
+      "id": "area_seeds",
+      "name": "dbt Seeds (User-Editable CSVs)",
+      "x": 960,
+      "y": 1640,
+      "width": 680,
+      "height": 560,
+      "color": "#2f855a"
+    },
+    {
+      "id": "area_ingest",
+      "name": "Raw Ingest (Per-Source Schemas)",
+      "x": 1380,
+      "y": 40,
+      "width": 640,
+      "height": 1170,
+      "color": "#b7791f"
+    }
+  ],
+  "types": [],
+  "enums": [],
+  "views": []
+}

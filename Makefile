@@ -182,7 +182,8 @@ test-integration: ## Run only integration tests
 dbt-debug: ## Verify dbt can reach the warehouse
 	uv run dbt debug --project-dir dbt --profiles-dir dbt
 
-dbt-run: ## Build dbt models in the analytics schema (optional: SELECT=model)
+dbt-run: ## Seed CSVs and build dbt models in the analytics schema (optional: SELECT=model)
+	uv run dbt seed --project-dir dbt --profiles-dir dbt
 	uv run dbt run --project-dir dbt --profiles-dir dbt $(ARGS_select)
 
 dbt-test: ## Run dbt data tests against the analytics schema (optional: SELECT=model)
