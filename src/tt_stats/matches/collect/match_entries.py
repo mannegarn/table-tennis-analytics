@@ -2,8 +2,8 @@
 
 The endpoint returns the whole match list for one tournament, so the request
 grain is the event and the payload is stored as one row in
-``ingest.match_entries_payloads_raw``. Which events are asked for is derived in
-``ingest.match_entries_pending`` (ADR 0005), never stored.
+``ingest_wtt.match_entries_payloads_raw``. Which events are asked for is derived in
+``ingest_wtt.match_entries_pending`` (ADR 0005), never stored.
 
 Two shapes behave differently from the calendar collector:
 
@@ -12,8 +12,8 @@ Two shapes behave differently from the calendar collector:
 * **Each payload is small but there are thousands of them**, so batching and
   concurrency matter here in a way they never did for 102 calendar requests.
 
-Every attempt, successful or not, is recorded in ``ingest.ingest_runs`` with
-``source = wtt_getofficialresult`` and ``entity_key = event_id``.
+Every attempt, successful or not, is recorded in ``ingest_wtt.ingest_runs`` with
+``endpoint = wtt_getofficialresult`` and ``entity_key = event_id``.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ from tt_stats.core.clients.wtt_api import WttClient
 from tt_stats.core.config import get_settings
 from tt_stats.core.db import get_connection
 from tt_stats.core.ingest_runs import (
-    SOURCE_WTT_MATCH_ENTRIES,
+    ENDPOINT_WTT_MATCH_ENTRIES,
     RunRecord,
     record_run,
     safe_record_run,
@@ -67,7 +67,7 @@ REQUIRED_MATCH_KEYS = (
 #: events by most recent end date. ``--limit`` takes a prefix of this.
 _PENDING_EVENTS_SQL = """
 SELECT p.event_id, p.reason
-FROM ingest.match_entries_pending AS p
+FROM ingest_wtt.match_entries_pending AS p
 ORDER BY
     (p.reason = 'live') DESC,
     GREATEST(p.start_date, p.end_date) DESC,
@@ -293,11 +293,11 @@ def _record_run(
     *,
     started_at: datetime,
 ) -> None:
-    """Write the attempt to ``ingest.ingest_runs``, never breaking the collect."""
+    """Write the attempt to ``ingest_wtt.ingest_runs``, never breaking the collect."""
     safe_record_run(
         record,
         RunRecord(
-            source=SOURCE_WTT_MATCH_ENTRIES,
+            endpoint=ENDPOINT_WTT_MATCH_ENTRIES,
             entity_key=str(summary.event_id),
             status=status_for(summary.error),
             started_at=started_at,
@@ -353,7 +353,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Console entry point used by ``tt-matches-collect``."""
     parser = argparse.ArgumentParser(
         description=(
-            "Fetch WTT match lists into ingest.match_entries_payloads_raw. "
+            "Fetch WTT match lists into ingest_wtt.match_entries_payloads_raw. "
             "Without --event-ids, the pending view decides: live events, then "
             "events never fetched, then events whose snapshot predates their "
             "final day."
@@ -433,8 +433,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         event="match_entries",
         unit="event",
         found_label="matches",
-        raw_table="ingest.match_entries_payloads_raw",
-        unpacked_table="ingest.match_entries_unpacked",
+        raw_table="ingest_wtt.match_entries_payloads_raw",
+        unpacked_table="ingest_wtt.match_entries_unpacked",
     )
 
 

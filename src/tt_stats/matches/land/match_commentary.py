@@ -57,7 +57,7 @@ def land_match_commentary_chunk(
     with connection.transaction(), connection.cursor() as cursor:
         cursor.executemany(
             """
-            INSERT INTO ingest.match_commentary_raw (
+            INSERT INTO ingest_wtt.match_commentary_raw (
                 event_id,
                 document_code,
                 payload,

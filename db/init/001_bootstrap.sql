@@ -4,6 +4,10 @@
 -- Files here execute in filename order against the database named by
 -- POSTGRES_DB, so this file must stay environment-agnostic.
 --
+-- Source schemas (ingest_wtt, ingest_ittf, ...) are created by numbered
+-- migrations in db/migrations/, not here, so freshly created test databases
+-- need no bootstrap script.
+--
 
 DO $$
 BEGIN
@@ -17,7 +21,5 @@ $$;
 --  add text similiarty extension if needed for fuzzy matching / name reconciliation later?
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
--- Ensure the schemas exist before migrations run.
+-- Ensure the public schema exists before migrations run.
 CREATE SCHEMA IF NOT EXISTS public;
-CREATE SCHEMA IF NOT EXISTS ingest;
-CREATE SCHEMA IF NOT EXISTS analytics;

@@ -24,7 +24,7 @@ from tt_stats.core.clients.wtt_api import WttClient
 from tt_stats.core.config import get_settings
 from tt_stats.core.db import get_connection
 from tt_stats.core.ingest_runs import (
-    SOURCE_WTT_PLAYER_DETAILS,
+    ENDPOINT_WTT_PLAYER_DETAILS,
     RunRecord,
     record_runs,
     safe_record_runs,
@@ -40,7 +40,7 @@ logger = get_logger(__name__)
 
 _PENDING_PLAYERS_SQL = """
 SELECT p.player_id, p.reason
-FROM ingest.player_details_pending AS p
+FROM ingest_wtt.player_details_pending AS p
 ORDER BY p.player_id;
 """
 
@@ -243,7 +243,7 @@ def _to_run_record(
     started_at: datetime,
 ) -> RunRecord:
     return RunRecord(
-        source=SOURCE_WTT_PLAYER_DETAILS,
+        endpoint=ENDPOINT_WTT_PLAYER_DETAILS,
         entity_key=str(summary.player_id),
         status=status_for(summary.error),
         started_at=started_at,
@@ -296,7 +296,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Console entry point used by ``tt-player-details-collect``."""
     parser = argparse.ArgumentParser(
         description=(
-            "Fetch WTT player details into ingest.player_details_raw, "
+            "Fetch WTT player details into ingest_wtt.player_details_raw, "
             "committed by chunk."
         )
     )
@@ -376,7 +376,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         event="player_details",
         unit="player",
         found_label="profiles",
-        raw_table="ingest.player_details_raw",
+        raw_table="ingest_wtt.player_details_raw",
     )
 
 

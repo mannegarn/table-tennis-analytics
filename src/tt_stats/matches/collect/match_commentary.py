@@ -3,7 +3,7 @@
 The endpoint returns a double-encoded JSON string containing an array of
 commentary actions (or an empty array/string when a match has no commentary).
 Each chunk is fetched concurrently, unwrapped into a JSON array, and committed
-to ``ingest.match_commentary_raw`` and ``ingest.ingest_runs`` at the end of each
+to ``ingest_wtt.match_commentary_raw`` and ``ingest_wtt.ingest_runs`` at the end of each
 chunk.
 """
 
@@ -32,7 +32,7 @@ from tt_stats.core.clients.wtt_api import WttClient
 from tt_stats.core.config import get_settings
 from tt_stats.core.db import get_connection
 from tt_stats.core.ingest_runs import (
-    SOURCE_WTT_MATCH_COMMENTARY,
+    ENDPOINT_WTT_MATCH_COMMENTARY,
     RunRecord,
     record_runs,
     safe_record_runs,
@@ -50,7 +50,7 @@ MatchKey = tuple[int, str]
 
 _PENDING_MATCHES_SQL = """
 SELECT p.event_id, p.document_code, p.reason
-FROM ingest.match_commentary_pending AS p
+FROM ingest_wtt.match_commentary_pending AS p
 ORDER BY
     (p.reason = 'live') DESC,
     GREATEST(p.start_date, p.end_date) DESC,
@@ -60,7 +60,7 @@ ORDER BY
 
 _PENDING_MATCHES_BY_EVENT_SQL = """
 SELECT p.event_id, p.document_code, p.reason
-FROM ingest.match_commentary_pending AS p
+FROM ingest_wtt.match_commentary_pending AS p
 WHERE p.event_id = ANY(%(event_ids)s)
 ORDER BY
     (p.reason = 'live') DESC,
@@ -276,7 +276,7 @@ def _to_run_record(
     started_at: datetime,
 ) -> RunRecord:
     return RunRecord(
-        source=SOURCE_WTT_MATCH_COMMENTARY,
+        endpoint=ENDPOINT_WTT_MATCH_COMMENTARY,
         entity_key=f"{summary.event_id}:{summary.document_code}",
         status=status_for(summary.error),
         started_at=started_at,
@@ -330,7 +330,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Console entry point used by ``tt-match-commentary-collect``."""
     parser = argparse.ArgumentParser(
         description=(
-            "Fetch WTT match commentary into ingest.match_commentary_raw, "
+            "Fetch WTT match commentary into ingest_wtt.match_commentary_raw, "
             "committed by chunk."
         )
     )
@@ -409,7 +409,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         event="match_commentary",
         unit="match",
         found_label="lines",
-        raw_table="ingest.match_commentary_raw",
+        raw_table="ingest_wtt.match_commentary_raw",
     )
 
 

@@ -255,7 +255,7 @@ async def test_collect_records_a_run_per_event() -> None:
 
     assert len(recorded) == 1
     record = recorded[0]
-    assert record.source == "wtt_getofficialresult"
+    assert record.endpoint == "wtt_getofficialresult"
     assert record.entity_key == "3098"
     assert record.status == "succeeded"
     assert record.http_status == 200

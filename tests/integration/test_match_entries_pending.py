@@ -1,4 +1,4 @@
-"""Integration tests: ``ingest.match_entries_pending`` derives the work queue.
+"""Integration tests: ``ingest_wtt.match_entries_pending`` derives the work queue.
 
 Every case writes its own events and payloads, then reads the view. Runs against
 ``tt_stats_test``, truncated around each test by the autouse fixture.
@@ -38,7 +38,7 @@ def _add_event(
     today = _today()
     connection.execute(
         """
-        INSERT INTO ingest.events_unpacked (
+        INSERT INTO ingest_wtt.events_unpacked (
             source_year, event_id, event_name, start_date, end_date
         )
         VALUES (%s, %s, %s, %s, %s);
@@ -63,7 +63,7 @@ def _add_payload(
     """Insert a landed match list."""
     connection.execute(
         """
-        INSERT INTO ingest.match_entries_payloads_raw (
+        INSERT INTO ingest_wtt.match_entries_payloads_raw (
             event_id, payload, http_status, received_count,
             payload_sha256, fetched_at
         )
@@ -77,7 +77,7 @@ def _queue(connection: Connection[Any]) -> list[tuple[int, str]]:
     rows = connection.execute(
         """
         SELECT event_id, reason, start_date, end_date
-        FROM ingest.match_entries_pending
+        FROM ingest_wtt.match_entries_pending
         ORDER BY
             (reason = 'live') DESC,
             GREATEST(start_date, end_date) DESC,

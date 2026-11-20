@@ -1,4 +1,4 @@
-"""Append-only ingestion run history in ``ingest.ingest_runs``.
+"""Append-only WTT ingestion run history in ``ingest_wtt.ingest_runs``.
 
 One row per fetch attempt, written once the attempt has settled. This is the
 durable counterpart to the console log: it survives a closed terminal and can
@@ -24,12 +24,12 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-SOURCE_WTT_EVENTCALENDAR = "wtt_eventcalendar"
-SOURCE_WTT_MATCH_ENTRIES = "wtt_getofficialresult"
-SOURCE_WTT_MATCH_DETAILS = "wtt_matchcentre"
-SOURCE_WTT_MATCH_COMMENTARY = "wtt_match_commentary"
-SOURCE_WTT_EVENT_SPONSORS = "wtt_geteventequipmentwithlogo"
-SOURCE_WTT_PLAYER_DETAILS = "wtt_player_details"
+ENDPOINT_WTT_EVENTCALENDAR = "wtt_eventcalendar"
+ENDPOINT_WTT_MATCH_ENTRIES = "wtt_getofficialresult"
+ENDPOINT_WTT_MATCH_DETAILS = "wtt_matchcentre"
+ENDPOINT_WTT_MATCH_COMMENTARY = "wtt_match_commentary"
+ENDPOINT_WTT_EVENT_SPONSORS = "wtt_geteventequipmentwithlogo"
+ENDPOINT_WTT_PLAYER_DETAILS = "wtt_player_details"
 
 STATUS_SUCCEEDED = "succeeded"
 STATUS_FAILED = "failed"
@@ -42,13 +42,13 @@ def status_for(error: str | None) -> str:
 
 @dataclass(frozen=True, slots=True)
 class RunRecord:
-    """One settled ingestion attempt.
+    """One settled WTT ingestion attempt.
 
     ``finished_at`` is not part of the record: it is stamped by the insert, so
     the recorded time is the write time rather than a caller's guess.
     """
 
-    source: str
+    endpoint: str
     entity_key: str
     status: str
     started_at: datetime
@@ -59,7 +59,7 @@ class RunRecord:
 
 
 def record_run(connection: Connection[Any], record: RunRecord) -> None:
-    """Insert one attempt into ``ingest.ingest_runs`` in its own transaction.
+    """Insert one attempt into ``ingest_wtt.ingest_runs`` in its own transaction.
 
     The caller passes a persistent ``autocommit=True`` connection. A run that
     failed mid-landing has already rolled its transaction back on that
@@ -73,14 +73,14 @@ def record_runs(
     connection: Connection[Any],
     records: Sequence[RunRecord],
 ) -> None:
-    """Insert a batch of attempts into ``ingest.ingest_runs`` in one transaction."""
+    """Insert a batch of attempts into ``ingest_wtt.ingest_runs`` in one transaction."""
     if not records:
         return
 
     finished_at = datetime.now(tz=UTC)
     params = [
         (
-            record.source,
+            record.endpoint,
             record.entity_key,
             record.status,
             record.started_at,
@@ -95,8 +95,8 @@ def record_runs(
     with connection.transaction(), connection.cursor() as cursor:
         cursor.executemany(
             """
-            INSERT INTO ingest.ingest_runs (
-                source,
+            INSERT INTO ingest_wtt.ingest_runs (
+                endpoint,
                 entity_key,
                 status,
                 started_at,
@@ -144,7 +144,7 @@ def safe_record_run(
         logger.warning(
             "ingest_run_not_recorded",
             extra={
-                "source": run.source,
+                "endpoint": run.endpoint,
                 "entity_key": run.entity_key,
                 "error": str(error),
             },

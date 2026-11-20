@@ -108,7 +108,7 @@ def test_land_chunk_upserts_raw_player_details(
             received_count,
             source,
             payload -> 'Result' -> 0 ->> 'PlayerName' AS player_name
-        FROM ingest.player_details_raw
+        FROM ingest_wtt.player_details_raw
         ORDER BY player_id;
         """
     ).fetchall()
@@ -135,7 +135,7 @@ def test_player_details_pending_surfaces_unseen_match_players(
 ) -> None:
     db_connection.execute(
         """
-        INSERT INTO ingest.match_details_players_unpacked (
+        INSERT INTO ingest_wtt.match_details_players_unpacked (
             event_id,
             document_code,
             player_id
@@ -151,7 +151,7 @@ def test_player_details_pending_surfaces_unseen_match_players(
     pending = db_connection.execute(
         """
         SELECT player_id, reason
-        FROM ingest.player_details_pending
+        FROM ingest_wtt.player_details_pending
         ORDER BY player_id;
         """
     ).fetchall()
@@ -168,7 +168,7 @@ def test_player_details_pending_surfaces_unseen_match_players(
     remaining = db_connection.execute(
         """
         SELECT player_id, reason
-        FROM ingest.player_details_pending
+        FROM ingest_wtt.player_details_pending
         ORDER BY player_id;
         """
     ).fetchall()

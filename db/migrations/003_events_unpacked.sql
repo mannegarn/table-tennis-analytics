@@ -40,7 +40,7 @@
 --   NOT NULL too: EndDateTime is part of the documented payload contract, so a
 --   NULL there is drift, not a one-day tournament.
 
-CREATE TABLE IF NOT EXISTS ingest.events_unpacked (
+CREATE TABLE IF NOT EXISTS ingest_wtt.events_unpacked (
     source_year smallint NOT NULL,
     event_id bigint NOT NULL,
     event_name text NOT NULL,
@@ -58,31 +58,31 @@ CREATE TABLE IF NOT EXISTS ingest.events_unpacked (
 
 -- The live-window predicate reads end_date, so it gets its own index.
 CREATE INDEX IF NOT EXISTS events_unpacked_end_date_idx
-    ON ingest.events_unpacked (end_date);
+    ON ingest_wtt.events_unpacked (end_date);
 
 -- The key leads with source_year, so a lookup by event_id alone has no index.
 -- Cross-year questions ("did this event appear in two calendars") are exactly
 -- what the key is for, so that path gets its own index.
 CREATE INDEX IF NOT EXISTS events_unpacked_event_id_idx
-    ON ingest.events_unpacked (event_id);
+    ON ingest_wtt.events_unpacked (event_id);
 
-COMMENT ON TABLE ingest.events_unpacked IS
-    'One row per WTT event per calendar, unpacked from ingest.events_by_year_raw.';
-COMMENT ON COLUMN ingest.events_unpacked.event_id IS
+COMMENT ON TABLE ingest_wtt.events_unpacked IS
+    'One row per WTT event per calendar, unpacked from ingest_wtt.events_by_year_raw.';
+COMMENT ON COLUMN ingest_wtt.events_unpacked.event_id IS
     'WTT EventId. Unique per calendar, not across calendars: see the key.';
-COMMENT ON COLUMN ingest.events_unpacked.event_name IS
+COMMENT ON COLUMN ingest_wtt.events_unpacked.event_name IS
     'EventName as sent. A NULL here means the unpack stopped finding the key.';
-COMMENT ON COLUMN ingest.events_unpacked.start_date IS
+COMMENT ON COLUMN ingest_wtt.events_unpacked.start_date IS
     'StartDateTime as a date. The API sends no timezone, so none is invented. '
     'NOT NULL: a missing StartDateTime is schema drift, not a valid event.';
-COMMENT ON COLUMN ingest.events_unpacked.end_date IS
+COMMENT ON COLUMN ingest_wtt.events_unpacked.end_date IS
     'EndDateTime as a date. Drives the still-live window in the pending view. '
     'NOT NULL because EndDateTime is part of the documented payload contract.';
-COMMENT ON COLUMN ingest.events_unpacked.source_year IS
+COMMENT ON COLUMN ingest_wtt.events_unpacked.source_year IS
     'Calendar year whose payload listed this event. Part of the key, because '
     'a few tournaments appear in two years'' calendars.';
-COMMENT ON COLUMN ingest.events_unpacked.first_seen_at IS
+COMMENT ON COLUMN ingest_wtt.events_unpacked.first_seen_at IS
     'When this (source_year, event_id) was first unpacked. Written once.';
-COMMENT ON COLUMN ingest.events_unpacked.last_seen_at IS
+COMMENT ON COLUMN ingest_wtt.events_unpacked.last_seen_at IS
     'When this event was last present in its calendar payload. Advances on '
     'every unpack, so a stalled value means WTT dropped the event.';

@@ -1,4 +1,4 @@
-"""Integration tests: seeding ingest.ittf_player_profiles from a local CSV."""
+"""Integration tests: seeding ingest_ittf.ittf_player_profiles from a local CSV."""
 
 from datetime import UTC, datetime
 from pathlib import Path
@@ -32,7 +32,7 @@ def test_seed_ittf_player_profiles_loads_and_preserves_live_rows(
     # Pre-existing live-scraped row should not be overwritten by the CSV seed.
     db_connection.execute(
         """
-        INSERT INTO ingest.ittf_player_profiles (
+        INSERT INTO ingest_ittf.ittf_player_profiles (
             player_id, style, grip, hand, source, http_status, fetched_at
         )
         VALUES (90053, 'LiveStyle', 'Penhold', 'Left', 'ittf_results_link', 200, %s);
@@ -49,7 +49,7 @@ def test_seed_ittf_player_profiles_loads_and_preserves_live_rows(
     rows = db_connection.execute(
         """
         SELECT player_id, style, grip, hand, source
-        FROM ingest.ittf_player_profiles
+        FROM ingest_ittf.ittf_player_profiles
         ORDER BY player_id;
         """
     ).fetchall()

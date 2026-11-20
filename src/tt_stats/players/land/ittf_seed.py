@@ -1,4 +1,4 @@
-"""Seed ingest.ittf_player_profiles from a local master-players CSV file."""
+"""Seed ingest_ittf.ittf_player_profiles from a local master-players CSV file."""
 
 from __future__ import annotations
 
@@ -76,7 +76,7 @@ def seed_ittf_player_profiles(
     with connection.transaction(), connection.cursor() as cursor:
         cursor.executemany(
             """
-            INSERT INTO ingest.ittf_player_profiles (
+            INSERT INTO ingest_ittf.ittf_player_profiles (
                 player_id,
                 style,
                 grip,
@@ -95,7 +95,7 @@ def seed_ittf_player_profiles(
                 payload_sha256 = EXCLUDED.payload_sha256,
                 fetched_at     = EXCLUDED.fetched_at,
                 ingested_at    = now()
-            WHERE ingest.ittf_player_profiles.source <> 'ittf_results_link';
+            WHERE ingest_ittf.ittf_player_profiles.source <> 'ittf_results_link';
             """,
             params,
         )
@@ -116,7 +116,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     settings = get_settings()
     parser = argparse.ArgumentParser(
         description=(
-            "Seed ingest.ittf_player_profiles from a local master players CSV."
+            "Seed ingest_ittf.ittf_player_profiles from a local master players CSV."
         )
     )
     parser.add_argument(

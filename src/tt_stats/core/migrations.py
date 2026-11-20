@@ -1,7 +1,8 @@
 """Apply numbered SQL migrations from ``db/migrations``.
 
-Migrations are ingestion-owned DDL. They are not dbt models: dbt reads the
-resulting tables through ``sources.yml``.
+Migrations are ingestion-owned DDL tracked in ``public.schema_version``. They
+are not dbt models: dbt reads the resulting tables through its source
+definitions.
 
 The directory is resolved in this order: an explicit argument, then
 ``MIGRATIONS_DIR`` from the environment, then the repository's own
@@ -45,8 +46,7 @@ def resolve_migrations_dir(directory: Path | None = None) -> Path:
 
 # ``Final`` keeps this a literal type, so ``sql.SQL`` accepts it without a cast.
 SCHEMA_VERSION_DDL: Final = """
-CREATE SCHEMA IF NOT EXISTS ingest;
-CREATE TABLE IF NOT EXISTS ingest.schema_version (
+CREATE TABLE IF NOT EXISTS public.schema_version (
     version text PRIMARY KEY,
     checksum text NOT NULL,
     applied_at timestamptz NOT NULL DEFAULT now()
@@ -94,7 +94,7 @@ def apply_migrations(directory: Path | None = None) -> list[str]:
     with get_connection(autocommit=True) as connection:
         connection.execute(sql.SQL(SCHEMA_VERSION_DDL))
         rows = connection.execute(
-            "SELECT version, checksum FROM ingest.schema_version;"
+            "SELECT version, checksum FROM public.schema_version;"
         ).fetchall()
         known = {row["version"]: row["checksum"] for row in rows}
 
@@ -116,7 +116,7 @@ def apply_migrations(directory: Path | None = None) -> list[str]:
                 with connection.cursor() as cur:
                     cur.execute(migration_sql)
                     cur.execute(
-                        "INSERT INTO ingest.schema_version (version, checksum) "
+                        "INSERT INTO public.schema_version (version, checksum) "
                         "VALUES (%s, %s);",
                         (migration.version, migration.checksum),
                     )

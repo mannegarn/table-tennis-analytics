@@ -120,7 +120,7 @@ def _payload_with_repeats(repeats: int = 2) -> Any:
 def _raw_rows(connection: Connection[Any]) -> int:
     """Number of landed raw payloads for the test year (0 means rolled back)."""
     row = connection.execute(
-        "SELECT count(*) AS n FROM ingest.events_by_year_raw WHERE year = %s;",
+        "SELECT count(*) AS n FROM ingest_wtt.events_by_year_raw WHERE year = %s;",
         (TEST_YEAR,),
     ).fetchone()
     return int(row["n"]) if row else 0
@@ -130,7 +130,7 @@ def _counts(connection: Connection[Any]) -> dict[str, int]:
     row = connection.execute(
         """
         SELECT count(*) AS rows, count(DISTINCT event_id) AS events
-        FROM ingest.events_unpacked
+        FROM ingest_wtt.events_unpacked
         WHERE source_year = %s;
         """,
         (TEST_YEAR,),
@@ -145,7 +145,7 @@ def _sightings(
     rows = connection.execute(
         """
         SELECT source_year, event_id, first_seen_at, last_seen_at
-        FROM ingest.events_unpacked
+        FROM ingest_wtt.events_unpacked
         WHERE source_year = %s;
         """,
         (TEST_YEAR,),
@@ -186,7 +186,7 @@ def test_unpacked_columns_match_the_payload(
         """
         SELECT event_name, start_date, end_date, source_year,
                first_seen_at, last_seen_at
-        FROM ingest.events_unpacked
+        FROM ingest_wtt.events_unpacked
         WHERE source_year = %s AND event_id = %s;
         """,
         (TEST_YEAR, KNOWN_EVENT_ID),
@@ -282,7 +282,7 @@ def test_landing_tolerates_intra_year_duplicate_events(
     land_events_by_year(db_connection, _summary(payload, _digest(payload)), payload)
 
     raw = db_connection.execute(
-        "SELECT received_count FROM ingest.events_by_year_raw WHERE year = %s;",
+        "SELECT received_count FROM ingest_wtt.events_by_year_raw WHERE year = %s;",
         (TEST_YEAR,),
     ).fetchone()
 
@@ -352,19 +352,19 @@ def test_standalone_unpack_raises_and_rolls_back_when_sql_writes_nothing(
 ) -> None:
     """``tt-events-unpack`` must enforce the same completeness check as landing."""
     db_connection.execute(
-        "DELETE FROM ingest.events_unpacked WHERE source_year = %s;",
+        "DELETE FROM ingest_wtt.events_unpacked WHERE source_year = %s;",
         (TEST_YEAR,),
     )
 
     broken_sql = tmp_path / "broken_unpack.sql"
     broken_sql.write_text(
         """
-        INSERT INTO ingest.events_unpacked (
+        INSERT INTO ingest_wtt.events_unpacked (
             source_year, event_id, event_name, start_date, end_date
         )
         SELECT
             year::smallint, 1, 'never', current_date, current_date
-        FROM ingest.events_by_year_raw
+        FROM ingest_wtt.events_by_year_raw
         WHERE year = %(year)s AND false;
         """,
         encoding="utf-8",

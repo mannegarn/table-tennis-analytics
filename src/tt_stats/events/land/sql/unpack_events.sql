@@ -49,7 +49,7 @@
 -- =============================================================================
 
 
-INSERT INTO ingest.events_unpacked (
+INSERT INTO ingest_wtt.events_unpacked (
     source_year,
     event_id,
     event_name,
@@ -96,7 +96,7 @@ SELECT DISTINCT ON ((e.value ->> 'EventId')::bigint)
 -- Rewritten on every unpack; this is the column that moves while an event is
 -- still scheduled.
 
-FROM ingest.events_by_year_raw AS r
+FROM ingest_wtt.events_by_year_raw AS r
 -- The raw row for the year we were asked for. The year arrives as a query
 -- parameter, filled in by Python, so this same file works for 2021, 2022 and
 -- every year after. Keep exactly one placeholder in the whole file: psycopg

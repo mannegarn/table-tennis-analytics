@@ -56,7 +56,7 @@ def land_player_details_chunk(
     with connection.transaction(), connection.cursor() as cursor:
         cursor.executemany(
             """
-            INSERT INTO ingest.player_details_raw (
+            INSERT INTO ingest_wtt.player_details_raw (
                 player_id,
                 payload,
                 http_status,

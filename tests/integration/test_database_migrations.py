@@ -66,19 +66,19 @@ def test_migrations_create_the_raw_table(
         """
         SELECT column_name, data_type, is_nullable
         FROM information_schema.columns
-        WHERE table_schema = 'ingest'
+        WHERE table_schema = 'ingest_wtt'
           AND table_name = 'events_by_year_raw'
         ORDER BY ordinal_position;
         """
     ).fetchall()
     versions = db_connection.execute(
-        "SELECT version FROM ingest.schema_version;"
+        "SELECT version FROM public.schema_version;"
     ).fetchall()
     schemas = db_connection.execute(
         """
         SELECT schema_name
         FROM information_schema.schemata
-        WHERE schema_name IN ('ingest', 'analytics')
+        WHERE schema_name IN ('ingest_ittf', 'ingest_wtt')
         ORDER BY schema_name;
         """
     ).fetchall()
@@ -107,16 +107,16 @@ def test_migrations_create_the_raw_table(
         "015_ittf_player_profiles",
         "016_ittf_player_profiles_pending",
     }
-    assert [row["schema_name"] for row in schemas] == ["analytics", "ingest"]
+    assert [row["schema_name"] for row in schemas] == ["ingest_ittf", "ingest_wtt"]
 
 
 def _columns(connection: Connection[Any], table: str) -> dict[str, Any]:
-    """Return ``column_name -> row`` for one ``ingest`` table."""
+    """Return ``column_name -> row`` for one ``ingest_wtt`` table."""
     rows = connection.execute(
         """
         SELECT column_name, data_type, is_nullable
         FROM information_schema.columns
-        WHERE table_schema = 'ingest' AND table_name = %s
+        WHERE table_schema = 'ingest_wtt' AND table_name = %s
         ORDER BY ordinal_position;
         """,
         (table,),
@@ -143,7 +143,7 @@ def test_migrations_create_the_match_entries_tables(
         JOIN information_schema.key_column_usage AS kcu
           ON kcu.constraint_name = tc.constraint_name
          AND kcu.table_schema = tc.table_schema
-        WHERE tc.table_schema = 'ingest'
+        WHERE tc.table_schema = 'ingest_wtt'
           AND tc.table_name = 'match_entries_payloads_raw'
           AND tc.constraint_type = 'PRIMARY KEY';
         """
@@ -157,7 +157,7 @@ def test_migrations_create_the_match_entries_tables(
         JOIN information_schema.key_column_usage AS kcu
           ON kcu.constraint_name = tc.constraint_name
          AND kcu.table_schema = tc.table_schema
-        WHERE tc.table_schema = 'ingest'
+        WHERE tc.table_schema = 'ingest_wtt'
           AND tc.table_name = 'match_entries_unpacked'
           AND tc.constraint_type = 'PRIMARY KEY'
         ORDER BY kcu.ordinal_position;
@@ -197,7 +197,7 @@ def test_migrations_create_the_event_sponsors_table(
         JOIN information_schema.key_column_usage AS kcu
           ON kcu.constraint_name = tc.constraint_name
          AND kcu.table_schema = tc.table_schema
-        WHERE tc.table_schema = 'ingest'
+        WHERE tc.table_schema = 'ingest_wtt'
           AND tc.table_name = 'event_sponsors_raw'
           AND tc.constraint_type = 'PRIMARY KEY';
         """

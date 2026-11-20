@@ -1,14 +1,14 @@
 """Fetch, validate and land one WTT event-calendar payload per year.
 
-The payload is upserted into ``ingest.events_by_year_raw``; the database row is
+The payload is upserted into ``ingest_wtt.events_by_year_raw``; the database row is
 the source of truth. No payload files are written. Every attempt, successful or
-not, is also recorded in ``ingest.ingest_runs`` so the history survives the
+not, is also recorded in ``ingest_wtt.ingest_runs`` so the history survives the
 terminal closing.
 
 Two things changed once the calendar was backfilled to 1926 (96+ years rather
 than six):
 
-* **The queue is derived, not computed.** ``ingest.events_years_pending`` answers
+* **The queue is derived, not computed.** ``ingest_wtt.events_years_pending`` answers
   which years deserve a request: the current year and the next always, any other
   year only while its payload is missing (ADR 0005). A past year that landed is
   never fetched again.
@@ -46,7 +46,7 @@ from tt_stats.core.clients.wtt_api import WttClient
 from tt_stats.core.config import get_settings
 from tt_stats.core.db import get_connection
 from tt_stats.core.ingest_runs import (
-    SOURCE_WTT_EVENTCALENDAR,
+    ENDPOINT_WTT_EVENTCALENDAR,
     RunRecord,
     record_run,
     safe_record_run,
@@ -72,7 +72,7 @@ WITH bounds AS (
     )::int AS current_year
 )
 SELECT p.year, p.reason
-FROM ingest.events_years_pending AS p
+FROM ingest_wtt.events_years_pending AS p
 CROSS JOIN bounds AS b
 WHERE p.year >= %(start_year)s
 ORDER BY
@@ -345,11 +345,11 @@ def _record_run(
     *,
     started_at: datetime,
 ) -> None:
-    """Write the attempt to ``ingest.ingest_runs``, never breaking the collect."""
+    """Write the attempt to ``ingest_wtt.ingest_runs``, never breaking the collect."""
     safe_record_run(
         record,
         RunRecord(
-            source=SOURCE_WTT_EVENTCALENDAR,
+            endpoint=ENDPOINT_WTT_EVENTCALENDAR,
             entity_key=str(summary.year),
             status=status_for(summary.error),
             started_at=started_at,
@@ -422,7 +422,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Console entry point used by ``tt-events-collect``."""
     parser = argparse.ArgumentParser(
         description=(
-            "Fetch WTT event calendars into ingest.events_by_year_raw. Without "
+            "Fetch WTT event calendars into ingest_wtt.events_by_year_raw. Without "
             "--years, the pending view decides: the current year, the next "
             "year, and any year whose payload is missing."
         )
@@ -505,8 +505,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         event="events_collect",
         unit="year",
         found_label="events",
-        raw_table="ingest.events_by_year_raw",
-        unpacked_table="ingest.events_unpacked",
+        raw_table="ingest_wtt.events_by_year_raw",
+        unpacked_table="ingest_wtt.events_unpacked",
     )
 
 

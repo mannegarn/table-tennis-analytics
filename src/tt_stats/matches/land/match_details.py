@@ -75,7 +75,7 @@ def land_match_details_chunk(
     with connection.transaction(), connection.cursor() as cursor:
         cursor.executemany(
             """
-            INSERT INTO ingest.match_details_raw (
+            INSERT INTO ingest_wtt.match_details_raw (
                 event_id,
                 document_code,
                 payload,

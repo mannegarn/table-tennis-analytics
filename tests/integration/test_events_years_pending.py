@@ -35,7 +35,7 @@ def _land_year(connection: Connection[Any], year: int, *, received: int = 0) -> 
     ]
     connection.execute(
         """
-        INSERT INTO ingest.events_by_year_raw (
+        INSERT INTO ingest_wtt.events_by_year_raw (
             year, payload, http_status, source_final_count,
             source_original_count, received_count, payload_sha256, fetched_at
         )

@@ -35,7 +35,7 @@ def _upper() -> str:
 def test_statement_is_a_single_dml_insert() -> None:
     body = _upper()
 
-    assert "INGEST.MATCH_ENTRIES_UNPACKED" in body
+    assert "INGEST_WTT.MATCH_ENTRIES_UNPACKED" in body
     assert body.startswith("INSERT"), "expected one INSERT statement"
     for forbidden in ("CREATE", "ALTER", "DROP", "TRUNCATE", "DELETE"):
         assert forbidden not in body, f"{forbidden} does not belong here"
