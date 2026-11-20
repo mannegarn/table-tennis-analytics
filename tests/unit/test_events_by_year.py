@@ -292,7 +292,7 @@ async def test_collect_records_a_successful_run() -> None:
 
     assert len(recorded) == 1
     record = recorded[0]
-    assert record.source == "wtt_eventcalendar"
+    assert record.endpoint == "wtt_eventcalendar"
     assert record.entity_key == "2023"
     assert record.status == "succeeded"
     assert record.http_status == 200

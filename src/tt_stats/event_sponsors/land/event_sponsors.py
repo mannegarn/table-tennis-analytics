@@ -1,4 +1,4 @@
-"""Land one fetched event-sponsor payload into ``ingest.event_sponsors_raw``.
+"""Land one fetched event-sponsor payload into ``ingest_wtt.event_sponsors_raw``.
 
 One event is one row and one transaction. The payload is stored exactly as it
 arrived, including the common empty case: a ``[]`` body is a real observation
@@ -49,7 +49,7 @@ def land_event_sponsors(
     with connection.transaction():
         connection.execute(
             """
-            INSERT INTO ingest.event_sponsors_raw (
+            INSERT INTO ingest_wtt.event_sponsors_raw (
                 event_id,
                 payload,
                 http_status,

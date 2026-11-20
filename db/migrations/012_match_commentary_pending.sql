@@ -1,6 +1,6 @@
 -- 012: the match_commentary work queue, derived and never stored (ADR 0005).
 
-CREATE OR REPLACE VIEW ingest.match_commentary_pending AS
+CREATE OR REPLACE VIEW ingest_wtt.match_commentary_pending AS
 WITH bounds AS (
     SELECT (current_timestamp AT TIME ZONE 'UTC')::date AS today
 ),
@@ -10,7 +10,7 @@ events AS (
         e.start_date,
         e.end_date,
         GREATEST(e.start_date, e.end_date) + 1 AS window_end
-    FROM ingest.events_unpacked AS e
+    FROM ingest_wtt.events_unpacked AS e
     ORDER BY e.event_id, e.last_seen_at DESC, e.source_year DESC
 )
 SELECT
@@ -25,10 +25,10 @@ SELECT
     END::text AS reason,
     r.fetched_at,
     r.received_count AS previous_received_count
-FROM ingest.match_entries_unpacked AS m
+FROM ingest_wtt.match_entries_unpacked AS m
 JOIN events AS e ON e.event_id = m.event_id
 CROSS JOIN bounds AS b
-LEFT JOIN ingest.match_commentary_raw AS r
+LEFT JOIN ingest_wtt.match_commentary_raw AS r
     ON r.event_id = m.event_id
    AND r.document_code = m.document_code
 WHERE e.start_date <= b.today
@@ -38,5 +38,5 @@ WHERE e.start_date <= b.today
      OR (r.fetched_at AT TIME ZONE 'UTC')::date <= e.window_end
   );
 
-COMMENT ON VIEW ingest.match_commentary_pending IS
+COMMENT ON VIEW ingest_wtt.match_commentary_pending IS
     'Matches worth requesting commentary for now (ADR 0005).';

@@ -1,10 +1,10 @@
 -- 013: the player_details raw landing table, owned by ingestion.
 --
--- One row per PLAYER (player_id). No unpacked table is created in ingest because
+-- One row per PLAYER (player_id). No unpacked table is created in ingest_wtt because
 -- no downstream scraper depends on player attributes (ADR 0003); full player
 -- unpacking lives in dbt staging (stg_wtt_players).
 
-CREATE TABLE IF NOT EXISTS ingest.player_details_raw (
+CREATE TABLE IF NOT EXISTS ingest_wtt.player_details_raw (
     player_id bigint PRIMARY KEY,
     payload jsonb NOT NULL,
     http_status integer NOT NULL,
@@ -23,9 +23,9 @@ CREATE TABLE IF NOT EXISTS ingest.player_details_raw (
         CHECK (payload_sha256 ~ '^[0-9a-f]{64}$')
 );
 
-COMMENT ON TABLE ingest.player_details_raw IS
+COMMENT ON TABLE ingest_wtt.player_details_raw IS
     'One raw WTT TTU Connect GetPlayers response per player_id, with fetch provenance.';
-COMMENT ON COLUMN ingest.player_details_raw.payload IS
+COMMENT ON COLUMN ingest_wtt.player_details_raw.payload IS
     'Response body as JSONB.';
-COMMENT ON COLUMN ingest.player_details_raw.payload_sha256 IS
+COMMENT ON COLUMN ingest_wtt.player_details_raw.payload_sha256 IS
     'SHA-256 of the original response bytes.';

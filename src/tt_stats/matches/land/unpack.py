@@ -44,7 +44,7 @@ SELECT
     count(e.value) AS items,
     count(e.value ->> 'documentCode') AS usable,
     count(DISTINCT e.value ->> 'documentCode') AS documents
-FROM ingest.match_entries_payloads_raw AS r
+FROM ingest_wtt.match_entries_payloads_raw AS r
 LEFT JOIN LATERAL jsonb_array_elements(r.payload) AS e ON true
 WHERE r.event_id = %s
 GROUP BY r.event_id, r.received_count;
@@ -172,7 +172,7 @@ def _verify_unpacked(
 def landed_event_ids(connection: Connection[Any]) -> list[int]:
     """Return every event present in the raw table, smallest id first."""
     rows = connection.execute(
-        "SELECT event_id FROM ingest.match_entries_payloads_raw ORDER BY event_id;"
+        "SELECT event_id FROM ingest_wtt.match_entries_payloads_raw ORDER BY event_id;"
     ).fetchall()
     return [row["event_id"] for row in rows]
 
@@ -205,9 +205,9 @@ def _log_preview(connection: Connection[Any], event_id: int, rows: int) -> None:
     row = connection.execute(
         """
         SELECT
-            (SELECT count(*) FROM ingest.match_entries_unpacked
+            (SELECT count(*) FROM ingest_wtt.match_entries_unpacked
              WHERE event_id = %s) AS unpacked,
-            (SELECT received_count FROM ingest.match_entries_payloads_raw
+            (SELECT received_count FROM ingest_wtt.match_entries_payloads_raw
              WHERE event_id = %s) AS received;
         """,
         (event_id, event_id),
@@ -240,7 +240,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser(
         description=(
-            "Unpack landed WTT match lists into ingest.match_entries_unpacked. "
+            "Unpack landed WTT match lists into ingest_wtt.match_entries_unpacked. "
             "Without --event-ids, every event present in the raw table is "
             "unpacked."
         )
@@ -262,5 +262,5 @@ def main(argv: Sequence[str] | None = None) -> int:
         unit="event",
         found_label="matches",
         dry_run=args.dry_run,
-        target_table="ingest.match_entries_unpacked",
+        target_table="ingest_wtt.match_entries_unpacked",
     )

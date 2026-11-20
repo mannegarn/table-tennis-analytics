@@ -19,6 +19,18 @@ logger = get_logger(__name__)
 
 DEFAULT_OUTPUT_PATH = project_root() / "docs" / "data-summary.md"
 
+WAREHOUSE_SCHEMAS: tuple[str, ...] = (
+    "ingest_wtt",
+    "ingest_ittf",
+    "staging_wtt",
+    "staging_ittf",
+    "intermediate",
+    "marts_wtt",
+    "marts_ittf",
+    "marts",
+    "seeds",
+)
+
 
 def _fmt_int(value: int | None) -> str:
     """Format an integer with thousands separators, or '-' if None."""
@@ -121,24 +133,29 @@ def build_summary_markdown(conn: Connection[Any]) -> str:
         SELECT
             current_database() AS db_name,
             pg_size_pretty(pg_database_size(current_database())) AS db_size,
-            (SELECT COUNT(*) FROM ingest.schema_version) AS migrations_applied
+            (SELECT COUNT(*) FROM public.schema_version) AS migrations_applied
         ;
         """,
     )
 
+    schema_literals = sql.SQL(", ").join(
+        sql.Literal(schema) for schema in WAREHOUSE_SCHEMAS
+    )
     table_stats = _fetch_all(
         conn,
-        """
-        SELECT
-            n.nspname AS schema_name,
-            c.relname AS table_name,
-            pg_size_pretty(pg_total_relation_size(c.oid)) AS total_size
-        FROM pg_class AS c
-        JOIN pg_namespace AS n ON n.oid = c.relnamespace
-        WHERE c.relkind = 'r'
-          AND n.nspname IN ('ingest', 'analytics')
-        ORDER BY n.nspname, pg_total_relation_size(c.oid) DESC, c.relname;
-        """,
+        sql.SQL(
+            """
+            SELECT
+                n.nspname AS schema_name,
+                c.relname AS table_name,
+                pg_size_pretty(pg_total_relation_size(c.oid)) AS total_size
+            FROM pg_class AS c
+            JOIN pg_namespace AS n ON n.oid = c.relnamespace
+            WHERE c.relkind = 'r'
+              AND n.nspname IN ({schemas})
+            ORDER BY n.nspname, pg_total_relation_size(c.oid) DESC, c.relname;
+            """
+        ).format(schemas=schema_literals),
     )
     for table_row in table_stats:
         schema_name = str(table_row["schema_name"])
@@ -162,8 +179,8 @@ def build_summary_markdown(conn: Connection[Any]) -> str:
             COUNT(*) FILTER (WHERE received_count > 0) AS years_with_events,
             COUNT(*) FILTER (WHERE received_count = 0) AS empty_years,
             COALESCE(SUM(received_count), 0) AS raw_event_rows,
-            (SELECT COUNT(*) FROM ingest.events_years_pending) AS pending_years
-        FROM ingest.events_by_year_raw;
+            (SELECT COUNT(*) FROM ingest_wtt.events_years_pending) AS pending_years
+        FROM ingest_wtt.events_by_year_raw;
         """,
     )
 
@@ -173,46 +190,46 @@ def build_summary_markdown(conn: Connection[Any]) -> str:
         """
         WITH distinct_events AS (
             SELECT DISTINCT event_id
-            FROM ingest.events_unpacked
+            FROM ingest_wtt.events_unpacked
         )
         SELECT
-            (SELECT COUNT(*) FROM ingest.events_unpacked) AS calendar_rows,
+            (SELECT COUNT(*) FROM ingest_wtt.events_unpacked) AS calendar_rows,
             (SELECT COUNT(*) FROM distinct_events) AS distinct_events,
-            (SELECT MIN(start_date) FROM ingest.events_unpacked) AS min_start_date,
-            (SELECT MAX(end_date) FROM ingest.events_unpacked) AS max_end_date,
+            (SELECT MIN(start_date) FROM ingest_wtt.events_unpacked) AS min_start_date,
+            (SELECT MAX(end_date) FROM ingest_wtt.events_unpacked) AS max_end_date,
             (
                 SELECT COUNT(*)
                 FROM distinct_events AS e
-                JOIN ingest.match_entries_payloads_raw AS m
+                JOIN ingest_wtt.match_entries_payloads_raw AS m
                   ON m.event_id = e.event_id
             ) AS events_match_fetched,
             (
                 SELECT COUNT(*)
                 FROM distinct_events AS e
-                JOIN ingest.match_entries_payloads_raw AS m
+                JOIN ingest_wtt.match_entries_payloads_raw AS m
                   ON m.event_id = e.event_id
                 WHERE m.received_count > 0
             ) AS events_with_matches,
             (
                 SELECT COUNT(*)
-                FROM ingest.match_entries_pending
+                FROM ingest_wtt.match_entries_pending
             ) AS events_match_pending,
             (
                 SELECT COUNT(*)
                 FROM distinct_events AS e
-                JOIN ingest.event_sponsors_raw AS s
+                JOIN ingest_wtt.event_sponsors_raw AS s
                   ON s.event_id = e.event_id
             ) AS events_sponsor_fetched,
             (
                 SELECT COUNT(*)
                 FROM distinct_events AS e
-                JOIN ingest.event_sponsors_raw AS s
+                JOIN ingest_wtt.event_sponsors_raw AS s
                   ON s.event_id = e.event_id
                 WHERE s.received_count > 0
             ) AS events_with_sponsors,
             (
                 SELECT COUNT(*)
-                FROM ingest.event_sponsors_pending
+                FROM ingest_wtt.event_sponsors_pending
             ) AS events_sponsor_pending
         ;
         """,
@@ -223,37 +240,40 @@ def build_summary_markdown(conn: Connection[Any]) -> str:
         conn,
         """
         SELECT
-            (SELECT COUNT(*) FROM ingest.match_entries_unpacked) AS total_matches,
+            (SELECT COUNT(*) FROM ingest_wtt.match_entries_unpacked) AS total_matches,
             (
                 SELECT COUNT(DISTINCT event_id)
-                FROM ingest.match_entries_unpacked
+                FROM ingest_wtt.match_entries_unpacked
             ) AS events_with_matches,
-            (SELECT COUNT(*) FROM ingest.match_details_raw) AS details_fetched,
+            (SELECT COUNT(*) FROM ingest_wtt.match_details_raw) AS details_fetched,
             (
                 SELECT COUNT(*)
-                FROM ingest.match_details_raw
+                FROM ingest_wtt.match_details_raw
                 WHERE payload <> '{}'::jsonb
                   AND payload <> '[]'::jsonb
                   AND payload <> 'null'::jsonb
             ) AS details_non_empty,
             (
                 SELECT COUNT(DISTINCT (event_id, document_code))
-                FROM ingest.match_details_players_unpacked
+                FROM ingest_wtt.match_details_players_unpacked
             ) AS details_with_players,
-            (SELECT COUNT(*) FROM ingest.match_details_pending) AS details_pending,
-            (SELECT COUNT(*) FROM ingest.match_commentary_raw) AS commentary_fetched,
+            (SELECT COUNT(*) FROM ingest_wtt.match_details_pending) AS details_pending,
             (
                 SELECT COUNT(*)
-                FROM ingest.match_commentary_raw
+                FROM ingest_wtt.match_commentary_raw
+            ) AS commentary_fetched,
+            (
+                SELECT COUNT(*)
+                FROM ingest_wtt.match_commentary_raw
                 WHERE received_count > 0
             ) AS commentary_with_rows,
             (
                 SELECT COUNT(*)
-                FROM ingest.match_commentary_pending
+                FROM ingest_wtt.match_commentary_pending
             ) AS commentary_pending,
             (
                 SELECT COALESCE(SUM(received_count), 0)
-                FROM ingest.match_commentary_raw
+                FROM ingest_wtt.match_commentary_raw
             ) AS commentary_total_rows
         ;
         """,
@@ -265,43 +285,46 @@ def build_summary_markdown(conn: Connection[Any]) -> str:
         """
         WITH seen_players AS (
             SELECT DISTINCT player_id
-            FROM ingest.match_details_players_unpacked
+            FROM ingest_wtt.match_details_players_unpacked
         )
         SELECT
             (SELECT COUNT(*) FROM seen_players) AS seen_players,
             (
                 SELECT COUNT(*)
                 FROM seen_players AS sp
-                JOIN ingest.player_details_raw AS r
+                JOIN ingest_wtt.player_details_raw AS r
                   ON r.player_id = sp.player_id
             ) AS seen_with_raw_details,
             (
                 SELECT COUNT(*)
                 FROM seen_players AS sp
-                JOIN ingest.player_details_raw AS r
+                JOIN ingest_wtt.player_details_raw AS r
                   ON r.player_id = sp.player_id
                 WHERE r.received_count > 0
             ) AS seen_with_unpacked_details,
             (
                 SELECT COUNT(*)
-                FROM ingest.player_details_pending
+                FROM ingest_wtt.player_details_pending
             ) AS details_pending,
-            (SELECT COUNT(*) FROM ingest.player_details_raw) AS total_raw_details,
+            (SELECT COUNT(*) FROM ingest_wtt.player_details_raw) AS total_raw_details,
             (
                 SELECT COUNT(*) FILTER (WHERE received_count > 0)
-                FROM ingest.player_details_raw
+                FROM ingest_wtt.player_details_raw
             ) AS total_unpacked_details,
             (
                 SELECT COUNT(*)
                 FROM seen_players AS sp
-                JOIN ingest.ittf_player_profiles AS i
+                JOIN ingest_ittf.ittf_player_profiles AS i
                   ON i.player_id = sp.player_id
             ) AS seen_with_ittf_profile,
             (
                 SELECT COUNT(*)
-                FROM ingest.ittf_player_profiles_pending
+                FROM ingest_ittf.ittf_player_profiles_pending
             ) AS ittf_pending,
-            (SELECT COUNT(*) FROM ingest.ittf_player_profiles) AS total_ittf_profiles
+            (
+                SELECT COUNT(*)
+                FROM ingest_ittf.ittf_player_profiles
+            ) AS total_ittf_profiles
         ;
         """,
     )
@@ -321,7 +344,7 @@ def build_summary_markdown(conn: Connection[Any]) -> str:
             COUNT(*) FILTER (
                 WHERE hand IS NOT NULL AND btrim(hand) <> ''
             ) AS with_hand
-        FROM ingest.ittf_player_profiles
+        FROM ingest_ittf.ittf_player_profiles
         GROUP BY source
         ORDER BY row_count DESC, source;
         """,
@@ -331,21 +354,21 @@ def build_summary_markdown(conn: Connection[Any]) -> str:
         conn,
         """
         SELECT
-            source,
+            endpoint,
             COUNT(*) AS total_runs,
             COUNT(*) FILTER (WHERE status = 'succeeded') AS succeeded,
             COUNT(*) FILTER (WHERE status = 'failed') AS failed,
             MAX(finished_at) AS last_finished_at
-        FROM ingest.ingest_runs
-        GROUP BY source
-        ORDER BY total_runs DESC, source;
+        FROM ingest_wtt.ingest_runs
+        GROUP BY endpoint
+        ORDER BY total_runs DESC, endpoint;
         """,
     )
 
     # Field completeness for flat ingest tables
     ittf_fields = _field_completeness_rows(
         conn,
-        "ingest.ittf_player_profiles",
+        "ingest_ittf.ittf_player_profiles",
         [
             ("style", "style"),
             ("grip", "grip"),
@@ -575,7 +598,7 @@ def build_summary_markdown(conn: Connection[Any]) -> str:
         f"({_fmt_int(seen_with_ittf)} matched to seen players, "
         f"{_fmt_int(ittf_extra)} not yet seen in WTT matches)",
         "",
-        "### ITTF Player Profiles Completeness (`ingest.ittf_player_profiles`)",
+        "### ITTF Player Profiles Completeness (`ingest_ittf.ittf_player_profiles`)",
         "",
         _md_table(
             ["Field", "Total Rows", "Has Data", "Missing / Empty"],
@@ -611,7 +634,7 @@ def build_summary_markdown(conn: Connection[Any]) -> str:
             )
             run_rows.append(
                 [
-                    str(r["source"]),
+                    str(r["endpoint"]),
                     _fmt_int(total),
                     f"{_fmt_int(succ)} ({_fmt_pct(succ, total)})",
                     f"{_fmt_int(fail)} ({_fmt_pct(fail, total)})",
@@ -621,10 +644,10 @@ def build_summary_markdown(conn: Connection[Any]) -> str:
         sections.append(
             "\n".join(
                 [
-                    "## Ingestion Run History (`ingest.ingest_runs`)",
+                    "## Ingestion Run History (`ingest_wtt.ingest_runs`)",
                     "",
                     _md_table(
-                        ["Source", "Total Runs", "Succeeded", "Failed", "Last Run"],
+                        ["Endpoint", "Total Runs", "Succeeded", "Failed", "Last Run"],
                         run_rows,
                     ),
                 ]

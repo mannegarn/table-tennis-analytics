@@ -7,7 +7,7 @@ risk real rows.
 Besides the happy path, this module pins the two failure-mode invariants:
 
 * a landing that fails midway leaves no rows behind in either ingest table;
-* the failure is still visible afterwards, because ``ingest.ingest_runs`` is
+* the failure is still visible afterwards, because ``ingest_wtt.ingest_runs`` is
   written by the orchestrator in its own transaction.
 """
 
@@ -23,7 +23,7 @@ from psycopg import Connection, errors
 
 from tt_stats.core.clients.wtt_api import WttClient
 from tt_stats.core.ingest_runs import (
-    SOURCE_WTT_EVENTCALENDAR,
+    ENDPOINT_WTT_EVENTCALENDAR,
     STATUS_FAILED,
     record_run,
 )
@@ -75,13 +75,13 @@ def test_landing_upserts_one_row_and_is_idempotent(
         """
         SELECT payload, http_status, source_final_count,
                source_original_count, received_count, payload_sha256
-        FROM ingest.events_by_year_raw
+        FROM ingest_wtt.events_by_year_raw
         WHERE year = %s;
         """,
         (TEST_YEAR,),
     ).fetchone()
     count = db_connection.execute(
-        "SELECT count(*) AS n FROM ingest.events_by_year_raw WHERE year = %s;",
+        "SELECT count(*) AS n FROM ingest_wtt.events_by_year_raw WHERE year = %s;",
         (TEST_YEAR,),
     ).fetchone()
 
@@ -110,11 +110,11 @@ def test_a_quiet_year_lands_zero_rows_without_failing(
     land_events_by_year(db_connection, summary, payload)
 
     raw = db_connection.execute(
-        "SELECT received_count FROM ingest.events_by_year_raw WHERE year = %s;",
+        "SELECT received_count FROM ingest_wtt.events_by_year_raw WHERE year = %s;",
         (TEST_YEAR,),
     ).fetchone()
     unpacked = db_connection.execute(
-        "SELECT count(*) AS n FROM ingest.events_unpacked WHERE source_year = %s;",
+        "SELECT count(*) AS n FROM ingest_wtt.events_unpacked WHERE source_year = %s;",
         (TEST_YEAR,),
     ).fetchone()
 
@@ -138,7 +138,7 @@ def _malformed_payload() -> Any:
 
 def _raw_count(connection: Connection[Any]) -> int:
     row = connection.execute(
-        "SELECT count(*) AS n FROM ingest.events_by_year_raw WHERE year = %s;",
+        "SELECT count(*) AS n FROM ingest_wtt.events_by_year_raw WHERE year = %s;",
         (TEST_YEAR,),
     ).fetchone()
     return int(row["n"]) if row else 0
@@ -146,7 +146,7 @@ def _raw_count(connection: Connection[Any]) -> int:
 
 def _unpacked_count(connection: Connection[Any]) -> int:
     row = connection.execute(
-        "SELECT count(*) AS n FROM ingest.events_unpacked WHERE source_year = %s;",
+        "SELECT count(*) AS n FROM ingest_wtt.events_unpacked WHERE source_year = %s;",
         (TEST_YEAR,),
     ).fetchone()
     return int(row["n"]) if row else 0
@@ -156,12 +156,12 @@ def _last_run(connection: Connection[Any]) -> dict[str, Any]:
     row = connection.execute(
         """
         SELECT status, error
-        FROM ingest.ingest_runs
-        WHERE source = %s AND entity_key = %s
+        FROM ingest_wtt.ingest_runs
+        WHERE endpoint = %s AND entity_key = %s
         ORDER BY started_at DESC, run_id DESC
         LIMIT 1;
         """,
-        (SOURCE_WTT_EVENTCALENDAR, str(TEST_YEAR)),
+        (ENDPOINT_WTT_EVENTCALENDAR, str(TEST_YEAR)),
     ).fetchone()
     assert row is not None, "the failed attempt was never recorded"
     return dict(row)

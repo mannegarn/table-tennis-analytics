@@ -1,12 +1,12 @@
--- 002: ingestion run history.
+-- 002: WTT ingestion run history.
 --
 -- One row per fetch attempt, successful or failed. Append only: nothing updates
 -- these rows, so they remain a truthful record of what happened. This is not a
 -- scrape flag; eligibility is derived in the pending view (ADR 0005).
 
-CREATE TABLE IF NOT EXISTS ingest.ingest_runs (
+CREATE TABLE IF NOT EXISTS ingest_wtt.ingest_runs (
     run_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    source text NOT NULL,
+    endpoint text NOT NULL,
     entity_key text NOT NULL,
     status text NOT NULL,
     started_at timestamptz NOT NULL,
@@ -28,21 +28,21 @@ CREATE TABLE IF NOT EXISTS ingest.ingest_runs (
 );
 
 CREATE INDEX IF NOT EXISTS ingest_runs_entity_idx
-    ON ingest.ingest_runs (source, entity_key, started_at DESC);
+    ON ingest_wtt.ingest_runs (endpoint, entity_key, started_at DESC);
 
 CREATE INDEX IF NOT EXISTS ingest_runs_failures_idx
-    ON ingest.ingest_runs (finished_at DESC)
+    ON ingest_wtt.ingest_runs (finished_at DESC)
     WHERE status = 'failed';
 
-COMMENT ON TABLE ingest.ingest_runs IS
-    'Append-only record of every ingestion attempt, successful or not.';
-COMMENT ON COLUMN ingest.ingest_runs.source IS
-    'Source identifier, for example wtt_eventcalendar.';
-COMMENT ON COLUMN ingest.ingest_runs.entity_key IS
+COMMENT ON TABLE ingest_wtt.ingest_runs IS
+    'Append-only record of every WTT ingestion attempt, successful or not.';
+COMMENT ON COLUMN ingest_wtt.ingest_runs.endpoint IS
+    'API endpoint identifier, for example wtt_eventcalendar.';
+COMMENT ON COLUMN ingest_wtt.ingest_runs.entity_key IS
     'Natural key of the entity attempted, for example the year 2023.';
-COMMENT ON COLUMN ingest.ingest_runs.status IS
+COMMENT ON COLUMN ingest_wtt.ingest_runs.status IS
     'succeeded when the payload validated and landed, failed otherwise.';
-COMMENT ON COLUMN ingest.ingest_runs.received_count IS
+COMMENT ON COLUMN ingest_wtt.ingest_runs.received_count IS
     'Rows this attempt produced. Null or 0 for a failed attempt.';
-COMMENT ON COLUMN ingest.ingest_runs.error IS
+COMMENT ON COLUMN ingest_wtt.ingest_runs.error IS
     'Human readable failure reason. Never populated for a success.';

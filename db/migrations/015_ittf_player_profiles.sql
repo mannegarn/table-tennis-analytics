@@ -4,7 +4,7 @@
 -- populated either from a local CSV backfill (e.g. source = '20260615_master_players.csv')
 -- or by live HTML scraping (source = 'ittf_results_link').
 
-CREATE TABLE IF NOT EXISTS ingest.ittf_player_profiles (
+CREATE TABLE IF NOT EXISTS ingest_ittf.ittf_player_profiles (
     player_id bigint PRIMARY KEY,
     style text,
     grip text,
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS ingest.ittf_player_profiles (
         CHECK (payload_sha256 IS NULL OR payload_sha256 ~ '^[0-9a-f]{64}$')
 );
 
-COMMENT ON TABLE ingest.ittf_player_profiles IS
+COMMENT ON TABLE ingest_ittf.ittf_player_profiles IS
     'Player style, grip, and hand enrichment per player_id from local CSV seed or ITTF results HTML.';
-COMMENT ON COLUMN ingest.ittf_player_profiles.source IS
+COMMENT ON COLUMN ingest_ittf.ittf_player_profiles.source IS
     'Origin of the row, e.g. 20260615_master_players.csv or ittf_results_link.';

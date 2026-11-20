@@ -66,7 +66,7 @@ def test_land_chunk_upserts_raw_commentary_payload(
     raw_row = db_connection.execute(
         """
         SELECT received_count, source, jsonb_array_length(payload) AS item_count
-        FROM ingest.match_commentary_raw
+        FROM ingest_wtt.match_commentary_raw
         WHERE event_id = %s AND document_code = %s;
         """,
         (EVENT_ID, DOC_1),

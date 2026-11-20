@@ -58,7 +58,7 @@ def test_landing_upserts_one_row_and_is_idempotent(
     rows = db_connection.execute(
         """
         SELECT event_id, payload, http_status, received_count, payload_sha256, source
-        FROM ingest.event_sponsors_raw
+        FROM ingest_wtt.event_sponsors_raw
         WHERE event_id = %s;
         """,
         (EVENT_ID,),
@@ -85,7 +85,7 @@ def test_an_empty_sponsor_list_is_recorded_as_an_answer(
     row = db_connection.execute(
         """
         SELECT payload, received_count
-        FROM ingest.event_sponsors_raw
+        FROM ingest_wtt.event_sponsors_raw
         WHERE event_id = %s;
         """,
         (EVENT_ID,),
@@ -120,7 +120,7 @@ def test_landing_refuses_a_failed_summary(
     row = db_connection.execute(
         """
         SELECT received_count
-        FROM ingest.event_sponsors_raw
+        FROM ingest_wtt.event_sponsors_raw
         WHERE event_id = %s;
         """,
         (EVENT_ID,),

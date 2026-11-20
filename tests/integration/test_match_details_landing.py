@@ -55,7 +55,7 @@ def test_land_chunk_upserts_raw_and_unpacks_distinct_players(
     raw_rows = db_connection.execute(
         """
         SELECT document_code, source
-        FROM ingest.match_details_raw
+        FROM ingest_wtt.match_details_raw
         WHERE event_id = %s
         ORDER BY document_code;
         """,
@@ -69,7 +69,7 @@ def test_land_chunk_upserts_raw_and_unpacks_distinct_players(
     players = db_connection.execute(
         """
         SELECT document_code, player_id
-        FROM ingest.match_details_players_unpacked
+        FROM ingest_wtt.match_details_players_unpacked
         WHERE event_id = %s
         ORDER BY document_code, player_id;
         """,

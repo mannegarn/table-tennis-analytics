@@ -1,9 +1,9 @@
 """Fetch and land one WTT matchcentre payload per match, committed by chunk.
 
-The queue is derived in ``ingest.match_details_pending`` (ADR 0005). Because a
+The queue is derived in ``ingest_wtt.match_details_pending`` (ADR 0005). Because a
 full backfill is ~200k matches, each chunk is fetched concurrently and then
-written to ``ingest.match_details_raw`` (plus minimal player-id unpack) and
-``ingest.ingest_runs`` in chunk-level transactions at the end of each chunk.
+written to ``ingest_wtt.match_details_raw`` (plus minimal player-id unpack) and
+``ingest_wtt.ingest_runs`` in chunk-level transactions at the end of each chunk.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ from tt_stats.core.clients.wtt_api import WttClient
 from tt_stats.core.config import get_settings
 from tt_stats.core.db import get_connection
 from tt_stats.core.ingest_runs import (
-    SOURCE_WTT_MATCH_DETAILS,
+    ENDPOINT_WTT_MATCH_DETAILS,
     RunRecord,
     record_runs,
     safe_record_runs,
@@ -48,7 +48,7 @@ MatchKey = tuple[int, str]
 
 _PENDING_MATCHES_SQL = """
 SELECT p.event_id, p.document_code, p.reason
-FROM ingest.match_details_pending AS p
+FROM ingest_wtt.match_details_pending AS p
 ORDER BY
     (p.reason = 'live') DESC,
     GREATEST(p.start_date, p.end_date) DESC,
@@ -58,7 +58,7 @@ ORDER BY
 
 _PENDING_MATCHES_BY_EVENT_SQL = """
 SELECT p.event_id, p.document_code, p.reason
-FROM ingest.match_details_pending AS p
+FROM ingest_wtt.match_details_pending AS p
 WHERE p.event_id = ANY(%(event_ids)s)
 ORDER BY
     (p.reason = 'live') DESC,
@@ -290,7 +290,7 @@ def _to_run_record(
     started_at: datetime,
 ) -> RunRecord:
     return RunRecord(
-        source=SOURCE_WTT_MATCH_DETAILS,
+        endpoint=ENDPOINT_WTT_MATCH_DETAILS,
         entity_key=f"{summary.event_id}:{summary.document_code}",
         status=status_for(summary.error),
         started_at=started_at,
@@ -342,7 +342,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Console entry point used by ``tt-match-details-collect``."""
     parser = argparse.ArgumentParser(
         description=(
-            "Fetch WTT matchcentre payloads into ingest.match_details_raw, "
+            "Fetch WTT matchcentre payloads into ingest_wtt.match_details_raw, "
             "landing and recording runs at the end of each chunk."
         )
     )
@@ -421,8 +421,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         event="match_details",
         unit="match",
         found_label="players",
-        raw_table="ingest.match_details_raw",
-        unpacked_table="ingest.match_details_players_unpacked",
+        raw_table="ingest_wtt.match_details_raw",
+        unpacked_table="ingest_wtt.match_details_players_unpacked",
     )
 
 

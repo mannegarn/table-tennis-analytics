@@ -62,7 +62,7 @@ def land_match_entries(
     with connection.transaction():
         connection.execute(
             """
-            INSERT INTO ingest.match_entries_payloads_raw (
+            INSERT INTO ingest_wtt.match_entries_payloads_raw (
                 event_id,
                 payload,
                 http_status,

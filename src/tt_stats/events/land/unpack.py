@@ -42,7 +42,7 @@ SELECT
     count(e.value) AS items,
     count((e.value ->> 'EventId')::bigint) AS usable,
     count(DISTINCT (e.value ->> 'EventId')::bigint) AS distinct_events
-FROM ingest.events_by_year_raw AS r
+FROM ingest_wtt.events_by_year_raw AS r
 LEFT JOIN LATERAL jsonb_array_elements(r.payload -> 0 -> 'rows') AS e ON true
 WHERE r.year = %s
 GROUP BY r.year, r.received_count;
@@ -200,7 +200,7 @@ def _verify_unpacked(
 def landed_years(connection: Connection[Any]) -> list[int]:
     """Return every year present in the raw table, oldest first."""
     rows = connection.execute(
-        "SELECT year FROM ingest.events_by_year_raw ORDER BY year;"
+        "SELECT year FROM ingest_wtt.events_by_year_raw ORDER BY year;"
     ).fetchall()
     return [row["year"] for row in rows]
 
@@ -231,7 +231,7 @@ def unpack_years(
 def _log_preview(connection: Connection[Any], year: int, rows: int) -> None:
     """Log what a dry run would have written, before rolling it back."""
     row = connection.execute(
-        "SELECT count(*) AS n FROM ingest.events_unpacked WHERE source_year = %s;",
+        "SELECT count(*) AS n FROM ingest_wtt.events_unpacked WHERE source_year = %s;",
         (year,),
     ).fetchone()
     total = row["n"] if row else 0
@@ -252,7 +252,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser(
         description=(
-            "Unpack landed WTT event calendars into ingest.events_unpacked. "
+            "Unpack landed WTT event calendars into ingest_wtt.events_unpacked. "
             "Without --years, every year present in the raw table is unpacked."
         )
     )
@@ -273,5 +273,5 @@ def main(argv: Sequence[str] | None = None) -> int:
         unit="year",
         found_label="events",
         dry_run=args.dry_run,
-        target_table="ingest.events_unpacked",
+        target_table="ingest_wtt.events_unpacked",
     )

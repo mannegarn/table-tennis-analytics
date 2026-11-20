@@ -9,7 +9,7 @@
 -- this event") and are stored with received_count = 0 so the pending queue
 -- knows the event has already been asked.
 
-CREATE TABLE IF NOT EXISTS ingest.event_sponsors_raw (
+CREATE TABLE IF NOT EXISTS ingest_wtt.event_sponsors_raw (
     event_id bigint PRIMARY KEY,
     payload jsonb NOT NULL,
     http_status integer NOT NULL,
@@ -28,17 +28,17 @@ CREATE TABLE IF NOT EXISTS ingest.event_sponsors_raw (
         CHECK (payload_sha256 ~ '^[0-9a-f]{64}$')
 );
 
-COMMENT ON TABLE ingest.event_sponsors_raw IS
+COMMENT ON TABLE ingest_wtt.event_sponsors_raw IS
     'One raw WTT GetEventEquipmentwithLogo response per event, with fetch provenance.';
-COMMENT ON COLUMN ingest.event_sponsors_raw.event_id IS
+COMMENT ON COLUMN ingest_wtt.event_sponsors_raw.event_id IS
     'WTT EventId these sponsors belong to. One row per event, so this is the key.';
-COMMENT ON COLUMN ingest.event_sponsors_raw.payload IS
+COMMENT ON COLUMN ingest_wtt.event_sponsors_raw.payload IS
     'Response body as JSONB: a bare array of sponsor/equipment objects.';
-COMMENT ON COLUMN ingest.event_sponsors_raw.received_count IS
+COMMENT ON COLUMN ingest_wtt.event_sponsors_raw.received_count IS
     'Rows parsed from the payload, i.e. len(payload).';
-COMMENT ON COLUMN ingest.event_sponsors_raw.payload_sha256 IS
+COMMENT ON COLUMN ingest_wtt.event_sponsors_raw.payload_sha256 IS
     'SHA-256 of the original response bytes.';
-COMMENT ON COLUMN ingest.event_sponsors_raw.fetched_at IS
+COMMENT ON COLUMN ingest_wtt.event_sponsors_raw.fetched_at IS
     'When the request completed.';
-COMMENT ON COLUMN ingest.event_sponsors_raw.ingested_at IS
+COMMENT ON COLUMN ingest_wtt.event_sponsors_raw.ingested_at IS
     'When the row was written.';

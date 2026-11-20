@@ -1,14 +1,14 @@
 -- 009: the match_details domain, owned by ingestion.
 --
 -- Two tables:
---   ingest.match_details_raw              one row per MATCH (event_id, document_code)
---   ingest.match_details_players_unpacked one row per (match, player_id)
+--   ingest_wtt.match_details_raw              one row per MATCH (event_id, document_code)
+--   ingest_wtt.match_details_players_unpacked one row per (match, player_id)
 --
 -- Minimal unpack for now: only player_id is unpacked from
 -- payload -> 'competitiors' -> 'players' -> 'playerId' so the players domain
 -- can derive its pending queue without scanning 200k+ JSONB blobs.
 
-CREATE TABLE IF NOT EXISTS ingest.match_details_raw (
+CREATE TABLE IF NOT EXISTS ingest_wtt.match_details_raw (
     event_id bigint NOT NULL,
     document_code text NOT NULL,
     payload jsonb NOT NULL,
@@ -29,14 +29,14 @@ CREATE TABLE IF NOT EXISTS ingest.match_details_raw (
         CHECK (payload_sha256 ~ '^[0-9a-f]{64}$')
 );
 
-COMMENT ON TABLE ingest.match_details_raw IS
+COMMENT ON TABLE ingest_wtt.match_details_raw IS
     'One raw WTT matchdata/matchcentre response per match, with fetch provenance.';
-COMMENT ON COLUMN ingest.match_details_raw.payload IS
+COMMENT ON COLUMN ingest_wtt.match_details_raw.payload IS
     'Response body as JSONB.';
-COMMENT ON COLUMN ingest.match_details_raw.payload_sha256 IS
+COMMENT ON COLUMN ingest_wtt.match_details_raw.payload_sha256 IS
     'SHA-256 of the original response bytes.';
 
-CREATE TABLE IF NOT EXISTS ingest.match_details_players_unpacked (
+CREATE TABLE IF NOT EXISTS ingest_wtt.match_details_players_unpacked (
     event_id bigint NOT NULL,
     document_code text NOT NULL,
     player_id bigint NOT NULL,
@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS ingest.match_details_players_unpacked (
 );
 
 CREATE INDEX IF NOT EXISTS match_details_players_unpacked_player_id_idx
-    ON ingest.match_details_players_unpacked (player_id);
+    ON ingest_wtt.match_details_players_unpacked (player_id);
 
-COMMENT ON TABLE ingest.match_details_players_unpacked IS
+COMMENT ON TABLE ingest_wtt.match_details_players_unpacked IS
     'Minimal unpack of match_details_raw: distinct player_ids per match.';

@@ -60,7 +60,7 @@ def test_landing_upserts_one_row_and_is_idempotent(
     rows = db_connection.execute(
         """
         SELECT event_id, payload, http_status, received_count, payload_sha256, source
-        FROM ingest.match_entries_payloads_raw
+        FROM ingest_wtt.match_entries_payloads_raw
         WHERE event_id = %s;
         """,
         (EVENT_ID,),
@@ -75,7 +75,8 @@ def test_landing_upserts_one_row_and_is_idempotent(
     assert row["source"] == "wtt_getofficialresult"
 
     unpacked = db_connection.execute(
-        "SELECT count(*) AS n FROM ingest.match_entries_unpacked WHERE event_id = %s;",
+        "SELECT count(*) AS n FROM ingest_wtt.match_entries_unpacked "
+        "WHERE event_id = %s;",
         (EVENT_ID,),
     ).fetchone()
     assert unpacked == {"n": 2}
@@ -93,7 +94,7 @@ def test_an_empty_match_list_is_recorded_as_an_answer(
     row = db_connection.execute(
         """
         SELECT payload, received_count
-        FROM ingest.match_entries_payloads_raw
+        FROM ingest_wtt.match_entries_payloads_raw
         WHERE event_id = %s;
         """,
         (EVENT_ID,),
@@ -128,7 +129,7 @@ def test_landing_refuses_a_failed_summary(
     row = db_connection.execute(
         """
         SELECT received_count
-        FROM ingest.match_entries_payloads_raw
+        FROM ingest_wtt.match_entries_payloads_raw
         WHERE event_id = %s;
         """,
         (EVENT_ID,),
@@ -156,12 +157,13 @@ def test_landing_rolls_back_when_summary_count_disagrees_with_payload(
         land_match_entries(db_connection, mismatched, payload)
 
     raw = db_connection.execute(
-        "SELECT count(*) AS n FROM ingest.match_entries_payloads_raw "
+        "SELECT count(*) AS n FROM ingest_wtt.match_entries_payloads_raw "
         "WHERE event_id = %s;",
         (EVENT_ID,),
     ).fetchone()
     unpacked = db_connection.execute(
-        "SELECT count(*) AS n FROM ingest.match_entries_unpacked WHERE event_id = %s;",
+        "SELECT count(*) AS n FROM ingest_wtt.match_entries_unpacked "
+        "WHERE event_id = %s;",
         (EVENT_ID,),
     ).fetchone()
     assert raw == {"n": 0}

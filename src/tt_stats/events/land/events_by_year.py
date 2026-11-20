@@ -66,7 +66,7 @@ def land_events_by_year(
     with connection.transaction():
         connection.execute(
             """
-            INSERT INTO ingest.events_by_year_raw (
+            INSERT INTO ingest_wtt.events_by_year_raw (
                 year,
                 payload,
                 http_status,
