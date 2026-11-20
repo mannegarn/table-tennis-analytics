@@ -199,6 +199,9 @@ async def collect[KeyT](
             if land_chunk is not None and to_land:
                 land_chunk(list(to_land))
         except Exception as error:
+            # The transaction rolled back, so nothing in to_land was stored.
+            # Say so in the run history rather than leaving them "succeeded".
+            _mark_unlanded(endpoint, runs, to_land, error=error)
             logger.error(
                 f"{endpoint.name}_chunk_landing_failed",
                 extra={
@@ -270,6 +273,24 @@ def _summarise[KeyT](
         facts=checked.facts,
     )
     return summary, payload
+
+
+def _mark_unlanded[KeyT](
+    endpoint: Endpoint[KeyT],
+    runs: list[RunRecord],
+    unlanded: Sequence[tuple[FetchSummary[KeyT], Any]],
+    *,
+    error: Exception,
+) -> None:
+    """Rewrite, in place, the runs of items a failed chunk landing dropped."""
+    keys = {endpoint.entity_key(summary.key) for summary, _ in unlanded}
+    message = f"chunk landing failed: {error}"
+    runs[:] = [
+        replace(run, status=status_for(message), error=message)
+        if run.entity_key in keys
+        else run
+        for run in runs
+    ]
 
 
 def _run_record[KeyT](

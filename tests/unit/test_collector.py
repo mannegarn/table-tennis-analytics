@@ -129,7 +129,8 @@ async def test_checked_facts_reach_the_summary() -> None:
     assert results[0].facts == {"Count": 2}
 
 
-async def test_chunk_landing_failure_stops_the_run_but_still_records() -> None:
+async def test_chunk_landing_failure_stops_the_run_and_records_it() -> None:
+    """Rolled-back items are recorded as failed, not as succeeded."""
     recorded: list[RunRecord] = []
 
     def land_chunk(_items: Sequence[tuple[FetchSummary[int], Any]]) -> None:
@@ -139,15 +140,21 @@ async def test_chunk_landing_failure_stops_the_run_but_still_records() -> None:
         with pytest.raises(RuntimeError, match="db down"):
             await collect(
                 _endpoint(),
-                [1, 2, 3],
+                [1, SERVER_ERROR, 3, 4],
                 client=client,
                 land_chunk=land_chunk,
                 record=recorded.extend,
-                chunk_size=2,
+                chunk_size=3,
             )
 
-    # The first chunk's attempts are recorded; the second chunk never ran.
-    assert [run.entity_key for run in recorded] == ["1", "2"]
+    # The first chunk is recorded; the second chunk, key 4, never ran.
+    by_key = {run.entity_key: run for run in recorded}
+    assert list(by_key) == ["1", str(SERVER_ERROR), "3"]
+    assert all(run.status == "failed" for run in recorded)
+    assert by_key["1"].error == "chunk landing failed: db down"
+    assert by_key["3"].error == "chunk landing failed: db down"
+    # An item that failed on its own keeps its own reason.
+    assert by_key[str(SERVER_ERROR)].error == f"HTTP {SERVER_ERROR}"
 
 
 async def test_runs_use_the_endpoint_source_and_entity_key() -> None:
