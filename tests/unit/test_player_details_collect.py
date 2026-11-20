@@ -10,7 +10,7 @@ from tt_stats.core.clients.wtt_api import WttClient
 from tt_stats.core.collector import FetchSummary, PayloadShapeError, collect
 from tt_stats.core.config import Settings
 from tt_stats.core.ingest_runs import RunRecord
-from tt_stats.players.collect.player_details import (
+from tt_stats.players.collect import (
     PLAYER_DETAILS,
     check_payload,
     main,

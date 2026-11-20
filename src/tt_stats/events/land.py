@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any
 from psycopg.types.json import Jsonb
 
 from tt_stats.core.logging_config import get_logger
-from tt_stats.events.land.unpack import unpack_events_year
+from tt_stats.events.unpack import unpack_events_year
 
 logger = get_logger(__name__)
 

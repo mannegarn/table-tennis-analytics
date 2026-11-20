@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from tt_stats.core.clients.wtt_api import WttClient, WttResponse
-from tt_stats.events.collect.events_by_year import DATE_FORMAT, check_payload
+from tt_stats.events.collect import DATE_FORMAT, check_payload
 
 pytestmark = pytest.mark.integration
 

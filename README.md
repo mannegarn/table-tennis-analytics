@@ -120,7 +120,7 @@ some events more than once, and the unpack de-duplicates them. The key is
 calendars keeps a row in both instead of the later landing overwriting the
 earlier one. `first_seen_at` is written once and `last_seen_at` advances on
 every unpack, which is how an event WTT dropped is spotted without deleting
-anything. The statement lives in `src/tt_stats/events/land/sql/unpack_events.sql`
+anything. The statement lives in `src/tt_stats/events/sql/unpack_events.sql`
 and runs inside the same transaction as the raw insert, so a year is never
 half-landed.
 
@@ -297,13 +297,17 @@ container.
 
 ## Project layout
 
-Domain first, then data level.
+Domain first. Each domain module holds only what is specific to its endpoint:
+the pending queue, the payload check, and the landing SQL. The fetch, land and
+record loop every collector runs is `src/tt_stats/core/collector.py`.
 
 ```
-src/tt_stats/core/        shared config, database, logging, run history, clients
-src/tt_stats/events/      collect and land events
-src/tt_stats/matches/     collect and land match entries and details
-src/tt_stats/players/     collect and land player details and playstyle
+src/tt_stats/core/            shared config, database, logging, run history,
+                              clients, and the collector loop
+src/tt_stats/events/          collect.py, land.py, unpack.py, sql/
+src/tt_stats/event_sponsors/  collect.py, land.py
+src/tt_stats/matches/         collect/ and land/: entries, details, commentary
+src/tt_stats/players/         collect.py, land.py, ittf_seed.py
 db/init/                  one-time SQL on first database start
 db/migrations/            versioned tables, unpack SQL, views, control tables
 dbt/models/<domain>/      marts models per domain, reading _unpacked tables
@@ -318,7 +322,7 @@ airflow/dags/             orchestration (later)
 
 Raw payloads land in the `ingest` schema as JSONB. The same transaction then
 unpacks the payload into `ingest.events_unpacked`, one row per event, using
-`src/tt_stats/events/land/sql/unpack_events.sql`. dbt reads ingestion tables as
+`src/tt_stats/events/sql/unpack_events.sql`. dbt reads ingestion tables as
 sources and writes every model to `analytics`.
 
 | Level | Schema | Naming | Example | Owner |

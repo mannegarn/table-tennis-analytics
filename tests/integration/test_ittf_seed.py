@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from psycopg import Connection
 
-from tt_stats.players.land.ittf_seed import seed_ittf_player_profiles
+from tt_stats.players.ittf_seed import seed_ittf_player_profiles
 
 pytestmark = pytest.mark.integration
 

@@ -12,7 +12,7 @@ import pytest
 from psycopg import Connection
 from psycopg.types.json import Jsonb
 
-from tt_stats.events.collect.events_by_year import pending_years
+from tt_stats.events.collect import pending_years
 
 pytestmark = pytest.mark.integration
 
