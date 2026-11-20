@@ -9,16 +9,17 @@ import httpx
 import pytest
 
 from tt_stats.core.clients.wtt_api import WttClient
+from tt_stats.core.collector import FetchSummary, PayloadShapeError, collect
 from tt_stats.core.config import Settings
 from tt_stats.core.ingest_runs import RunRecord
 from tt_stats.matches.collect.match_commentary import (
-    MatchCommentarySummary,
+    MATCH_COMMENTARY,
     MatchKey,
-    PayloadShapeError,
-    collect_match_commentary,
     decode_commentary_payload,
     main,
 )
+
+MatchCommentarySummary = FetchSummary[MatchKey]
 
 EVENT_ID = 3257
 DOCUMENT_CODE = "TTEWSINGLES-----------RND1002700----------"
@@ -85,9 +86,7 @@ async def test_collect_unwraps_and_lands_by_chunk() -> None:
         return httpx.Response(200, json=json.dumps([_line(1), _line(2)]))
 
     def land_chunk(items: Sequence[tuple[MatchCommentarySummary, Any]]) -> None:
-        landed_chunks.append(
-            [((s.event_id, s.document_code), len(rows)) for s, rows in items]
-        )
+        landed_chunks.append([(s.key, len(rows)) for s, rows in items])
 
     def record_many(runs: Sequence[RunRecord]) -> None:
         recorded_chunks.append([r.entity_key for r in runs])
@@ -95,11 +94,12 @@ async def test_collect_unwraps_and_lands_by_chunk() -> None:
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
-        results = await collect_match_commentary(
+        results = await collect(
+            MATCH_COMMENTARY,
             keys,
             client=client,
             land_chunk=land_chunk,
-            record_many=record_many,
+            record=record_many,
             chunk_size=2,
         )
 

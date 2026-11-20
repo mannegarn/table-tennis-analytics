@@ -20,7 +20,7 @@ from typing import Any
 import pytest
 from psycopg import Connection, errors
 
-from tt_stats.events.collect.events_by_year import YearPayloadSummary
+from tt_stats.core.collector import FetchSummary
 from tt_stats.events.land import land_events_by_year
 from tt_stats.events.land import unpack as events_unpack
 from tt_stats.events.land.unpack import load_unpack_sql, unpack_years
@@ -58,7 +58,7 @@ def _summary(
     digest: str,
     *,
     received_count: int | None = None,
-) -> YearPayloadSummary:
+) -> FetchSummary[int]:
     """Build the summary the collector would have produced for ``payload``.
 
     ``received_count`` is overridable so a drift test can describe a payload
@@ -66,19 +66,23 @@ def _summary(
     contains them.
     """
     envelope = payload[0]
-    return YearPayloadSummary(
-        year=TEST_YEAR,
+    return FetchSummary(
+        key=TEST_YEAR,
         status_code=200,
-        source_final_count=envelope.get("Count"),
-        source_original_count=(
-            int(envelope["Original_Count"]) if "Original_Count" in envelope else None
-        ),
         received_count=(
             len(envelope["rows"]) if received_count is None else received_count
         ),
         payload_sha256=digest,
         fetched_at=datetime.now(tz=UTC),
         error=None,
+        facts={
+            "source_final_count": envelope.get("Count"),
+            "source_original_count": (
+                int(envelope["Original_Count"])
+                if "Original_Count" in envelope
+                else None
+            ),
+        },
     )
 
 

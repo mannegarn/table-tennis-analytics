@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 from psycopg import Connection
 
-from tt_stats.matches.collect.match_entries import MatchEntriesSummary
+from tt_stats.core.collector import FetchSummary
 from tt_stats.matches.land import land_match_entries
 
 pytestmark = pytest.mark.integration
@@ -35,10 +35,10 @@ def _match(match_id: int) -> dict[str, Any]:
     }
 
 
-def _summary(payload: list[dict[str, Any]]) -> MatchEntriesSummary:
+def _summary(payload: list[dict[str, Any]]) -> FetchSummary[int]:
     body = json.dumps(payload).encode("utf-8")
-    return MatchEntriesSummary(
-        event_id=EVENT_ID,
+    return FetchSummary(
+        key=EVENT_ID,
         status_code=200,
         received_count=len(payload),
         payload_sha256=hashlib.sha256(body).hexdigest(),
@@ -112,8 +112,8 @@ def test_landing_refuses_a_failed_summary(
     good = _summary(payload)
     land_match_entries(db_connection, good, payload)
 
-    failed = MatchEntriesSummary(
-        event_id=EVENT_ID,
+    failed = FetchSummary(
+        key=EVENT_ID,
         status_code=500,
         received_count=0,
         payload_sha256=None,
@@ -142,8 +142,8 @@ def test_landing_rolls_back_when_summary_count_disagrees_with_payload(
     """A summary whose received_count disagrees with the stored JSON must abort."""
     payload = [_match(1), _match(2)]
     body = json.dumps(payload).encode("utf-8")
-    mismatched = MatchEntriesSummary(
-        event_id=EVENT_ID,
+    mismatched = FetchSummary(
+        key=EVENT_ID,
         status_code=200,
         received_count=1,
         payload_sha256=hashlib.sha256(body).hexdigest(),

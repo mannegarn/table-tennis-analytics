@@ -3,23 +3,24 @@
 import asyncio
 import json
 import logging
+from collections.abc import Sequence
 from typing import Any
 
 import httpx
 import pytest
 
 from tt_stats.core.clients.wtt_api import WttClient
+from tt_stats.core.collector import FetchSummary, PayloadShapeError, collect
 from tt_stats.core.config import Settings
 from tt_stats.core.ingest_runs import RunRecord
 from tt_stats.events.collect.events_by_year import (
-    PayloadShapeError,
-    YearPayloadSummary,
-    collect_events_by_year,
-    extract_counts,
-    extract_rows,
+    EVENTS,
+    check_payload,
     main,
     validate_rows,
 )
+
+YearPayloadSummary = FetchSummary[int]
 
 
 def _settings(**overrides: Any) -> Settings:
@@ -72,28 +73,38 @@ def _requested_year(request: httpx.Request) -> int:
     return int(inner_filter[0]["value"])
 
 
-def test_extract_rows_rejects_the_wrong_envelope() -> None:
+def test_check_payload_rejects_the_wrong_envelope() -> None:
     with pytest.raises(PayloadShapeError):
-        extract_rows({"rows": []})
+        check_payload(2023, {"rows": []})
 
 
-def test_extract_rows_accepts_an_empty_year() -> None:
+def test_check_payload_accepts_an_empty_year() -> None:
     """A year with no tournaments is valid: the envelope exists, rows is empty."""
-    assert extract_rows(_payload([])) == []
+    checked = check_payload(1934, _payload([]))
+
+    assert checked.error is None
+    assert checked.received_count == 0
 
 
-def test_extract_rows_rejects_a_missing_rows_key() -> None:
+def test_check_payload_rejects_a_missing_rows_key() -> None:
     with pytest.raises(PayloadShapeError):
-        extract_rows([{"Count": 0}])
+        check_payload(2023, [{"Count": 0}])
 
 
-def test_extract_counts_reads_both_values() -> None:
-    source_final_count, source_original_count = extract_counts(
-        _payload([_row(1)], original=7)
-    )
+def test_check_payload_reads_both_source_counts() -> None:
+    checked = check_payload(2023, _payload([_row(1)], original=7))
 
-    assert source_final_count == 1
-    assert source_original_count == 7
+    assert checked.facts == {"source_final_count": 1, "source_original_count": 7}
+
+
+def test_check_payload_requires_a_count() -> None:
+    payload = _payload([_row(1)])
+    del payload[0]["Count"]
+
+    checked = check_payload(2023, payload)
+
+    assert checked.error is not None
+    assert "count mismatch" in checked.error
 
 
 def test_validate_rows_accepts_a_complete_row() -> None:
@@ -128,14 +139,13 @@ async def test_collect_returns_a_summary() -> None:
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
-        results = await collect_events_by_year([2023], client=client)
+        results = await collect(EVENTS, [2023], client=client)
 
     result = results[0]
     assert result.error is None
     assert result.status_code == 200
     assert result.received_count == 2
-    assert result.source_final_count == 2
-    assert result.source_original_count == 2
+    assert result.facts == {"source_final_count": 2, "source_original_count": 2}
     assert result.payload_sha256 is not None
     assert len(result.payload_sha256) == 64
 
@@ -151,13 +161,14 @@ async def test_collect_reports_progress_for_every_year() -> None:
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
-        await collect_events_by_year(
+        await collect(
+            EVENTS,
             [2023, 2024],
             client=client,
             progress=reported.append,
         )
 
-    assert [summary.year for summary in reported] == [2023, 2024]
+    assert [summary.key for summary in reported] == [2023, 2024]
     assert [summary.received_count for summary in reported] == [1, 1]
     assert all(summary.error is None for summary in reported)
 
@@ -175,7 +186,7 @@ async def test_chunk_progress_is_logged_once_per_chunk(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """One INFO record per chunk; the per-year records are DEBUG-only."""
-    caplog.set_level(logging.INFO, logger="tt_stats.events.collect.events_by_year")
+    caplog.set_level(logging.INFO, logger="tt_stats.core.collector")
     payload = _payload([_row(1)])
 
     async def handler(_request: httpx.Request) -> httpx.Response:
@@ -184,7 +195,7 @@ async def test_chunk_progress_is_logged_once_per_chunk(
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
-        await collect_events_by_year([2021, 2022, 2023], client=client, chunk_size=2)
+        await collect(EVENTS, [2021, 2022, 2023], client=client, chunk_size=2)
 
     records = [r for r in caplog.records if r.getMessage() == "events_chunk"]
     extras: list[dict[str, Any]] = [dict(record.__dict__) for record in records]
@@ -194,7 +205,7 @@ async def test_chunk_progress_is_logged_once_per_chunk(
     assert sum(extra["events"] for extra in extras) == 3
 
     messages = {record.getMessage() for record in caplog.records}
-    assert "events_year_saved" not in messages
+    assert "events_saved" not in messages
 
 
 async def test_collect_lands_successful_years() -> None:
@@ -205,12 +216,13 @@ async def test_collect_lands_successful_years() -> None:
         return httpx.Response(200, json=payload)
 
     def land(summary: YearPayloadSummary, data: object) -> None:
-        landed.append((summary.year, summary.received_count))
+        landed.append((summary.key, summary.received_count))
 
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
-        results = await collect_events_by_year(
+        results = await collect(
+            EVENTS,
             [2023],
             client=client,
             land=land,
@@ -232,7 +244,8 @@ async def test_landing_failure_marks_the_year_failed() -> None:
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
-        results = await collect_events_by_year(
+        results = await collect(
+            EVENTS,
             [2023],
             client=client,
             land=land,
@@ -250,7 +263,7 @@ async def test_count_mismatch_is_an_error() -> None:
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
-        results = await collect_events_by_year([2023], client=client)
+        results = await collect(EVENTS, [2023], client=client)
 
     result = results[0]
     assert result.error is not None
@@ -266,7 +279,8 @@ async def test_http_failure_returns_a_failed_summary() -> None:
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
-        results = await collect_events_by_year(
+        results = await collect(
+            EVENTS,
             [2023],
             client=client,
             progress=reported.append,
@@ -288,7 +302,7 @@ async def test_collect_records_a_successful_run() -> None:
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
-        await collect_events_by_year([2023], client=client, record=recorded.append)
+        await collect(EVENTS, [2023], client=client, record=recorded.extend)
 
     assert len(recorded) == 1
     record = recorded[0]
@@ -310,7 +324,7 @@ async def test_collect_records_a_failed_run() -> None:
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
-        await collect_events_by_year([2023], client=client, record=recorded.append)
+        await collect(EVENTS, [2023], client=client, record=recorded.extend)
 
     assert len(recorded) == 1
     record = recorded[0]
@@ -327,13 +341,13 @@ async def test_recording_failure_does_not_break_the_collect() -> None:
     async def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=payload)
 
-    def record(_record: RunRecord) -> None:
+    def record(_records: Sequence[RunRecord]) -> None:
         raise RuntimeError("runs table missing")
 
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
-        results = await collect_events_by_year([2023], client=client, record=record)
+        results = await collect(EVENTS, [2023], client=client, record=record)
 
     assert results[0].error is None
     assert results[0].received_count == 1
@@ -348,19 +362,19 @@ async def test_empty_year_is_a_success_and_still_lands() -> None:
         return httpx.Response(200, json=payload)
 
     def land(summary: YearPayloadSummary, data: object) -> None:
-        landed.append((summary.year, summary.received_count))
+        landed.append((summary.key, summary.received_count))
 
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
-        results = await collect_events_by_year(
-            [1934], client=client, land=land, reasons={1934: "backfill"}
+        results = await collect(
+            EVENTS, [1934], client=client, land=land, reasons={1934: "backfill"}
         )
 
     result = results[0]
     assert result.error is None
     assert result.received_count == 0
-    assert result.source_final_count == 0
+    assert result.facts["source_final_count"] == 0
     assert result.reason == "backfill"
     assert landed == [(1934, 0)]
 
@@ -383,16 +397,14 @@ async def test_chunks_bound_concurrency_and_land_in_order() -> None:
         return httpx.Response(200, json=payload)
 
     def land(summary: YearPayloadSummary, data: object) -> None:
-        landed.append(summary.year)
+        landed.append(summary.key)
 
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
-        results = await collect_events_by_year(
-            years, client=client, land=land, chunk_size=2
-        )
+        results = await collect(EVENTS, years, client=client, land=land, chunk_size=2)
 
-    assert [summary.year for summary in results] == years
+    assert [summary.key for summary in results] == years
     assert peak == 2
     assert landed == years
 
@@ -408,16 +420,16 @@ async def test_one_failed_year_does_not_stop_its_chunk() -> None:
         return httpx.Response(200, json=payload)
 
     def land(summary: YearPayloadSummary, data: object) -> None:
-        landed.append(summary.year)
+        landed.append(summary.key)
 
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
-        results = await collect_events_by_year(
-            [2023, 2024, 2025], client=client, land=land, chunk_size=3
+        results = await collect(
+            EVENTS, [2023, 2024, 2025], client=client, land=land, chunk_size=3
         )
 
-    by_year = {summary.year: summary for summary in results}
+    by_year = {summary.key: summary for summary in results}
     assert by_year[2024].error is not None
     assert by_year[2024].status_code == 500
     assert by_year[2023].error is None
@@ -435,4 +447,4 @@ async def test_chunk_size_must_be_positive() -> None:
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
         with pytest.raises(ValueError, match="chunk size"):
-            await collect_events_by_year([2023], client=client, chunk_size=0)
+            await collect(EVENTS, [2023], client=client, chunk_size=0)

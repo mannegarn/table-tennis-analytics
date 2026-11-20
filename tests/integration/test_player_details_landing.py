@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from psycopg import Connection
 
-from tt_stats.players.collect.player_details import PlayerDetailsSummary
+from tt_stats.core.collector import FetchSummary
 from tt_stats.players.land import land_player_details_chunk
 
 pytestmark = pytest.mark.integration
@@ -71,10 +71,10 @@ def _summary(
     *,
     status_code: int = 200,
     received_count: int = 1,
-) -> PlayerDetailsSummary:
+) -> FetchSummary[int]:
     body = json.dumps(payload).encode("utf-8")
-    return PlayerDetailsSummary(
-        player_id=player_id,
+    return FetchSummary(
+        key=player_id,
         status_code=status_code,
         received_count=received_count,
         payload_sha256=hashlib.sha256(body).hexdigest(),
