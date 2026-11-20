@@ -1,4 +1,8 @@
-"""Unit tests for the player_details collector. No network, no database."""
+"""Unit tests for the player-details endpoint. No network, no database.
+
+The shared fetch/land/record loop is tested once, in test_collector.py. These
+cover the player-details payload rules and its wiring into that loop.
+"""
 
 from collections.abc import Sequence
 from typing import Any
@@ -13,7 +17,6 @@ from tt_stats.core.ingest_runs import RunRecord
 from tt_stats.players.collect import (
     PLAYER_DETAILS,
     check_payload,
-    main,
 )
 
 PlayerDetailsSummary = FetchSummary[int]
@@ -118,11 +121,3 @@ async def test_collect_lands_chunks_and_treats_404_as_empty() -> None:
         [(PLAYER_ID, 1, 200), (404000, 0, 404)],
     ]
     assert [r.status for r in recorded_runs] == ["succeeded", "succeeded", "failed"]
-
-
-@pytest.mark.parametrize("flag", ["--limit", "--chunk-size"])
-def test_main_rejects_non_positive_numbers(flag: str) -> None:
-    with pytest.raises(SystemExit) as caught:
-        main([flag, "0"])
-
-    assert caught.value.code == 2
