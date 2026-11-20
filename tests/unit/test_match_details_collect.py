@@ -1,8 +1,10 @@
-"""Unit tests for the match_details collector. No network, no database."""
+"""Unit tests for the matchcentre endpoint. No network, no database.
+
+The shared fetch/land/record loop is tested once, in test_collector.py. These
+cover the matchcentre payload rules and its wiring into that loop.
+"""
 
 import asyncio
-import hashlib
-import json
 from collections.abc import Sequence
 from typing import Any
 
@@ -17,7 +19,6 @@ from tt_stats.matches.collect.match_details import (
     MATCH_DETAILS,
     MatchKey,
     check_payload,
-    main,
 )
 
 MatchDetailsSummary = FetchSummary[MatchKey]
@@ -120,58 +121,3 @@ async def test_collect_lands_and_records_at_end_of_each_chunk() -> None:
         [f"{EVENT_ID}:DOC1", f"{EVENT_ID}:DOC2"],
         [f"{EVENT_ID}:DOC3"],
     ]
-
-
-async def test_failed_match_is_recorded_but_excluded_from_chunk_landing() -> None:
-    keys: list[MatchKey] = [(EVENT_ID, "OK"), (EVENT_ID, "FAIL")]
-    landed_chunks: list[list[MatchKey]] = []
-    recorded_runs: list[RunRecord] = []
-
-    async def handler(request: httpx.Request) -> httpx.Response:
-        eid, code = _requested_key(request)
-        if code == "FAIL":
-            return httpx.Response(500, json={"error": "server error"})
-        return httpx.Response(200, json=_payload(eid, code))
-
-    async with WttClient(
-        settings=_settings(), transport=httpx.MockTransport(handler)
-    ) as client:
-        results = await collect(
-            MATCH_DETAILS,
-            keys,
-            client=client,
-            land_chunk=lambda items: landed_chunks.append([s.key for s, _ in items]),
-            record=recorded_runs.extend,
-            chunk_size=2,
-        )
-
-    assert [r.error is None for r in results] == [True, False]
-    assert landed_chunks == [[(EVENT_ID, "OK")]]
-    assert [r.status for r in recorded_runs] == ["succeeded", "failed"]
-
-
-async def test_payload_is_hashed_from_the_original_bytes() -> None:
-    payload = _payload()
-    body = json.dumps(payload).encode("utf-8")
-
-    async def handler(_request: httpx.Request) -> httpx.Response:
-        return httpx.Response(
-            200, content=body, headers={"content-type": "application/json"}
-        )
-
-    async with WttClient(
-        settings=_settings(), transport=httpx.MockTransport(handler)
-    ) as client:
-        results = await collect(
-            MATCH_DETAILS, [(EVENT_ID, DOCUMENT_CODE)], client=client
-        )
-
-    assert results[0].payload_sha256 == hashlib.sha256(body).hexdigest()
-
-
-@pytest.mark.parametrize("flag", ["--limit", "--chunk-size"])
-def test_main_rejects_non_positive_numbers(flag: str) -> None:
-    with pytest.raises(SystemExit) as caught:
-        main([flag, "0"])
-
-    assert caught.value.code == 2
