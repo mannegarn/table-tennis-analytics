@@ -22,7 +22,7 @@ import psycopg
 import pytest
 from psycopg import Connection, errors
 
-from tt_stats.matches.collect.match_entries import MatchEntriesSummary
+from tt_stats.core.collector import FetchSummary
 from tt_stats.matches.land import land_match_entries
 from tt_stats.matches.land import unpack as matches_unpack
 from tt_stats.matches.land.unpack import unpack_events
@@ -65,10 +65,10 @@ def _without(key: str, **overrides: Any) -> dict[str, Any]:
     return row
 
 
-def _summary(event_id: int, payload: Payload) -> MatchEntriesSummary:
+def _summary(event_id: int, payload: Payload) -> FetchSummary[int]:
     body = json.dumps(payload).encode("utf-8")
-    return MatchEntriesSummary(
-        event_id=event_id,
+    return FetchSummary(
+        key=event_id,
         status_code=200,
         received_count=len(payload) if isinstance(payload, list) else 0,
         payload_sha256=hashlib.sha256(body).hexdigest(),

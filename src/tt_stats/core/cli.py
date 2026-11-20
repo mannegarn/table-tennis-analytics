@@ -1,14 +1,9 @@
-"""Shared plumbing for the collector and unpack console entry points.
+"""Terminal plumbing for the collector and unpack console entry points.
 
-Every endpoint ships two commands: a collector (``tt-<domain>-collect``) and a
-backfill unpacker (``tt-<domain>-unpack``). Their *domain* parts differ - which
-flags name the work (``--years``, ``--event-ids``), which pending view feeds the
-queue, what a summary counts - but the scaffolding around them does not. That
-scaffolding lives here so a new endpoint only writes what is specific to it.
-
-Deliberately a set of small functions, not a base class or a runner that owns
-``main()``: each entry point still reads top to bottom and keeps its own flags,
-queue query and wording.
+Argument parsing, the progress bar, chunk log lines and the end-of-run tally.
+The collectors reach these through ``tt_stats.core.collector.collector_main``,
+which owns their ``main()``; the ``tt-<domain>-unpack`` commands call them
+directly.
 """
 
 from __future__ import annotations

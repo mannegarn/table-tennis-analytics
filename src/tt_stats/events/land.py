@@ -20,19 +20,19 @@ from typing import TYPE_CHECKING, Any
 from psycopg.types.json import Jsonb
 
 from tt_stats.core.logging_config import get_logger
-from tt_stats.events.land.unpack import unpack_events_year
+from tt_stats.events.unpack import unpack_events_year
 
 logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from psycopg import Connection
 
-    from tt_stats.events.collect.events_by_year import YearPayloadSummary
+    from tt_stats.core.collector import FetchSummary
 
 
 def land_events_by_year(
     connection: Connection[Any],
-    summary: YearPayloadSummary,
+    summary: FetchSummary[int],
     payload: Any,
 ) -> None:
     """Upsert one year's payload and unpack it in a single transaction.
@@ -88,11 +88,11 @@ def land_events_by_year(
                 ingested_at = now();
             """,
             (
-                summary.year,
+                summary.key,
                 Jsonb(payload),
                 summary.status_code,
-                summary.source_final_count,
-                summary.source_original_count,
+                summary.facts.get("source_final_count"),
+                summary.facts.get("source_original_count"),
                 summary.received_count,
                 summary.payload_sha256,
                 summary.fetched_at,
@@ -100,14 +100,14 @@ def land_events_by_year(
         )
         unpacked = unpack_events_year(
             connection,
-            summary.year,
+            summary.key,
             received_count=summary.received_count,
         )
 
     logger.info(
         "events_year_landed",
         extra={
-            "year": summary.year,
+            "year": summary.key,
             "received_count": summary.received_count,
             "unpacked": unpacked,
             "distinct_events": unpacked,

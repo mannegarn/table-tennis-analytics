@@ -1,8 +1,8 @@
 """Chunked batching and concurrent fetch-then-settle helpers.
 
-Both collectors batch: the calendar by year, the match list by event. This is
-the shared implementation, so chunking, concurrency error handling, and queue
-tallying cannot drift between domains while payload validation stays domain-owned.
+The lowest layer of the collector loop in ``tt_stats.core.collector``: it
+knows nothing about payloads, only how to fetch a chunk of keys concurrently
+and hand each result, in order, to a ``settle`` callback.
 
 Batching is a **scheduling and commit-granularity** decision, not a concurrency
 limit. Concurrency is bounded by the client's semaphore; a batch bounds how much
@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from tt_stats.core.clients.wtt_api import WttPayloadError, WttRequestError
 
@@ -53,14 +53,6 @@ def chunks[T](items: Sequence[T], size: int) -> list[list[T]]:
     if size < 1:
         raise ValueError(f"chunk size must be at least 1, got {size}")
     return [list(items[index : index + size]) for index in range(0, len(items), size)]
-
-
-def reason_counts(queue: Sequence[tuple[Any, str]]) -> dict[str, int]:
-    """Count queued items by their pending reason."""
-    counts: dict[str, int] = {}
-    for _, reason in queue:
-        counts[reason] = counts.get(reason, 0) + 1
-    return counts
 
 
 async def _fetch_one[KeyT](
