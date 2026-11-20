@@ -11,7 +11,7 @@ import pytest
 from psycopg import Connection
 from psycopg.types.json import Jsonb
 
-from tt_stats.event_sponsors.collect.event_sponsors import pending_events
+from tt_stats.event_sponsors.collect import pending_events
 
 pytestmark = pytest.mark.integration
 

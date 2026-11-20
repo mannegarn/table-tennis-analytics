@@ -13,14 +13,14 @@ if TYPE_CHECKING:
 
     from psycopg import Connection
 
-    from tt_stats.players.collect.player_details import PlayerDetailsSummary
+    from tt_stats.core.collector import FetchSummary
 
 logger = get_logger(__name__)
 
 
 def land_player_details(
     connection: Connection[Any],
-    summary: PlayerDetailsSummary,
+    summary: FetchSummary[int],
     payload: Any,
 ) -> None:
     """Upsert one player's raw details payload."""
@@ -29,7 +29,7 @@ def land_player_details(
 
 def land_player_details_chunk(
     connection: Connection[Any],
-    items: Sequence[tuple[PlayerDetailsSummary, Any]],
+    items: Sequence[tuple[FetchSummary[int], Any]],
 ) -> None:
     """Upsert a chunk of player_details payloads in a single transaction."""
     if not items:
@@ -44,7 +44,7 @@ def land_player_details_chunk(
 
         raw_params.append(
             (
-                summary.player_id,
+                summary.key,
                 Jsonb(payload),
                 summary.status_code,
                 summary.received_count,

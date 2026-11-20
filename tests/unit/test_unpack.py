@@ -9,8 +9,8 @@ from pathlib import Path
 import pytest
 
 from tt_stats.core.sql_files import executable_sql
-from tt_stats.events.land import unpack
-from tt_stats.events.land.unpack import (
+from tt_stats.events import unpack
+from tt_stats.events.unpack import (
     UNPACK_SQL_PATH,
     load_unpack_sql,
 )

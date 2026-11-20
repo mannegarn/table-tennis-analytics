@@ -1,6 +1,6 @@
 # Ingestion progress and decisions
 
-Updated: 2026-11-10.
+Updated: 2026-11-20.
 
 ## Current state
 
@@ -140,7 +140,7 @@ Updated: 2026-11-10.
   already in the table name (`events_*`, `match_entries_*`), and per-domain
   schemas would undo ADR 0007, split the grants and force one schema per dbt
   source. Folders only mirror the Python package, as in
-  `src/tt_stats/events/land/sql/` and `src/tt_stats/matches/land/sql/`.
+  `src/tt_stats/events/sql/` and `src/tt_stats/matches/land/sql/`.
 - **Migrations stay flat in `db/migrations/` (2026-11-10).** Order is the
   deployment contract, and `discover_migrations()` globs `*.sql` without
   recursing, so a migration filed in a subfolder would be silently skipped
@@ -179,6 +179,19 @@ Updated: 2026-11-10.
 - **No `run_limited` helper (2026-11-10).** The client semaphore already caps
   in-flight requests at `max_concurrent_requests`, so a second limiter would
   bound nothing. One bound, one place.
+- **One collector loop for every endpoint (2026-11-20).** The six collectors
+  had grown the same summary class, settle step, chunk logging, run recording
+  and `main()`. That loop now lives once in `src/tt_stats/core/collector.py`;
+  an endpoint module keeps only its pending query, its `check_payload()` and
+  an `Endpoint` description. Per-item landing (calendar, match lists,
+  sponsors) and per-chunk landing (match details, commentary, players) both
+  stay. Run history is written per chunk, and a failed chunk landing is
+  recorded as failed rather than succeeded.
+- **Flat modules where a folder held one (2026-11-20).** `events/`,
+  `event_sponsors/` and `players/` are now `collect.py` and `land.py` (plus
+  `unpack.py`, `sql/` and `ittf_seed.py` where they apply). `matches/` keeps
+  `collect/` and `land/` because three sources share them. Console commands
+  are unchanged.
 
 ## Year queue: eligibility rules (decided 2026-11-10)
 
@@ -243,8 +256,9 @@ ORDER BY (y.year = cy) DESC, (y.year = cy + 1) DESC, y.year DESC
   next year.
 - **An empty year is not `[]`.** It is the normal envelope with
   `rows: []`, `Count: 0`, `Original_Count: 0`, 228 bytes. The collector's shape
-  check already accepts that envelope; what fails today is `extract_rows()`
-  rejecting an empty `rows` list.
+  check already accepts that envelope; what failed at the time was
+  `extract_rows()` rejecting an empty `rows` list (since folded into the
+  calendar's `check_payload()`).
 - **2027 is already published** with 116 events, which is the evidence for
   refreshing `current year + 1` rather than only the current year.
 - **The archive grew from 736 events to 2965**, so `events_unpacked` and every
@@ -383,7 +397,9 @@ Modules, in build order:
    in one transaction, followed by the completeness assertion, mirroring
    `land_events_by_year`.
 5. `matches/collect/match_entries.py`: queue read, chunk loop, per-event land,
-   `ingest_runs` row per attempt, progress bar, CLI.
+   `ingest_runs` row per attempt, progress bar, CLI. (Since 2026-11-20 the
+   loop, run recording, progress bar and CLI are shared in
+   `core/collector.py`; this module keeps the queue and the payload check.)
 
 Loop shape:
 
