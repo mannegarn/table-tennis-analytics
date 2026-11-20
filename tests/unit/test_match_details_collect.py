@@ -10,16 +10,17 @@ import httpx
 import pytest
 
 from tt_stats.core.clients.wtt_api import WttClient
+from tt_stats.core.collector import FetchSummary, PayloadShapeError, collect
 from tt_stats.core.config import Settings
 from tt_stats.core.ingest_runs import RunRecord
 from tt_stats.matches.collect.match_details import (
-    MatchDetailsSummary,
+    MATCH_DETAILS,
     MatchKey,
-    PayloadShapeError,
-    collect_match_details,
+    check_payload,
     main,
-    validate_payload,
 )
+
+MatchDetailsSummary = FetchSummary[MatchKey]
 
 EVENT_ID = 3257
 DOCUMENT_CODE = "TTEWSINGLES-----------RND1002700----------"
@@ -54,31 +55,26 @@ def _requested_key(request: httpx.Request) -> MatchKey:
     return int(parts[-2]), parts[-1]
 
 
-def test_validate_payload_counts_distinct_players() -> None:
-    count, error = validate_payload(
-        _payload(player_ids=("117455", "146301", "117455")),
-        event_id=EVENT_ID,
-        document_code=DOCUMENT_CODE,
-    )
-    assert error is None
-    assert count == 2
+KEY: MatchKey = (EVENT_ID, DOCUMENT_CODE)
 
 
-def test_validate_payload_rejects_non_dict() -> None:
+def test_check_payload_counts_distinct_players() -> None:
+    checked = check_payload(KEY, _payload(player_ids=("117455", "146301", "117455")))
+    assert checked.error is None
+    assert checked.received_count == 2
+
+
+def test_check_payload_rejects_non_dict() -> None:
     with pytest.raises(PayloadShapeError, match="expected a match object"):
-        validate_payload([], event_id=EVENT_ID, document_code=DOCUMENT_CODE)
+        check_payload(KEY, [])
 
 
-def test_validate_payload_rejects_mismatched_event_or_document() -> None:
-    _, err_event = validate_payload(
-        _payload(event_id=9999), event_id=EVENT_ID, document_code=DOCUMENT_CODE
-    )
+def test_check_payload_rejects_mismatched_event_or_document() -> None:
+    err_event = check_payload(KEY, _payload(event_id=9999)).error
     assert err_event is not None
     assert "eventId" in err_event
 
-    _, err_doc = validate_payload(
-        _payload(document_code="OTHER"), event_id=EVENT_ID, document_code=DOCUMENT_CODE
-    )
+    err_doc = check_payload(KEY, _payload(document_code="OTHER")).error
     assert err_doc is not None
     assert "documentCode" in err_doc
 
@@ -98,7 +94,7 @@ async def test_collect_lands_and_records_at_end_of_each_chunk() -> None:
         return httpx.Response(200, json=_payload(eid, code))
 
     def land_chunk(items: Sequence[tuple[MatchDetailsSummary, Any]]) -> None:
-        landed_chunks.append([(s.event_id, s.document_code) for s, _ in items])
+        landed_chunks.append([s.key for s, _ in items])
 
     def record_many(runs: Sequence[RunRecord]) -> None:
         recorded_chunks.append([r.entity_key for r in runs])
@@ -106,11 +102,12 @@ async def test_collect_lands_and_records_at_end_of_each_chunk() -> None:
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
-        results = await collect_match_details(
+        results = await collect(
+            MATCH_DETAILS,
             keys,
             client=client,
             land_chunk=land_chunk,
-            record_many=record_many,
+            record=record_many,
             chunk_size=2,
         )
 
@@ -139,13 +136,12 @@ async def test_failed_match_is_recorded_but_excluded_from_chunk_landing() -> Non
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
-        results = await collect_match_details(
+        results = await collect(
+            MATCH_DETAILS,
             keys,
             client=client,
-            land_chunk=lambda items: landed_chunks.append(
-                [(s.event_id, s.document_code) for s, _ in items]
-            ),
-            record_many=recorded_runs.extend,
+            land_chunk=lambda items: landed_chunks.append([s.key for s, _ in items]),
+            record=recorded_runs.extend,
             chunk_size=2,
         )
 
@@ -166,8 +162,8 @@ async def test_payload_is_hashed_from_the_original_bytes() -> None:
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
-        results = await collect_match_details(
-            [(EVENT_ID, DOCUMENT_CODE)], client=client
+        results = await collect(
+            MATCH_DETAILS, [(EVENT_ID, DOCUMENT_CODE)], client=client
         )
 
     assert results[0].payload_sha256 == hashlib.sha256(body).hexdigest()

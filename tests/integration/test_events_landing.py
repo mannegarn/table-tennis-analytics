@@ -22,15 +22,13 @@ import pytest
 from psycopg import Connection, errors
 
 from tt_stats.core.clients.wtt_api import WttClient
+from tt_stats.core.collector import FetchSummary, collect
 from tt_stats.core.ingest_runs import (
     SOURCE_WTT_EVENTCALENDAR,
     STATUS_FAILED,
-    record_run,
+    record_runs,
 )
-from tt_stats.events.collect.events_by_year import (
-    YearPayloadSummary,
-    collect_events_by_year,
-)
+from tt_stats.events.collect.events_by_year import EVENTS
 from tt_stats.events.land import land_events_by_year
 from tt_stats.events.land.unpack import load_unpack_sql
 
@@ -47,17 +45,19 @@ TEST_YEAR = 2023
 NAME_CHECK = "events_unpacked_name_check"
 
 
-def _summary(payload: Any, digest: str) -> YearPayloadSummary:
+def _summary(payload: Any, digest: str) -> FetchSummary[int]:
     envelope = payload[0]
-    return YearPayloadSummary(
-        year=TEST_YEAR,
+    return FetchSummary(
+        key=TEST_YEAR,
         status_code=200,
-        source_final_count=envelope["Count"],
-        source_original_count=int(envelope["Original_Count"]),
         received_count=len(envelope["rows"]),
         payload_sha256=digest,
         fetched_at=datetime.now(tz=UTC),
         error=None,
+        facts={
+            "source_final_count": envelope["Count"],
+            "source_original_count": int(envelope["Original_Count"]),
+        },
     )
 
 
@@ -198,11 +198,12 @@ async def test_landing_failure_rolls_back_cleanly_and_records_failed_run(
         return httpx.Response(200, json=payload)
 
     async with WttClient(transport=httpx.MockTransport(handler)) as client:
-        summaries = await collect_events_by_year(
+        summaries = await collect(
+            EVENTS,
             [TEST_YEAR],
             client=client,
             land=lambda s, p: land_events_by_year(db_connection, s, p),
-            record=lambda r: record_run(db_connection, r),
+            record=lambda runs: record_runs(db_connection, runs),
         )
 
     summary = summaries[0]

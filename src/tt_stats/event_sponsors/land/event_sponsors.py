@@ -23,12 +23,12 @@ logger = get_logger(__name__)
 if TYPE_CHECKING:
     from psycopg import Connection
 
-    from tt_stats.event_sponsors.collect.event_sponsors import EventSponsorsSummary
+    from tt_stats.core.collector import FetchSummary
 
 
 def land_event_sponsors(
     connection: Connection[Any],
-    summary: EventSponsorsSummary,
+    summary: FetchSummary[int],
     payload: Any,
 ) -> None:
     """Upsert one event's raw sponsor payload in a single transaction.
@@ -67,7 +67,7 @@ def land_event_sponsors(
                 ingested_at = now();
             """,
             (
-                summary.event_id,
+                summary.key,
                 Jsonb(payload),
                 summary.status_code,
                 summary.received_count,
@@ -79,7 +79,7 @@ def land_event_sponsors(
     logger.info(
         "event_sponsors_landed",
         extra={
-            "event_id": summary.event_id,
+            "event_id": summary.key,
             "reason": summary.reason,
             "received_count": summary.received_count,
         },

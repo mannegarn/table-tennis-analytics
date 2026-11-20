@@ -4,22 +4,24 @@ import asyncio
 import hashlib
 import json
 import logging
+from collections.abc import Sequence
 from typing import Any
 
 import httpx
 import pytest
 
 from tt_stats.core.clients.wtt_api import WttClient
+from tt_stats.core.collector import FetchSummary, PayloadShapeError, collect
 from tt_stats.core.config import Settings
 from tt_stats.core.ingest_runs import RunRecord
 from tt_stats.matches.collect.match_entries import (
-    MatchEntriesSummary,
-    PayloadShapeError,
-    collect_match_entries,
-    extract_rows,
+    MATCH_ENTRIES,
+    check_payload,
     main,
     validate_rows,
 )
+
+MatchEntriesSummary = FetchSummary[int]
 
 EVENT_ID = 3098
 
@@ -56,19 +58,19 @@ def _requested_event(request: httpx.Request) -> int:
     return int(request.url.params["EventId"])
 
 
-def test_extract_rows_accepts_an_empty_list() -> None:
+def test_check_payload_accepts_an_empty_list() -> None:
     """``[]`` is what the API sends for an event with no published matches."""
-    assert extract_rows([]) == []
+    assert check_payload(EVENT_ID, []).received_count == 0
 
 
-def test_extract_rows_rejects_a_non_list() -> None:
+def test_check_payload_rejects_a_non_list() -> None:
     with pytest.raises(PayloadShapeError, match="expected a list"):
-        extract_rows({"rows": []})
+        check_payload(EVENT_ID, {"rows": []})
 
 
-def test_extract_rows_rejects_a_list_of_non_objects() -> None:
+def test_check_payload_rejects_a_list_of_non_objects() -> None:
     with pytest.raises(PayloadShapeError, match="row 0 is not an object"):
-        extract_rows(["not a match"])
+        check_payload(EVENT_ID, ["not a match"])
 
 
 def test_validate_rows_accepts_a_complete_row() -> None:
@@ -138,7 +140,7 @@ async def test_collect_returns_a_summary() -> None:
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
-        results = await collect_match_entries([EVENT_ID], client=client)
+        results = await collect(MATCH_ENTRIES, [EVENT_ID], client=client)
 
     result = results[0]
     assert result.error is None
@@ -155,13 +157,13 @@ async def test_empty_match_list_is_a_success_and_still_lands() -> None:
         return httpx.Response(200, json=[])
 
     def land(summary: MatchEntriesSummary, data: object) -> None:
-        landed.append((summary.event_id, summary.received_count))
+        landed.append((summary.key, summary.received_count))
 
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
-        results = await collect_match_entries(
-            [928], client=client, land=land, reasons={928: "new"}
+        results = await collect(
+            MATCH_ENTRIES, [928], client=client, land=land, reasons={928: "new"}
         )
 
     result = results[0]
@@ -187,16 +189,16 @@ async def test_chunks_bound_concurrency_and_land_in_order() -> None:
         return httpx.Response(200, json=[_match(1, _requested_event(request))])
 
     def land(summary: MatchEntriesSummary, data: object) -> None:
-        landed.append(summary.event_id)
+        landed.append(summary.key)
 
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
-        results = await collect_match_entries(
-            events, client=client, land=land, chunk_size=2
+        results = await collect(
+            MATCH_ENTRIES, events, client=client, land=land, chunk_size=2
         )
 
-    assert [summary.event_id for summary in results] == events
+    assert [summary.key for summary in results] == events
     assert peak == 2
     assert landed == events
 
@@ -210,16 +212,16 @@ async def test_one_failed_event_does_not_stop_its_chunk() -> None:
         return httpx.Response(200, json=[_match(1, _requested_event(request))])
 
     def land(summary: MatchEntriesSummary, data: object) -> None:
-        landed.append(summary.event_id)
+        landed.append(summary.key)
 
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
-        results = await collect_match_entries(
-            [3098, 3099, 3100], client=client, land=land, chunk_size=3
+        results = await collect(
+            MATCH_ENTRIES, [3098, 3099, 3100], client=client, land=land, chunk_size=3
         )
 
-    by_event = {summary.event_id: summary for summary in results}
+    by_event = {summary.key: summary for summary in results}
     assert by_event[3099].error is not None
     assert by_event[3099].status_code == 500
     assert by_event[3098].error is None
@@ -237,7 +239,7 @@ async def test_landing_failure_marks_the_event_failed() -> None:
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
-        results = await collect_match_entries([EVENT_ID], client=client, land=land)
+        results = await collect(MATCH_ENTRIES, [EVENT_ID], client=client, land=land)
 
     assert results[0].error == "landing failed: db down"
 
@@ -251,7 +253,7 @@ async def test_collect_records_a_run_per_event() -> None:
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
-        await collect_match_entries([EVENT_ID], client=client, record=recorded.append)
+        await collect(MATCH_ENTRIES, [EVENT_ID], client=client, record=recorded.extend)
 
     assert len(recorded) == 1
     record = recorded[0]
@@ -266,13 +268,13 @@ async def test_recording_failure_does_not_break_the_collect() -> None:
     async def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=[_match(1)])
 
-    def record(_record: RunRecord) -> None:
+    def record(_records: Sequence[RunRecord]) -> None:
         raise RuntimeError("runs table missing")
 
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
-        results = await collect_match_entries([EVENT_ID], client=client, record=record)
+        results = await collect(MATCH_ENTRIES, [EVENT_ID], client=client, record=record)
 
     assert results[0].error is None
     assert results[0].received_count == 1
@@ -286,7 +288,7 @@ async def test_chunk_size_must_be_positive() -> None:
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
         with pytest.raises(ValueError, match="chunk size"):
-            await collect_match_entries([EVENT_ID], client=client, chunk_size=0)
+            await collect(MATCH_ENTRIES, [EVENT_ID], client=client, chunk_size=0)
 
 
 @pytest.mark.parametrize("flag", ["--limit", "--chunk-size"])
@@ -302,7 +304,7 @@ async def test_chunk_progress_is_logged_once_per_chunk(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Chunk lines carry progress; per-event records are DEBUG-only."""
-    caplog.set_level(logging.INFO, logger="tt_stats.matches.collect.match_entries")
+    caplog.set_level(logging.INFO, logger="tt_stats.core.collector")
     events = [3098, 3099, 3100, 3101, 3102]
 
     async def handler(request: httpx.Request) -> httpx.Response:
@@ -316,7 +318,7 @@ async def test_chunk_progress_is_logged_once_per_chunk(
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
-        await collect_match_entries(events, client=client, chunk_size=2)
+        await collect(MATCH_ENTRIES, events, client=client, chunk_size=2)
 
     records = [r for r in caplog.records if r.getMessage() == "match_entries_chunk"]
     # Extras are attached to the record's __dict__, not to typed attributes.
@@ -345,6 +347,6 @@ async def test_payload_is_hashed_from_the_original_bytes() -> None:
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
-        results = await collect_match_entries([EVENT_ID], client=client)
+        results = await collect(MATCH_ENTRIES, [EVENT_ID], client=client)
 
     assert results[0].payload_sha256 == hashlib.sha256(body).hexdigest()

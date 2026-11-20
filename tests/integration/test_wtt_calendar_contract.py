@@ -13,12 +13,7 @@ from pathlib import Path
 import pytest
 
 from tt_stats.core.clients.wtt_api import WttClient, WttResponse
-from tt_stats.events.collect.events_by_year import (
-    DATE_FORMAT,
-    extract_counts,
-    extract_rows,
-    validate_rows,
-)
+from tt_stats.events.collect.events_by_year import DATE_FORMAT, check_payload
 
 pytestmark = pytest.mark.integration
 
@@ -30,11 +25,10 @@ def test_committed_fixture_matches_the_contract() -> None:
         pytest.skip("capture the fixture with make events-collect first")
 
     payload = json.loads(FIXTURE.read_text(encoding="utf-8"))
-    rows = extract_rows(payload)
-    source_final_count, _ = extract_counts(payload)
+    checked = check_payload(2023, payload)
 
-    assert validate_rows(rows) == []
-    assert source_final_count == len(rows)
+    assert checked.error is None
+    assert checked.received_count > 0
 
 
 def test_live_2023_calendar_matches_the_contract() -> None:
@@ -46,14 +40,12 @@ def test_live_2023_calendar_matches_the_contract() -> None:
             return await client.fetch_events_by_year(2023)
 
     response = asyncio.run(fetch())
-    rows = extract_rows(response.data)
-    source_final_count, _ = extract_counts(response.data)
+    checked = check_payload(2023, response.data)
 
     assert response.status_code == 200
-    assert rows
-    assert validate_rows(rows) == []
-    assert source_final_count == len(rows)
+    assert checked.error is None
+    assert checked.received_count > 0
 
-    sample = rows[0]
+    sample = response.data[0]["rows"][0]
     assert isinstance(sample["EventId"], int)
     datetime.strptime(sample["StartDateTime"], DATE_FORMAT)
