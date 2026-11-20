@@ -28,9 +28,9 @@ from tt_stats.core.ingest_runs import (
     STATUS_FAILED,
     record_runs,
 )
-from tt_stats.events.collect.events_by_year import EVENTS
+from tt_stats.events.collect import EVENTS
 from tt_stats.events.land import land_events_by_year
-from tt_stats.events.land.unpack import load_unpack_sql
+from tt_stats.events.unpack import load_unpack_sql
 
 pytestmark = [
     pytest.mark.integration,

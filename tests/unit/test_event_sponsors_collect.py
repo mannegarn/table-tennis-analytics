@@ -14,7 +14,7 @@ from tt_stats.core.clients.wtt_api import WttClient
 from tt_stats.core.collector import FetchSummary, PayloadShapeError, collect
 from tt_stats.core.config import Settings
 from tt_stats.core.ingest_runs import RunRecord
-from tt_stats.event_sponsors.collect.event_sponsors import (
+from tt_stats.event_sponsors.collect import (
     EVENT_SPONSORS,
     check_payload,
     main,

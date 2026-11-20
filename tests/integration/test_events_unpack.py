@@ -21,9 +21,9 @@ import pytest
 from psycopg import Connection, errors
 
 from tt_stats.core.collector import FetchSummary
+from tt_stats.events import unpack as events_unpack
 from tt_stats.events.land import land_events_by_year
-from tt_stats.events.land import unpack as events_unpack
-from tt_stats.events.land.unpack import load_unpack_sql, unpack_years
+from tt_stats.events.unpack import load_unpack_sql, unpack_years
 
 pytestmark = [
     pytest.mark.integration,

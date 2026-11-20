@@ -13,7 +13,7 @@ from tt_stats.core.clients.wtt_api import WttClient
 from tt_stats.core.collector import FetchSummary, PayloadShapeError, collect
 from tt_stats.core.config import Settings
 from tt_stats.core.ingest_runs import RunRecord
-from tt_stats.events.collect.events_by_year import (
+from tt_stats.events.collect import (
     EVENTS,
     check_payload,
     main,
