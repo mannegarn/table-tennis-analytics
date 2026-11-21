@@ -41,7 +41,7 @@ endef
 # Collectors share one pending queue and one API; never run them side by side.
 .NOTPARALLEL:
 
-.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-collect events-unpack events-unpack-preview matches-collect matches-unpack matches-unpack-preview match-details-collect match-commentary-collect event-sponsors-collect player-details-collect collect-all ittf-players-seed update-summary test test-integration dbt-debug dbt-run dbt-test dbt-clean lint lint-sql format typecheck check hooks-install hooks-run
+.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-collect events-unpack events-unpack-preview matches-collect matches-unpack matches-unpack-preview match-details-collect match-details-seed match-commentary-collect event-sponsors-collect player-details-collect collect-all ittf-players-seed update-summary test test-integration dbt-debug dbt-run dbt-test dbt-clean lint lint-sql format typecheck check hooks-install hooks-run
 
 help: ## Show available commands
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -113,6 +113,9 @@ matches-unpack-preview: ## Run the match unpack with EVENT_IDS, then roll it bac
 
 match-details-collect: ## Collect matchcentre details for pending matches into ingest_wtt.match_details_raw
 	uv run tt-match-details-collect $(strip $(ARGS_events) $(ARGS_limit))
+
+match-details-seed: ## Seed ingest_wtt.match_details_raw from data/raw/match_details_backup
+	uv run tt-match-details-seed
 
 match-commentary-collect: ## Collect match commentary for pending matches into ingest_wtt.match_commentary_raw
 	uv run tt-match-commentary-collect $(strip $(ARGS_events) $(ARGS_limit))
