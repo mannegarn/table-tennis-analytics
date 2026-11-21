@@ -52,5 +52,7 @@ seeds:
         description: Verified official ball brand for the event (nullable).
       - name: table_sponsor
         description: Verified official table brand for the event (nullable).
+      - name: start_date
+        description: Scheduled event start date synced from marts_wtt.dim_events (nullable).
       - name: event_name
         description: Optional human-readable event name for reference while editing the CSV.
