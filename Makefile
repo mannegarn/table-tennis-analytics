@@ -41,7 +41,7 @@ endef
 # Collectors share one pending queue and one API; never run them side by side.
 .NOTPARALLEL:
 
-.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-collect events-unpack events-unpack-preview matches-collect matches-unpack matches-unpack-preview match-details-collect match-details-seed match-commentary-collect event-sponsors-collect player-details-collect collect-all ittf-players-seed update-summary test test-integration dbt-debug dbt-run dbt-test dbt-clean lint lint-sql format typecheck check hooks-install hooks-run
+.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-collect events-unpack events-unpack-preview matches-collect matches-unpack matches-unpack-preview match-details-collect match-details-seed match-commentary-collect event-sponsors-collect event-sponsors-sync player-details-collect collect-all ittf-players-seed update-summary test test-integration dbt-debug dbt-run dbt-test dbt-clean lint lint-sql format typecheck check hooks-install hooks-run
 
 help: ## Show available commands
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -185,8 +185,12 @@ test-integration: ## Run only integration tests
 dbt-debug: ## Verify dbt can reach the warehouse
 	uv run dbt debug --project-dir dbt --profiles-dir dbt
 
-dbt-run: ## Seed, build and test dbt models in dependency order (optional: SELECT=model+)
+event-sponsors-sync: ## Sync senior match-detail events into dbt/seeds/event_sponsors_manual.csv (preserves manual edits)
+	uv run tt-event-sponsors-sync
+
+dbt-run: ## Seed, build and test dbt models in dependency order (optional: SELECT=model+; full run also syncs event_sponsors_manual.csv)
 	uv run dbt build --project-dir dbt --profiles-dir dbt $(ARGS_select)
+	$(if $(SELECT),,uv run tt-event-sponsors-sync)
 
 dbt-test: ## Run dbt data tests (optional: SELECT=model+)
 	uv run dbt test --project-dir dbt --profiles-dir dbt $(ARGS_select)

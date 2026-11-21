@@ -52,6 +52,7 @@ seeds:
         event_id: integer
         ball_sponsor: varchar
         table_sponsor: varchar
+        start_date: date
         event_name: varchar
     sponsor_domains:
       +column_types:
