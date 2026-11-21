@@ -1,4 +1,4 @@
-"""Integration test: ``ingest.events_unpacked`` exists and enforces its contract.
+"""Integration test: ``ingest_wtt.events_unpacked`` exists and enforces its contract.
 
 Schema, constraints and upsert behaviour only. The unpack statement and its
 placement inside the landing transaction are covered in ``test_events_unpack``.
@@ -35,14 +35,14 @@ EXPECTED_COLUMNS: dict[str, tuple[str, str, str | None]] = {
 }
 
 INSERT = """
-INSERT INTO ingest.events_unpacked (
+INSERT INTO ingest_wtt.events_unpacked (
     source_year, event_id, event_name, start_date, end_date
 )
 VALUES (%s, %s, %s, %s, %s);
 """
 
 UPSERT = """
-INSERT INTO ingest.events_unpacked (
+INSERT INTO ingest_wtt.events_unpacked (
     source_year, event_id, event_name, start_date, end_date, last_seen_at
 )
 VALUES (%s, %s, %s, %s, %s, clock_timestamp())
@@ -64,7 +64,7 @@ def test_events_unpacked_has_the_agreed_columns(
             """
             SELECT column_name, data_type, is_nullable, column_default
             FROM information_schema.columns
-            WHERE table_schema = 'ingest' AND table_name = 'events_unpacked';
+            WHERE table_schema = 'ingest_wtt' AND table_name = 'events_unpacked';
             """
         ).fetchall()
     }
@@ -75,7 +75,7 @@ def test_events_unpacked_has_the_agreed_columns(
         JOIN information_schema.key_column_usage AS kcu
           ON kcu.constraint_name = tc.constraint_name
          AND kcu.table_schema = tc.table_schema
-        WHERE tc.table_schema = 'ingest'
+        WHERE tc.table_schema = 'ingest_wtt'
           AND tc.table_name = 'events_unpacked'
           AND tc.constraint_type = 'PRIMARY KEY'
         ORDER BY kcu.ordinal_position;
@@ -104,7 +104,7 @@ def test_events_unpacked_defaults_the_freshness_columns(
     row = db_connection.execute(
         """
         SELECT first_seen_at, last_seen_at
-        FROM ingest.events_unpacked
+        FROM ingest_wtt.events_unpacked
         WHERE source_year = %s AND event_id = %s;
         """,
         (FIRST_YEAR, TEST_EVENT_ID),
@@ -129,7 +129,7 @@ def test_events_unpacked_upserts_in_place_within_a_year(
     rows = db_connection.execute(
         """
         SELECT event_name, start_date, end_date, source_year
-        FROM ingest.events_unpacked
+        FROM ingest_wtt.events_unpacked
         WHERE event_id = %s;
         """,
         (TEST_EVENT_ID,),
@@ -156,7 +156,7 @@ def test_events_unpacked_keeps_one_row_per_year_for_the_same_event(
     )
     rows = db_connection.execute(
         """
-        SELECT source_year FROM ingest.events_unpacked
+        SELECT source_year FROM ingest_wtt.events_unpacked
         WHERE event_id = %s
         ORDER BY source_year;
         """,
@@ -225,7 +225,7 @@ def test_events_unpacked_keeps_an_upstream_inverted_date_range(
     row = db_connection.execute(
         """
         SELECT start_date, end_date
-        FROM ingest.events_unpacked
+        FROM ingest_wtt.events_unpacked
         WHERE event_id = %s;
         """,
         (TEST_EVENT_ID,),
@@ -242,7 +242,7 @@ def test_events_unpacked_requires_a_name(
     with pytest.raises(errors.NotNullViolation):
         db_connection.execute(
             """
-            INSERT INTO ingest.events_unpacked (
+            INSERT INTO ingest_wtt.events_unpacked (
                 source_year, event_id, event_name, start_date, end_date
             )
             VALUES (%s, %s, NULL, %s, %s);

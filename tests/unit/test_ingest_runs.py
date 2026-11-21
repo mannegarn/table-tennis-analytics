@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from tt_stats.core.ingest_runs import (
-    SOURCE_WTT_EVENTCALENDAR,
+    ENDPOINT_WTT_EVENTCALENDAR,
     STATUS_FAILED,
     STATUS_SUCCEEDED,
     RunRecord,
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 def _sample_run() -> RunRecord:
     return RunRecord(
-        source=SOURCE_WTT_EVENTCALENDAR,
+        endpoint=ENDPOINT_WTT_EVENTCALENDAR,
         entity_key="2023",
         status=STATUS_SUCCEEDED,
         started_at=datetime.now(tz=UTC),

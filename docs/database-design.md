@@ -2,7 +2,7 @@
 
 This document defines the target schema layout, surrogate key strategy, match data quality rules, and multi-source integration pattern for `table-tennis-analytics`. Current work focuses on **WTT + ITTF enrichment**, while keeping every mart ready for future national/team leagues (France Pro A, Germany TTBL, Japan T.League, Poland Superliga, MLTT).
 
-Implementation is scheduled in `plans/warehouse-reorg-and-marts.md`. Where this document and the plan disagree, fix both.
+Implementation is scheduled in `plans/warehouse-build-plan.md`. Where this document and the plan disagree, fix both.
 
 ---
 
@@ -12,20 +12,27 @@ Both **Postgres schemas** and **dbt model folders** strictly follow **`level_sou
 
 | Layer | Postgres Schema (`level_source`) | dbt Folder (`level/source`) | Materialization | Purpose |
 |---|---|---|---|---|
-| **Raw / Landing** | `ingest_wtt`, `ingest_ittf`, *(future)* `ingest_pro_a`, `ingest_ttbl`, `ingest_tleague`, `ingest_superliga`, `ingest_mltt` | *(Python collectors + `db/migrations/`)* | Tables | Raw API JSONB payloads & operational `_unpacked` tables. *Until the optional raw split, everything is in `ingest`.* |
+| **Raw / Landing** | `ingest_wtt`, `ingest_ittf`, *(future)* `ingest_pro_a`, `ingest_ttbl`, `ingest_tleague`, `ingest_superliga`, `ingest_mltt` | *(Python collectors + `db/migrations/`)* | Tables | Raw API JSONB payloads, operational `_unpacked` tables, pending-queue views, and (WTT) the `ingest_runs` history. |
 | **Seeds** | `seeds` | `dbt/seeds/` | Tables | User-editable CSVs auto-loaded on `make dbt-run`. |
 | **Staging** | `staging_wtt`, `staging_ittf`, *(future)* `staging_<league>` | `dbt/models/staging/wtt/`, `dbt/models/staging/ittf/`, `dbt/models/staging/<league>/` | Views for thin models (`staging_ittf`); **tables for anything that expands JSONB** (all WTT staging) | 1:1 with raw tables: type casting, trimming, null normalization, column pruning, and parsing of codes embedded in IDs. |
 | **Intermediate** | `intermediate` | `dbt/models/intermediate/` | Tables / Views | Cross-source enrichment & identity crosswalks (`int_event_equipment_sponsors`, `int_player_identity_map`). |
 | **Source Marts** | `marts_wtt`, `marts_ittf` *(view)*, *(future)* `marts_<league>` | `dbt/models/marts/wtt/`, `dbt/models/marts/ittf/`, `dbt/models/marts/<league>/` | Tables *(views for lightweight enrichment like `marts_ittf`)* | Clean, source-scoped business entities (`marts_wtt.dim_events`, `dim_players`, `dim_matches`, `fct_singles`, `fct_match_games`, `fct_match_commentary`; `marts_ittf.dim_player_profiles`). |
 | **Unified Marts** | `marts` | `dbt/models/marts/core/` | **Views** until a second league exists, then re-evaluate | "Marts of marts": `UNION ALL`s source marts into `marts.dim_events`, `dim_players`, `dim_matches`, `fct_singles`, `fct_match_games`, `fct_match_commentary`. |
 
-> **dbt note — schema names**: Set `+schema:` per folder in `dbt_project.yml` and add a 5-line `dbt/macros/generate_schema_name.sql` macro so dbt writes to `staging_wtt`, `marts_wtt`, `marts_ittf`, `marts`, etc. literally instead of prefixing them with the default profile schema (`analytics`). The macro must return `target.schema` when no custom schema is set and `custom_schema_name | trim` otherwise.
+> **dbt note — schema names**: Set `+schema:` per folder in `dbt_project.yml` and add a 5-line `dbt/macros/generate_schema_name.sql` macro so dbt writes to `staging_wtt`, `marts_wtt`, `marts_ittf`, `marts`, etc. literally instead of prefixing them with the profile schema. The macro returns `target.schema` when no custom schema is set and `custom_schema_name | trim` otherwise. The profile's default schema is `dbt_default`; every model sets `+schema`, so that schema stays empty (a test asserts it).
 
 > **dbt note — model names must be unique project-wide.** dbt resolves `ref('dim_events')` by file name, regardless of schema, so `marts/wtt/dim_events.sql` and `marts/core/dim_events.sql` cannot coexist. Name the files `wtt__dim_events.sql` and `core__dim_events.sql` and set `config(alias='dim_events')` so the tables keep clean names. Use the same `<source>__<name>` prefix for every mart with a unified twin.
 
-> **dbt note — sources**: name dbt sources after the source system (`source('wtt', 'match_details_raw')`, `source('ittf', 'ittf_player_profiles')`) even while both point at `schema: ingest`. Splitting the raw schema later is then a YAML-only change.
+> **dbt note — sources**: name dbt sources after the source system: `source('wtt', 'match_details_raw')` reads `ingest_wtt`, `source('ittf', 'ittf_player_profiles')` reads `ingest_ittf`.
 
 > **dbt note — sqlfluff** cannot see custom macros unless `.sqlfluff` has `[sqlfluff:templater:jinja] load_macros_from_path = dbt/macros`.
+
+---
+
+### Raw-layer control tables
+
+- **`ingest_wtt.ingest_runs`** — append-only record of every WTT fetch attempt (success or failure). It is local to the source: each source owns its own history. The `endpoint` column names the API endpoint (e.g. `wtt_eventcalendar`). ITTF profiles come from a CSV seed and have no run history; a future league adds `ingest_<league>.ingest_runs`.
+- **`public.schema_version`** — the migration ledger (version, checksum, applied_at). Migrations are one numbered sequence for the whole database, so there is one ledger, and it belongs to no source. Migrations create `ingest_wtt` and `ingest_ittf` themselves, so a freshly created test database needs no bootstrap script.
 
 ---
 
@@ -217,12 +224,13 @@ erDiagram
 
 ## 7. Current Build Order (WTT + ITTF Subset)
 
-1. `fct_match_commentary` — **done** (plus `action_types` seed). Rebuild needed to restore the covering index (see plan, review item 2).
-2. `int_event_equipment_sponsors` — **done** (plus `event_sponsors_manual` & `sponsor_domains` seeds)
-3. `dim_events` — **next** (deduplicated WTT events + `event_sk` + equipment sponsors)
-4. `dim_players` — WTT + ITTF profile enrichment (`player_sk`, nullable `ittf_id`)
-5. **Match staging fixes** — `best_of`, result suffix, age category, discipline (see §10)
-6. `dim_matches`, `fct_singles`, `fct_match_games` — and `match_sk` on commentary
+1. Raw layer: `ingest_wtt`, `ingest_ittf`, `public.schema_version`
+2. dbt skeleton: `staging_*`, `intermediate`, `marts_*`, `seeds`; `int_event_equipment_sponsors` and its seeds
+3. Keys and `dim_events` (deduplicated WTT events, `event_sk`, equipment sponsors)
+4. `dim_players` (WTT + ITTF profile enrichment, `player_sk`, nullable `ittf_id`)
+5. Match staging (`best_of`, result suffix, age category, discipline; see §10)
+6. `dim_matches`, `fct_singles`, `fct_match_games`, and `match_sk` on `fct_match_commentary`
+7. Unified `marts` views
 
 ---
 

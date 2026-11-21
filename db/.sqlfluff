@@ -1,4 +1,4 @@
-# Applied migrations are checksummed in ingest.schema_version, so reformatting
+# Applied migrations are checksummed in public.schema_version, so reformatting
 # one makes `make db-migrate` refuse to run. Their existing layout is therefore
 # frozen: the style rules they predate are switched off here, and everything
 # else (parsing, aliasing, references, ambiguity) still applies.

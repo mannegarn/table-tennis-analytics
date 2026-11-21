@@ -41,7 +41,7 @@ endef
 # Collectors share one pending queue and one API; never run them side by side.
 .NOTPARALLEL:
 
-.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-collect events-unpack events-unpack-preview matches-collect matches-unpack matches-unpack-preview match-details-collect match-commentary-collect event-sponsors-collect player-details-collect collect-all ittf-players-seed update-summary test test-integration dbt-debug dbt-run dbt-test dbt-clean lint lint-sql format typecheck check hooks-install hooks-run
+.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-collect events-unpack events-unpack-preview matches-collect matches-unpack matches-unpack-preview match-details-collect match-details-seed match-commentary-collect event-sponsors-collect event-sponsors-sync player-details-collect collect-all ittf-players-seed update-summary test test-integration dbt-debug dbt-run dbt-test dbt-clean lint lint-sql format typecheck check hooks-install hooks-run
 
 help: ## Show available commands
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -82,45 +82,48 @@ db-test-check: ## Verify the test database exists, is migrated and how many fixt
 		|| { echo "missing database $(TEST_DATABASE_NAME); see db/init/000_create_test_db.sql"; exit 1; }
 	@$(COMPOSE) exec -T postgres psql -U $(POSTGRES_USER) -d $(TEST_DATABASE_NAME) -tAc \
 		"SELECT format('migrations=%s events_raw=%s events_unpacked=%s match_raw=%s match_unpacked=%s runs=%s', \
-			(SELECT count(*) FROM ingest.schema_version), \
-			(SELECT count(*) FROM ingest.events_by_year_raw), \
-			(SELECT count(*) FROM ingest.events_unpacked), \
-			(SELECT count(*) FROM ingest.match_entries_payloads_raw), \
-			(SELECT count(*) FROM ingest.match_entries_unpacked), \
-			(SELECT count(*) FROM ingest.ingest_runs));"
+			(SELECT count(*) FROM public.schema_version), \
+			(SELECT count(*) FROM ingest_wtt.events_by_year_raw), \
+			(SELECT count(*) FROM ingest_wtt.events_unpacked), \
+			(SELECT count(*) FROM ingest_wtt.match_entries_payloads_raw), \
+			(SELECT count(*) FROM ingest_wtt.match_entries_unpacked), \
+			(SELECT count(*) FROM ingest_wtt.ingest_runs));"
 
 db-migrate: ## Apply db/migrations to the warehouse
 	uv run tt-db-migrate
 
-events-collect: ## Collect the pending calendar years into ingest.events_by_year_raw
+events-collect: ## Collect the pending calendar years into ingest_wtt.events_by_year_raw
 	uv run tt-events-collect $(strip $(ARGS_years) $(ARGS_limit))
 
-events-unpack: ## Unpack landed calendars into ingest.events_unpacked
+events-unpack: ## Backfill-unpack landed calendars into ingest_wtt.events_unpacked
 	uv run tt-events-unpack $(ARGS_years)
 
 events-unpack-preview: ## Run the unpack for one year, then roll it back
 	uv run tt-events-unpack --years $(or $(YEARS),2023) --dry-run
 
-matches-collect: ## Collect match lists for pending events into ingest.match_entries_payloads_raw
+matches-collect: ## Collect match lists for pending events into ingest_wtt.match_entries_payloads_raw
 	uv run tt-matches-collect $(strip $(ARGS_events) $(ARGS_limit))
 
-matches-unpack: ## Unpack landed match lists into ingest.match_entries_unpacked
+matches-unpack: ## Backfill-unpack landed match lists into ingest_wtt.match_entries_unpacked
 	uv run tt-matches-unpack $(ARGS_events)
 
 matches-unpack-preview: ## Run the match unpack with EVENT_IDS, then roll it back
 	$(call require,EVENT_IDS)
 	uv run tt-matches-unpack --event-ids $(EVENT_IDS) --dry-run
 
-match-details-collect: ## Collect matchcentre details for pending matches into ingest.match_details_raw
+match-details-collect: ## Collect matchcentre details for pending matches into ingest_wtt.match_details_raw
 	uv run tt-match-details-collect $(strip $(ARGS_events) $(ARGS_limit))
 
-match-commentary-collect: ## Collect match commentary for pending matches into ingest.match_commentary_raw
+match-details-seed: ## Seed ingest_wtt.match_details_raw from data/raw/match_details_backup
+	uv run tt-match-details-seed
+
+match-commentary-collect: ## Collect match commentary for pending matches into ingest_wtt.match_commentary_raw
 	uv run tt-match-commentary-collect $(strip $(ARGS_events) $(ARGS_limit))
 
-event-sponsors-collect: ## Collect sponsor details for pending events into ingest.event_sponsors_raw
+event-sponsors-collect: ## Collect sponsor details for pending events into ingest_wtt.event_sponsors_raw
 	uv run tt-event-sponsors-collect $(strip $(ARGS_events) $(ARGS_limit))
 
-player-details-collect: ## Collect player details for pending players into ingest.player_details_raw
+player-details-collect: ## Collect player details for pending players into ingest_wtt.player_details_raw
 	uv run tt-player-details-collect $(strip $(ARGS_players) $(ARGS_limit))
 
 collect-all: ## Run every collector (details + commentary in parallel); report failures at the end
@@ -167,7 +170,7 @@ collect-all: ## Run every collector (details + commentary in parallel); report f
 	fi; \
 	printf '\nAll collectors finished.\n'
 
-ittf-players-seed: ## Seed ingest.ittf_player_profiles from data/20260615_master_players.csv
+ittf-players-seed: ## Seed ingest_ittf.ittf_player_profiles from data/20260615_master_players.csv
 	uv run tt-ittf-players-seed
 
 update-summary: ## Generate docs/data-summary.md from the PostgreSQL database
@@ -182,11 +185,14 @@ test-integration: ## Run only integration tests
 dbt-debug: ## Verify dbt can reach the warehouse
 	uv run dbt debug --project-dir dbt --profiles-dir dbt
 
-dbt-run: ## Seed CSVs and build dbt models in the analytics schema (optional: SELECT=model)
-	uv run dbt seed --project-dir dbt --profiles-dir dbt
-	uv run dbt run --project-dir dbt --profiles-dir dbt $(ARGS_select)
+event-sponsors-sync: ## Sync senior match-detail events into dbt/seeds/event_sponsors_manual.csv (preserves manual edits)
+	uv run tt-event-sponsors-sync
 
-dbt-test: ## Run dbt data tests against the analytics schema (optional: SELECT=model)
+dbt-run: ## Seed, build and test dbt models in dependency order (optional: SELECT=model+; full run also syncs event_sponsors_manual.csv)
+	uv run dbt build --project-dir dbt --profiles-dir dbt $(ARGS_select)
+	$(if $(SELECT),,uv run tt-event-sponsors-sync)
+
+dbt-test: ## Run dbt data tests (optional: SELECT=model+)
 	uv run dbt test --project-dir dbt --profiles-dir dbt $(ARGS_select)
 
 dbt-clean: ## Remove dbt compiled artifacts and logs (dbt/target, dbt/logs)

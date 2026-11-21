@@ -1,0 +1,31 @@
+version: 2
+
+models:
+  - name: stg_ittf_players
+    description: >
+      Thin staging view over ingest_ittf.ittf_player_profiles. Keeps player_id,
+      hand, grip, and style, trimming blank strings to NULL.
+    columns:
+      - name: player_id
+        description: ITTF/WTT player identifier.
+        data_tests:
+          - not_null
+          - unique
+      - name: hand
+        description: Playing hand (Left, Right, or NULL).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['Left', 'Right']
+      - name: grip
+        description: Raw trimmed grip value (normalized in players mart).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['Shakehand', 'Penhold', 'Shake hand', 'Handshake']
+      - name: style
+        description: Playing style (Attacker, Defender, or NULL).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['Attacker', 'Defender']

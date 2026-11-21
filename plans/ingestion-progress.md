@@ -1,32 +1,32 @@
 # Ingestion progress and decisions
 
-Updated: 2026-11-10.
+Updated: 2026-11-20.
 
 ## Current state
 
 **Events calendar**
 
-- `make events-collect` reads `ingest.events_years_pending`, fetches each year in
-  chunks, and upserts one row per year into `ingest.events_by_year_raw`.
+- `make events-collect` reads `ingest_wtt.events_years_pending`, fetches each year in
+  chunks, and upserts one row per year into `ingest_wtt.events_by_year_raw`.
 - **102 years are landed: 1926-2027**, 2984 calendar rows. `source_final_count`
   and `received_count` agree for every year, and nine years are legitimately
   empty (1927, 1934, 1940-1946).
-- `ingest.events_unpacked` holds **2965 events** from those 2984 rows. The 19
+- `ingest_wtt.events_unpacked` holds **2965 events** from those 2984 rows. The 19
   duplicates are verbatim repeats inside a single year, removed by `DISTINCT ON`.
 - `make events-unpack-preview YEARS=2023` runs the statement and rolls back, so
   the SQL can be exercised without touching the data.
-- Every attempt is recorded in `ingest.ingest_runs`, success or failure, with
+- Every attempt is recorded in `ingest_wtt.ingest_runs`, success or failure, with
   start/finish time, status, HTTP status, received count and error.
 
 **Match entries**
 
-- `make matches-collect` reads `ingest.match_entries_pending`, fetches one match
-  list per event into `ingest.match_entries_payloads_raw`, and writes one
+- `make matches-collect` reads `ingest_wtt.match_entries_pending`, fetches one match
+  list per event into `ingest_wtt.match_entries_payloads_raw`, and writes one
   `ingest_runs` row per event.
 - **2838 events fetched**: 2307 answers of `[]`, 531 with matches, 200,879 match
   rows, 2.7 MB of payload. The queue then holds only the live events.
 - `make matches-unpack` unpacks every landed payload into
-  `ingest.match_entries_unpacked`: **200,879 rows across 531 events**, with the
+  `ingest_wtt.match_entries_unpacked`: **200,879 rows across 531 events**, with the
   2307 empty payloads unpacking to nothing. A second run changes no counts, only
   `last_seen_at`.
 - The unpack also runs inside `land_match_entries`, so a collect cannot land a
@@ -35,9 +35,10 @@ Updated: 2026-11-10.
 
 **Shared plumbing**
 
-- One `ingest` schema holds raw, unpacked and control tables; dbt writes to
-  `analytics` and ingestion never reads it.
-- Migrations are tracked in `ingest.schema_version` with a checksum per file, and
+- Source-scoped raw schemas (`ingest_wtt`, `ingest_ittf`) hold raw, unpacked and
+  run-history tables; dbt writes to its own `level_source` schemas and ingestion
+  never reads them.
+- Migrations are tracked in `public.schema_version` with a checksum per file, and
   they are **declarative on the first pass**: no constraint is created only to be
   dropped a few files later. The database is disposable during development, so a
   migration is amended and the database rebuilt rather than layered with `ALTER`.
@@ -139,7 +140,7 @@ Updated: 2026-11-10.
   already in the table name (`events_*`, `match_entries_*`), and per-domain
   schemas would undo ADR 0007, split the grants and force one schema per dbt
   source. Folders only mirror the Python package, as in
-  `src/tt_stats/events/land/sql/` and `src/tt_stats/matches/land/sql/`.
+  `src/tt_stats/events/sql/` and `src/tt_stats/matches/land/sql/`.
 - **Migrations stay flat in `db/migrations/` (2026-11-10).** Order is the
   deployment contract, and `discover_migrations()` globs `*.sql` without
   recursing, so a migration filed in a subfolder would be silently skipped
@@ -178,11 +179,24 @@ Updated: 2026-11-10.
 - **No `run_limited` helper (2026-11-10).** The client semaphore already caps
   in-flight requests at `max_concurrent_requests`, so a second limiter would
   bound nothing. One bound, one place.
+- **One collector loop for every endpoint (2026-11-20).** The six collectors
+  had grown the same summary class, settle step, chunk logging, run recording
+  and `main()`. That loop now lives once in `src/tt_stats/core/collector.py`;
+  an endpoint module keeps only its pending query, its `check_payload()` and
+  an `Endpoint` description. Per-item landing (calendar, match lists,
+  sponsors) and per-chunk landing (match details, commentary, players) both
+  stay. Run history is written per chunk, and a failed chunk landing is
+  recorded as failed rather than succeeded.
+- **Flat modules where a folder held one (2026-11-20).** `events/`,
+  `event_sponsors/` and `players/` are now `collect.py` and `land.py` (plus
+  `unpack.py`, `sql/` and `ittf_seed.py` where they apply). `matches/` keeps
+  `collect/` and `land/` because three sources share them. Console commands
+  are unchanged.
 
 ## Year queue: eligibility rules (decided 2026-11-10)
 
 The same derivation as the event-level rules, one level up. A read-only view,
-`ingest.events_years_pending`, answers which years deserve a request: the
+`ingest_wtt.events_years_pending`, answers which years deserve a request: the
 current year and the next are always worth asking about, a missing past year is
 worth asking about once, and a past year that already landed is done.
 
@@ -198,7 +212,7 @@ worth asking about once, and a past year that already landed is done.
 
 ```sql
 FROM generate_series(1900, cy + 1) AS y (year)
-LEFT JOIN ingest.events_by_year_raw AS r USING (year)
+LEFT JOIN ingest_wtt.events_by_year_raw AS r USING (year)
 WHERE y.year IN (cy, cy + 1)
    OR r.year IS NULL
 ORDER BY (y.year = cy) DESC, (y.year = cy + 1) DESC, y.year DESC
@@ -242,8 +256,9 @@ ORDER BY (y.year = cy) DESC, (y.year = cy + 1) DESC, y.year DESC
   next year.
 - **An empty year is not `[]`.** It is the normal envelope with
   `rows: []`, `Count: 0`, `Original_Count: 0`, 228 bytes. The collector's shape
-  check already accepts that envelope; what fails today is `extract_rows()`
-  rejecting an empty `rows` list.
+  check already accepts that envelope; what failed at the time was
+  `extract_rows()` rejecting an empty `rows` list (since folded into the
+  calendar's `check_payload()`).
 - **2027 is already published** with 116 events, which is the evidence for
   refreshing `current year + 1` rather than only the current year.
 - **The archive grew from 736 events to 2965**, so `events_unpacked` and every
@@ -258,7 +273,7 @@ ORDER BY (y.year = cy) DESC, (y.year = cy + 1) DESC, y.year DESC
 
 ## Match-entries queue: eligibility rules (decided 2026-11-10)
 
-The queue is a read-only view, `ingest.match_entries_pending`. It joins
+The queue is a read-only view, `ingest_wtt.match_entries_pending`. It joins
 `events_unpacked` to `match_entries_payloads_raw` and answers one question:
 which events deserve a request right now.
 
@@ -382,12 +397,14 @@ Modules, in build order:
    in one transaction, followed by the completeness assertion, mirroring
    `land_events_by_year`.
 5. `matches/collect/match_entries.py`: queue read, chunk loop, per-event land,
-   `ingest_runs` row per attempt, progress bar, CLI.
+   `ingest_runs` row per attempt, progress bar, CLI. (Since 2026-11-20 the
+   loop, run recording, progress bar and CLI are shared in
+   `core/collector.py`; this module keeps the queue and the payload check.)
 
 Loop shape:
 
 ```
-queue = SELECT event_id FROM ingest.match_entries_pending        -- ordered
+queue = SELECT event_id FROM ingest_wtt.match_entries_pending    -- ordered
 for chunk in slices(queue, settings.chunk_size):                 -- 200
     summaries = gather(fetch_one(event_id) for event_id in chunk) -- semaphore caps I/O
     each summary: land in its own transaction, then record the run
@@ -403,7 +420,7 @@ exit 1 if any summary carries an error
   than retry, per event, and the run continues.
 - **Landing is synchronous psycopg inside async code.** A few milliseconds per
   event; wrap in `asyncio.to_thread` only if the bar visibly stutters.
-- **One `ingest_runs` row per event**, `source = wtt_getofficialresult`,
+- **One `ingest_runs` row per event**, `endpoint = wtt_getofficialresult`,
   `entity_key = event_id`.
 
 ### Measured collection (2026-11-10)
@@ -515,8 +532,8 @@ best-of-five effects all need who served each point and who won it.
 4. Integration tests: idempotency, an empty payload writing zero rows, and the
    reparenting guard.
 5. Add the match tables to `make db-test-check`.
-6. `dbt/models/events/sources.yml` over the `_unpacked` tables with freshness on
-   `fetched_at`, then the marts under `analytics`.
+6. dbt sources over the raw tables with freshness on `fetched_at`, then the
+   staging, intermediate and mart layers under `level_source` schemas.
 
 ## How to inspect now
 
@@ -524,7 +541,7 @@ Use DBeaver or `make db-psql`.
 
 ```sql
 SELECT entity_key, status, http_status, received_count, started_at, error
-FROM ingest.ingest_runs
+FROM ingest_wtt.ingest_runs
 ORDER BY run_id DESC
 LIMIT 20;
 ```
@@ -535,40 +552,40 @@ tail -f logs/tt_stats.log
 
 ```sql
 SELECT event_id, event_name, start_date, end_date, source_year, first_seen_at, last_seen_at
-FROM ingest.events_unpacked
+FROM ingest_wtt.events_unpacked
 ORDER BY start_date DESC
 LIMIT 20;
 
 -- Events whose last_seen_at stopped advancing: dropped upstream, kept for history.
 SELECT event_id, event_name, source_year, last_seen_at
-FROM ingest.events_unpacked
+FROM ingest_wtt.events_unpacked
 ORDER BY last_seen_at
 LIMIT 20;
 
 SELECT year, http_status, source_final_count, received_count, fetched_at
-FROM ingest.events_by_year_raw
+FROM ingest_wtt.events_by_year_raw
 ORDER BY year;
 
 SELECT year, payload->0->'rows'->0 AS first_event
-FROM ingest.events_by_year_raw
+FROM ingest_wtt.events_by_year_raw
 WHERE year = 2023;
 
 -- The match-entries queue: what a collect run would request right now.
 SELECT event_id, event_name, end_date, reason, previous_received_count
-FROM ingest.match_entries_pending
+FROM ingest_wtt.match_entries_pending
 ORDER BY end_date DESC
 LIMIT 20;
 
 -- Which events answered with no matches at all, by year.
 SELECT e.source_year, count(*) AS events_without_matches
-FROM ingest.events_unpacked AS e
-JOIN ingest.match_entries_payloads_raw AS r USING (event_id)
+FROM ingest_wtt.events_unpacked AS e
+JOIN ingest_wtt.match_entries_payloads_raw AS r USING (event_id)
 WHERE r.received_count = 0
 GROUP BY 1
 ORDER BY 1;
 
 SELECT event_id, received_count, pg_size_pretty(pg_column_size(payload)::bigint) AS size
-FROM ingest.match_entries_payloads_raw
+FROM ingest_wtt.match_entries_payloads_raw
 ORDER BY received_count DESC
 LIMIT 10;
 ```

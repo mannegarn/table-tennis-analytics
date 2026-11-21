@@ -18,17 +18,17 @@ from tt_stats.core.migrations import apply_migrations
 # The only tables tests write to. Truncating them removes fixture data without
 # the cost of dropping and recreating a schema.
 INGEST_TABLES = (
-    "ingest.ittf_player_profiles",
-    "ingest.player_details_raw",
-    "ingest.match_commentary_raw",
-    "ingest.match_details_players_unpacked",
-    "ingest.match_details_raw",
-    "ingest.event_sponsors_raw",
-    "ingest.match_entries_unpacked",
-    "ingest.match_entries_payloads_raw",
-    "ingest.events_unpacked",
-    "ingest.events_by_year_raw",
-    "ingest.ingest_runs",
+    "ingest_ittf.ittf_player_profiles",
+    "ingest_wtt.player_details_raw",
+    "ingest_wtt.match_commentary_raw",
+    "ingest_wtt.match_details_players_unpacked",
+    "ingest_wtt.match_details_raw",
+    "ingest_wtt.event_sponsors_raw",
+    "ingest_wtt.match_entries_unpacked",
+    "ingest_wtt.match_entries_payloads_raw",
+    "ingest_wtt.events_unpacked",
+    "ingest_wtt.events_by_year_raw",
+    "ingest_wtt.ingest_runs",
 )
 
 TRUNCATE_SQL = f"TRUNCATE {', '.join(INGEST_TABLES)} RESTART IDENTITY CASCADE;"

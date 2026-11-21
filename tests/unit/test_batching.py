@@ -11,7 +11,6 @@ from tt_stats.core.batching import (
     FetchedItem,
     chunks,
     collect_in_chunks,
-    reason_counts,
 )
 from tt_stats.core.clients.wtt_api import WttPayloadError, WttRequestError, WttResponse
 
@@ -27,11 +26,6 @@ def test_chunks_splits_items_preserving_order() -> None:
 def test_chunks_rejects_non_positive_size() -> None:
     with pytest.raises(ValueError, match="chunk size must be at least 1"):
         chunks([1], 0)
-
-
-def test_reason_counts_tallies_reasons() -> None:
-    queue = [(2026, "current"), (2027, "next"), (2025, "backfill"), (2024, "backfill")]
-    assert reason_counts(queue) == {"current": 1, "next": 1, "backfill": 2}
 
 
 async def test_collect_in_chunks_isolates_request_payload_and_unexpected_errors() -> (

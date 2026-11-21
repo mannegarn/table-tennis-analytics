@@ -1,0 +1,128 @@
+version: 2
+
+models:
+  - name: wtt__dim_events
+    description: >
+      Deduplicated WTT events dimension (1 row per WTT event_id, keeping the
+      latest source_year), enriched with equipment sponsors and downstream data
+      coverage flags.
+    columns:
+      - name: event_sk
+        description: Deterministic 60-bit surrogate key hashed from 'wtt' and source_event_id.
+        data_tests:
+          - unique
+          - not_null
+      - name: source_system
+        description: Source system identifier ('wtt').
+        data_tests:
+          - not_null
+      - name: source_event_id
+        description: Natural WTT event identifier.
+        data_tests:
+          - not_null
+      - name: event_name
+        description: Whitespace-normalized event name.
+        data_tests:
+          - not_null
+      - name: event_type
+        description: WTT event category label (e.g. WTTC, WTT Star Contender).
+        data_tests:
+          - not_null
+      - name: event_tier_name
+        description: Modern WTT event tier label (nullable for historical events).
+      - name: event_year
+        description: Calendar year derived from start_date.
+        data_tests:
+          - not_null
+      - name: start_date
+        description: Scheduled event start date.
+        data_tests:
+          - not_null
+      - name: end_date
+        description: Scheduled event end date.
+        data_tests:
+          - not_null
+      - name: duration_days
+        description: Inclusive event duration in days (end_date - start_date + 1); NULL when start_date > end_date.
+      - name: country
+        description: Whitespace-normalized host country name.
+        data_tests:
+          - not_null
+      - name: city
+        description: Whitespace-normalized host city name (nullable).
+      - name: continent_code
+        description: Host continent slug (europe, asia, americas, africa, oceania).
+        data_tests:
+          - not_null
+      - name: ball_sponsor
+        description: Canonical official ball brand from int_event_equipment_sponsors (nullable).
+      - name: table_sponsor
+        description: Canonical official table brand from int_event_equipment_sponsors (nullable).
+      - name: has_matches
+        description: True when at least one match entry exists for the event in stg_match_entries.
+        data_tests:
+          - not_null
+      - name: has_match_details
+        description: True when at least one non-empty match detail payload exists for the event in stg_match_details.
+        data_tests:
+          - not_null
+      - name: has_commentary
+        description: True when at least one commentary action exists for the event in stg_match_commentary.
+        data_tests:
+          - not_null
+      - name: has_sponsors
+        description: True when ball_sponsor or table_sponsor is present.
+        data_tests:
+          - not_null
+
+  - name: wtt__fct_match_commentary
+    description: >
+      Fact table of match commentary actions at grain (event_id, document_code,
+      sequence_number), enriched with human-readable action_name and
+      action_category from the action_types seed.
+    columns:
+      - name: event_id
+        description: WTT event identifier.
+        data_tests:
+          - not_null
+      - name: document_code
+        description: WTT match document code within the event.
+        data_tests:
+          - not_null
+      - name: sequence_number
+        description: Action sequence number within the match.
+        data_tests:
+          - not_null
+      - name: commentary_id
+        description: UUID of the commentary action.
+        data_tests:
+          - not_null
+      - name: action_type
+        description: Raw WTT action code (e.g. STP, PT, SSR, YC).
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('action_types')
+                field: action_type
+      - name: action_name
+        description: Human-readable action label from dbt/seeds/action_types.csv.
+        data_tests:
+          - not_null
+      - name: action_category
+        description: High-level action grouping (scoring, service, match_flow, discipline, other).
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["scoring", "service", "match_flow", "discipline", "other"]
+      - name: commentary_text
+        description: Human-readable commentary text (nullable for 350 MPOINT rows; placeholder text for silent actions).
+      - name: has_commentary_text
+        description: True when commentary_text is present and not the default placeholder string.
+        data_tests:
+          - not_null
+      - name: utc_time
+        description: UTC time of action (9-digit HHMMSSmmm for match actions; 13-digit epoch ms for OT rows).
+        data_tests:
+          - not_null

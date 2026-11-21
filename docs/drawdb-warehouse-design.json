@@ -2133,6 +2133,198 @@
           "comment": "True for LIVE rows: excluded from fct_singles / fct_match_games"
         }
       ]
+    },
+    {
+      "id": "tbl_raw_ingest_runs",
+      "name": "ingest_wtt.ingest_runs",
+      "areaId": "area_ingest",
+      "x": 1420,
+      "y": 1030,
+      "width": 270,
+      "color": "#b7791f",
+      "comment": "Append-only WTT fetch history (local to the source)",
+      "indices": [
+        {
+          "name": "ingest_runs_entity_idx",
+          "unique": false,
+          "fields": [
+            "endpoint",
+            "entity_key",
+            "started_at"
+          ]
+        }
+      ],
+      "fields": [
+        {
+          "id": "ir_run_id",
+          "name": "run_id",
+          "type": "BIGINT",
+          "default": "",
+          "check": "",
+          "primary": true,
+          "unique": true,
+          "notNull": true,
+          "increment": false,
+          "comment": "identity"
+        },
+        {
+          "id": "ir_endpoint",
+          "name": "endpoint",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "API endpoint, e.g. wtt_eventcalendar"
+        },
+        {
+          "id": "ir_entity",
+          "name": "entity_key",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "natural key attempted"
+        },
+        {
+          "id": "ir_status",
+          "name": "status",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "succeeded | failed"
+        },
+        {
+          "id": "ir_started",
+          "name": "started_at",
+          "type": "TIMESTAMPTZ",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "ir_finished",
+          "name": "finished_at",
+          "type": "TIMESTAMPTZ",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "ir_http",
+          "name": "http_status",
+          "type": "INTEGER",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "ir_count",
+          "name": "received_count",
+          "type": "INTEGER",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "ir_sha",
+          "name": "payload_sha256",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "ir_err",
+          "name": "error",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
+        }
+      ]
+    },
+    {
+      "id": "tbl_public_schema_version",
+      "name": "public.schema_version",
+      "areaId": "area_ingest",
+      "x": 1720,
+      "y": 1030,
+      "width": 270,
+      "color": "#b7791f",
+      "comment": "Migration ledger (one per database)",
+      "indices": [],
+      "fields": [
+        {
+          "id": "sv_version",
+          "name": "version",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": true,
+          "unique": true,
+          "notNull": true,
+          "increment": false,
+          "comment": "migration file version"
+        },
+        {
+          "id": "sv_checksum",
+          "name": "checksum",
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        },
+        {
+          "id": "sv_applied",
+          "name": "applied_at",
+          "type": "TIMESTAMPTZ",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": ""
+        }
+      ]
     }
   ],
   "relationships": [
@@ -2287,7 +2479,7 @@
       "width": 320,
       "height": 160,
       "title": "level_source Schema & Folder Pattern",
-      "content": "Both Postgres schemas and dbt folders use level_source: ingest_<src> -> staging_<src> (views) -> marts_<src> (marts_wtt, marts_ittf view, marts_pro_a) -> unified marts (UNION ALL).",
+      "content": "Both Postgres schemas and dbt folders use level_source: ingest_<src> -> staging_<src> (tables for JSONB, views for thin models) -> marts_<src> -> unified marts (views, UNION ALL). Run history is local (ingest_wtt.ingest_runs); the migration ledger is public.schema_version; dbt_default stays empty.",
       "color": "#fcf7ac"
     },
     {
@@ -2345,7 +2537,7 @@
       "x": 1380,
       "y": 40,
       "width": 640,
-      "height": 1170,
+      "height": 1440,
       "color": "#b7791f"
     }
   ],

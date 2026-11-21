@@ -1,0 +1,19 @@
+version: 2
+
+sources:
+  - name: wtt
+    schema: ingest_wtt
+    description: Raw WTT JSONB payloads populated by the ingestion pipeline.
+    tables:
+      - name: events_by_year_raw
+        description: One raw WTT GetEventsCalendar response per calendar year (JSONB array of page objects with rows).
+      - name: event_sponsors_raw
+        description: One raw WTT GetEventEquipmentwithLogo response per event_id (JSONB bare array of sponsor objects).
+      - name: match_entries_payloads_raw
+        description: One raw WTT GetOfficialResult response per event_id (JSONB bare array of match entry objects).
+      - name: match_details_raw
+        description: One raw WTT matchcentre response per (event_id, document_code), or '{}' when empty.
+      - name: match_commentary_raw
+        description: One raw WTT match commentary response per (event_id, document_code), decoded to a JSONB array.
+      - name: player_details_raw
+        description: One raw WTT GetPlayers response per player_id.

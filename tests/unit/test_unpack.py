@@ -9,8 +9,8 @@ from pathlib import Path
 import pytest
 
 from tt_stats.core.sql_files import executable_sql
-from tt_stats.events.land import unpack
-from tt_stats.events.land.unpack import (
+from tt_stats.events import unpack
+from tt_stats.events.unpack import (
     UNPACK_SQL_PATH,
     load_unpack_sql,
 )
@@ -45,7 +45,7 @@ def test_real_statement_is_returned(tmp_path: Path) -> None:
 def test_statement_is_a_single_dml_insert() -> None:
     body = executable_sql(STATEMENT or "")
 
-    assert "ingest.events_unpacked" in body
+    assert "ingest_wtt.events_unpacked" in body
     assert body.upper().startswith("INSERT"), "expected one INSERT statement"
     for forbidden in ("CREATE", "ALTER", "DROP", "TRUNCATE", "DELETE"):
         assert forbidden not in body.upper(), f"{forbidden} does not belong here"

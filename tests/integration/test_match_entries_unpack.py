@@ -22,7 +22,7 @@ import psycopg
 import pytest
 from psycopg import Connection, errors
 
-from tt_stats.matches.collect.match_entries import MatchEntriesSummary
+from tt_stats.core.collector import FetchSummary
 from tt_stats.matches.land import land_match_entries
 from tt_stats.matches.land import unpack as matches_unpack
 from tt_stats.matches.land.unpack import unpack_events
@@ -65,10 +65,10 @@ def _without(key: str, **overrides: Any) -> dict[str, Any]:
     return row
 
 
-def _summary(event_id: int, payload: Payload) -> MatchEntriesSummary:
+def _summary(event_id: int, payload: Payload) -> FetchSummary[int]:
     body = json.dumps(payload).encode("utf-8")
-    return MatchEntriesSummary(
-        event_id=event_id,
+    return FetchSummary(
+        key=event_id,
         status_code=200,
         received_count=len(payload) if isinstance(payload, list) else 0,
         payload_sha256=hashlib.sha256(body).hexdigest(),
@@ -89,7 +89,7 @@ def _unpacked(
     rows = connection.execute(
         """
         SELECT event_id, document_code, first_seen_at, last_seen_at
-        FROM ingest.match_entries_unpacked
+        FROM ingest_wtt.match_entries_unpacked
         WHERE event_id = %s
         ORDER BY document_code;
         """,
@@ -102,7 +102,7 @@ def _raw_count(connection: Connection[Any], event_id: int = EVENT_ID) -> int:
     row = connection.execute(
         """
         SELECT count(*) AS n
-        FROM ingest.match_entries_payloads_raw
+        FROM ingest_wtt.match_entries_payloads_raw
         WHERE event_id = %s;
         """,
         (event_id,),
@@ -227,7 +227,7 @@ def test_dry_run_reports_counts_but_writes_nothing(
 ) -> None:
     _land(db_connection, EVENT_ID, [_row()])
     db_connection.execute(
-        "DELETE FROM ingest.match_entries_unpacked WHERE event_id = %s;",
+        "DELETE FROM ingest_wtt.match_entries_unpacked WHERE event_id = %s;",
         (EVENT_ID,),
     )
 
@@ -242,7 +242,7 @@ def test_the_backfill_covers_every_landed_event(
 ) -> None:
     _land(db_connection, EVENT_ID, [_row()])
     _land(db_connection, OTHER_EVENT_ID, [_row()])
-    db_connection.execute("DELETE FROM ingest.match_entries_unpacked;")
+    db_connection.execute("DELETE FROM ingest_wtt.match_entries_unpacked;")
 
     results = unpack_events()
 
@@ -298,7 +298,7 @@ def test_the_schema_keys_on_the_event_and_the_document_code(
         FROM pg_index AS i
         JOIN pg_attribute AS a
           ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
-        WHERE i.indrelid = 'ingest.match_entries_unpacked'::regclass
+        WHERE i.indrelid = 'ingest_wtt.match_entries_unpacked'::regclass
           AND i.indisprimary
         ORDER BY a.attname;
         """
@@ -314,7 +314,7 @@ def test_the_unpacked_table_holds_identity_and_presence_only(
         """
         SELECT column_name
         FROM information_schema.columns
-        WHERE table_schema = 'ingest'
+        WHERE table_schema = 'ingest_wtt'
           AND table_name = 'match_entries_unpacked'
         ORDER BY ordinal_position;
         """
@@ -336,16 +336,16 @@ def test_standalone_unpack_raises_and_rolls_back_when_sql_writes_nothing(
     """``tt-matches-unpack`` must enforce the same completeness check as landing."""
     _land(db_connection, EVENT_ID, [_row()])
     db_connection.execute(
-        "DELETE FROM ingest.match_entries_unpacked WHERE event_id = %s;",
+        "DELETE FROM ingest_wtt.match_entries_unpacked WHERE event_id = %s;",
         (EVENT_ID,),
     )
 
     broken_sql = tmp_path / "broken_unpack.sql"
     broken_sql.write_text(
         """
-        INSERT INTO ingest.match_entries_unpacked (event_id, document_code)
+        INSERT INTO ingest_wtt.match_entries_unpacked (event_id, document_code)
         SELECT event_id, 'never'
-        FROM ingest.match_entries_payloads_raw
+        FROM ingest_wtt.match_entries_payloads_raw
         WHERE event_id = %(event_id)s AND false;
         """,
         encoding="utf-8",

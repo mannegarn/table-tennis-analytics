@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 from psycopg import Connection
 
-from tt_stats.matches.collect.match_entries import MatchEntriesSummary
+from tt_stats.core.collector import FetchSummary
 from tt_stats.matches.land import land_match_entries
 
 pytestmark = pytest.mark.integration
@@ -35,10 +35,10 @@ def _match(match_id: int) -> dict[str, Any]:
     }
 
 
-def _summary(payload: list[dict[str, Any]]) -> MatchEntriesSummary:
+def _summary(payload: list[dict[str, Any]]) -> FetchSummary[int]:
     body = json.dumps(payload).encode("utf-8")
-    return MatchEntriesSummary(
-        event_id=EVENT_ID,
+    return FetchSummary(
+        key=EVENT_ID,
         status_code=200,
         received_count=len(payload),
         payload_sha256=hashlib.sha256(body).hexdigest(),
@@ -60,7 +60,7 @@ def test_landing_upserts_one_row_and_is_idempotent(
     rows = db_connection.execute(
         """
         SELECT event_id, payload, http_status, received_count, payload_sha256, source
-        FROM ingest.match_entries_payloads_raw
+        FROM ingest_wtt.match_entries_payloads_raw
         WHERE event_id = %s;
         """,
         (EVENT_ID,),
@@ -75,7 +75,8 @@ def test_landing_upserts_one_row_and_is_idempotent(
     assert row["source"] == "wtt_getofficialresult"
 
     unpacked = db_connection.execute(
-        "SELECT count(*) AS n FROM ingest.match_entries_unpacked WHERE event_id = %s;",
+        "SELECT count(*) AS n FROM ingest_wtt.match_entries_unpacked "
+        "WHERE event_id = %s;",
         (EVENT_ID,),
     ).fetchone()
     assert unpacked == {"n": 2}
@@ -93,7 +94,7 @@ def test_an_empty_match_list_is_recorded_as_an_answer(
     row = db_connection.execute(
         """
         SELECT payload, received_count
-        FROM ingest.match_entries_payloads_raw
+        FROM ingest_wtt.match_entries_payloads_raw
         WHERE event_id = %s;
         """,
         (EVENT_ID,),
@@ -112,8 +113,8 @@ def test_landing_refuses_a_failed_summary(
     good = _summary(payload)
     land_match_entries(db_connection, good, payload)
 
-    failed = MatchEntriesSummary(
-        event_id=EVENT_ID,
+    failed = FetchSummary(
+        key=EVENT_ID,
         status_code=500,
         received_count=0,
         payload_sha256=None,
@@ -128,7 +129,7 @@ def test_landing_refuses_a_failed_summary(
     row = db_connection.execute(
         """
         SELECT received_count
-        FROM ingest.match_entries_payloads_raw
+        FROM ingest_wtt.match_entries_payloads_raw
         WHERE event_id = %s;
         """,
         (EVENT_ID,),
@@ -142,8 +143,8 @@ def test_landing_rolls_back_when_summary_count_disagrees_with_payload(
     """A summary whose received_count disagrees with the stored JSON must abort."""
     payload = [_match(1), _match(2)]
     body = json.dumps(payload).encode("utf-8")
-    mismatched = MatchEntriesSummary(
-        event_id=EVENT_ID,
+    mismatched = FetchSummary(
+        key=EVENT_ID,
         status_code=200,
         received_count=1,
         payload_sha256=hashlib.sha256(body).hexdigest(),
@@ -156,12 +157,13 @@ def test_landing_rolls_back_when_summary_count_disagrees_with_payload(
         land_match_entries(db_connection, mismatched, payload)
 
     raw = db_connection.execute(
-        "SELECT count(*) AS n FROM ingest.match_entries_payloads_raw "
+        "SELECT count(*) AS n FROM ingest_wtt.match_entries_payloads_raw "
         "WHERE event_id = %s;",
         (EVENT_ID,),
     ).fetchone()
     unpacked = db_connection.execute(
-        "SELECT count(*) AS n FROM ingest.match_entries_unpacked WHERE event_id = %s;",
+        "SELECT count(*) AS n FROM ingest_wtt.match_entries_unpacked "
+        "WHERE event_id = %s;",
         (EVENT_ID,),
     ).fetchone()
     assert raw == {"n": 0}

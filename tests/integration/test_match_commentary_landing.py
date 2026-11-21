@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from psycopg import Connection
 
-from tt_stats.matches.collect.match_commentary import MatchCommentarySummary
+from tt_stats.core.collector import FetchSummary
 from tt_stats.matches.land import land_match_commentary_chunk
 
 pytestmark = pytest.mark.integration
@@ -36,11 +36,10 @@ def _line(seq: int, action: str, text: str) -> dict[str, Any]:
     }
 
 
-def _summary(payload: list[dict[str, Any]]) -> MatchCommentarySummary:
+def _summary(payload: list[dict[str, Any]]) -> FetchSummary[tuple[int, str]]:
     body = json.dumps(payload).encode("utf-8")
-    return MatchCommentarySummary(
-        event_id=EVENT_ID,
-        document_code=DOC_1,
+    return FetchSummary(
+        key=(EVENT_ID, DOC_1),
         status_code=200,
         received_count=len(payload),
         payload_sha256=hashlib.sha256(body).hexdigest(),
@@ -66,7 +65,7 @@ def test_land_chunk_upserts_raw_commentary_payload(
     raw_row = db_connection.execute(
         """
         SELECT received_count, source, jsonb_array_length(payload) AS item_count
-        FROM ingest.match_commentary_raw
+        FROM ingest_wtt.match_commentary_raw
         WHERE event_id = %s AND document_code = %s;
         """,
         (EVENT_ID, DOC_1),
