@@ -3,6 +3,6 @@ select
     document_code,
     sequence_number,
     count(*) as row_count
-from {{ ref('fct_match_commentary') }}
+from {{ ref('wtt__fct_match_commentary') }}
 group by 1, 2, 3
 having count(*) > 1

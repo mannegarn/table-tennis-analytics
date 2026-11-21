@@ -5,4 +5,4 @@ select
     nullif(btrim(hand), '') as hand,
     nullif(btrim(grip), '') as grip,
     nullif(btrim(style), '') as style
-from {{ source('ingest', 'ittf_player_profiles') }}
+from {{ source('ittf', 'ittf_player_profiles') }}

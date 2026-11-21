@@ -13,7 +13,7 @@ select distinct on (
         when nullif(btrim(elem ->> 'startDateLocal'), '') = '0001-01-01T00:00:00' then null
         else nullif(btrim(elem ->> 'startDateLocal'), '')::timestamp
     end as start_date_local
-from {{ source('ingest', 'match_entries_payloads_raw') }} as r
+from {{ source('wtt', 'match_entries_payloads_raw') }} as r
 cross join lateral jsonb_array_elements(r.payload) as elem
 order by
     r.event_id,

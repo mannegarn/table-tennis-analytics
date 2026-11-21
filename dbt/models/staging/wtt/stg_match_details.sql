@@ -5,7 +5,7 @@ with source as (
         event_id,
         document_code,
         payload
-    from {{ source('ingest', 'match_details_raw') }}
+    from {{ source('wtt', 'match_details_raw') }}
     where
         payload <> '{}'::jsonb
         and jsonb_typeof(payload) = 'object'

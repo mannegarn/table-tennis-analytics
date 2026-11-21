@@ -1,0 +1,9 @@
+version: 2
+
+sources:
+  - name: ittf
+    schema: ingest_ittf
+    description: ITTF player profile enrichment populated from local master CSV or ITTF HTML.
+    tables:
+      - name: ittf_player_profiles
+        description: Player style, grip, and hand enrichment per player_id from ITTF master CSV or HTML.
