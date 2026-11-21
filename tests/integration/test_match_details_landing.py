@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from psycopg import Connection
 
-from tt_stats.matches.collect.match_details import MatchDetailsSummary
+from tt_stats.core.collector import FetchSummary
 from tt_stats.matches.land import land_match_details_chunk
 
 pytestmark = pytest.mark.integration
@@ -28,11 +28,12 @@ def _payload(document_code: str, player_groups: list[list[str]]) -> dict[str, An
     }
 
 
-def _summary(document_code: str, payload: dict[str, Any]) -> MatchDetailsSummary:
+def _summary(
+    document_code: str, payload: dict[str, Any]
+) -> FetchSummary[tuple[int, str]]:
     body = json.dumps(payload).encode("utf-8")
-    return MatchDetailsSummary(
-        event_id=EVENT_ID,
-        document_code=document_code,
+    return FetchSummary(
+        key=(EVENT_ID, document_code),
         status_code=200,
         received_count=2,
         payload_sha256=hashlib.sha256(body).hexdigest(),
@@ -55,7 +56,7 @@ def test_land_chunk_upserts_raw_and_unpacks_distinct_players(
     raw_rows = db_connection.execute(
         """
         SELECT document_code, source
-        FROM ingest.match_details_raw
+        FROM ingest_wtt.match_details_raw
         WHERE event_id = %s
         ORDER BY document_code;
         """,
@@ -69,7 +70,7 @@ def test_land_chunk_upserts_raw_and_unpacks_distinct_players(
     players = db_connection.execute(
         """
         SELECT document_code, player_id
-        FROM ingest.match_details_players_unpacked
+        FROM ingest_wtt.match_details_players_unpacked
         WHERE event_id = %s
         ORDER BY document_code, player_id;
         """,

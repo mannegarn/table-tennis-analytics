@@ -51,7 +51,7 @@
 -- =============================================================================
 
 
-INSERT INTO ingest.match_entries_unpacked (
+INSERT INTO ingest_wtt.match_entries_unpacked (
     event_id,
     document_code,
     first_seen_at,
@@ -79,7 +79,7 @@ SELECT DISTINCT ON (r.event_id, (e.value ->> 'documentCode'))
 -- Rewritten on every unpack; this is the column that moves while an event is
 -- still running.
 
-FROM ingest.match_entries_payloads_raw AS r
+FROM ingest_wtt.match_entries_payloads_raw AS r
 -- The raw row for the event we were asked for. The event id arrives as a query
 -- parameter, filled in by Python, so one file serves every event.
 

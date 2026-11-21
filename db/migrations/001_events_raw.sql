@@ -10,10 +10,10 @@
 --   source_final_count     WTT's Count
 --   received_count         rows we actually parsed
 
-CREATE SCHEMA IF NOT EXISTS ingest;
-CREATE SCHEMA IF NOT EXISTS analytics;
+CREATE SCHEMA IF NOT EXISTS ingest_wtt;
+CREATE SCHEMA IF NOT EXISTS ingest_ittf;
 
-CREATE TABLE IF NOT EXISTS ingest.events_by_year_raw (
+CREATE TABLE IF NOT EXISTS ingest_wtt.events_by_year_raw (
     year integer PRIMARY KEY,
     payload jsonb NOT NULL,
     http_status integer NOT NULL,
@@ -36,22 +36,22 @@ CREATE TABLE IF NOT EXISTS ingest.events_by_year_raw (
         CHECK (payload_sha256 ~ '^[0-9a-f]{64}$')
 );
 
-COMMENT ON TABLE ingest.events_by_year_raw IS
+COMMENT ON TABLE ingest_wtt.events_by_year_raw IS
     'One raw WTT event-calendar response per year, with fetch provenance.';
-COMMENT ON COLUMN ingest.events_by_year_raw.payload IS
+COMMENT ON COLUMN ingest_wtt.events_by_year_raw.payload IS
     'Response body as JSONB. Key order and whitespace are normalised.';
-COMMENT ON COLUMN ingest.events_by_year_raw.source_original_count IS
+COMMENT ON COLUMN ingest_wtt.events_by_year_raw.source_original_count IS
     'WTT Original_Count: their total before their own internal step. '
     'Undocumented upstream, always >= source_final_count, informational only.';
-COMMENT ON COLUMN ingest.events_by_year_raw.source_final_count IS
+COMMENT ON COLUMN ingest_wtt.events_by_year_raw.source_final_count IS
     'WTT Count: how many rows the API says it returned. '
     'Verified against received_count before a year is accepted.';
-COMMENT ON COLUMN ingest.events_by_year_raw.received_count IS
+COMMENT ON COLUMN ingest_wtt.events_by_year_raw.received_count IS
     'Rows we parsed from payload -> 0 -> rows. Ours, not theirs. '
     'A mismatch against source_final_count fails the year.';
-COMMENT ON COLUMN ingest.events_by_year_raw.payload_sha256 IS
+COMMENT ON COLUMN ingest_wtt.events_by_year_raw.payload_sha256 IS
     'SHA-256 of the original response bytes.';
-COMMENT ON COLUMN ingest.events_by_year_raw.fetched_at IS
+COMMENT ON COLUMN ingest_wtt.events_by_year_raw.fetched_at IS
     'When the request completed.';
-COMMENT ON COLUMN ingest.events_by_year_raw.ingested_at IS
+COMMENT ON COLUMN ingest_wtt.events_by_year_raw.ingested_at IS
     'When the row was written.';

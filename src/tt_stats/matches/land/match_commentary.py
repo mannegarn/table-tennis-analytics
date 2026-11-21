@@ -13,14 +13,14 @@ if TYPE_CHECKING:
 
     from psycopg import Connection
 
-    from tt_stats.matches.collect.match_commentary import MatchCommentarySummary
+    from tt_stats.core.collector import FetchSummary
 
 logger = get_logger(__name__)
 
 
 def land_match_commentary(
     connection: Connection[Any],
-    summary: MatchCommentarySummary,
+    summary: FetchSummary[tuple[int, str]],
     payload: Any,
 ) -> None:
     """Upsert one match's decoded commentary payload."""
@@ -29,7 +29,7 @@ def land_match_commentary(
 
 def land_match_commentary_chunk(
     connection: Connection[Any],
-    items: Sequence[tuple[MatchCommentarySummary, Any]],
+    items: Sequence[tuple[FetchSummary[tuple[int, str]], Any]],
 ) -> None:
     """Upsert a chunk of match_commentary payloads in a single transaction."""
     if not items:
@@ -42,10 +42,11 @@ def land_match_commentary_chunk(
         if summary.status_code is None or summary.payload_sha256 is None:
             raise ValueError("summary is missing status or payload hash")
 
+        event_id, document_code = summary.key
         raw_params.append(
             (
-                summary.event_id,
-                summary.document_code,
+                event_id,
+                document_code,
                 Jsonb(payload),
                 summary.status_code,
                 summary.received_count,
@@ -57,7 +58,7 @@ def land_match_commentary_chunk(
     with connection.transaction(), connection.cursor() as cursor:
         cursor.executemany(
             """
-            INSERT INTO ingest.match_commentary_raw (
+            INSERT INTO ingest_wtt.match_commentary_raw (
                 event_id,
                 document_code,
                 payload,

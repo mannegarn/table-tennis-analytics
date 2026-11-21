@@ -28,12 +28,12 @@ logger = get_logger(__name__)
 if TYPE_CHECKING:
     from psycopg import Connection
 
-    from tt_stats.matches.collect.match_entries import MatchEntriesSummary
+    from tt_stats.core.collector import FetchSummary
 
 
 def land_match_entries(
     connection: Connection[Any],
-    summary: MatchEntriesSummary,
+    summary: FetchSummary[int],
     payload: Any,
 ) -> None:
     """Upsert one event's match list, then unpack it, in one transaction.
@@ -62,7 +62,7 @@ def land_match_entries(
     with connection.transaction():
         connection.execute(
             """
-            INSERT INTO ingest.match_entries_payloads_raw (
+            INSERT INTO ingest_wtt.match_entries_payloads_raw (
                 event_id,
                 payload,
                 http_status,
@@ -80,7 +80,7 @@ def land_match_entries(
                 ingested_at = now();
             """,
             (
-                summary.event_id,
+                summary.key,
                 Jsonb(payload),
                 summary.status_code,
                 summary.received_count,
@@ -91,14 +91,14 @@ def land_match_entries(
 
         unpacked = unpack_event(
             connection,
-            summary.event_id,
+            summary.key,
             received_count=summary.received_count,
         )
 
     logger.info(
         "match_entries_landed",
         extra={
-            "event_id": summary.event_id,
+            "event_id": summary.key,
             "reason": summary.reason,
             "received_count": summary.received_count,
             "unpacked": unpacked,

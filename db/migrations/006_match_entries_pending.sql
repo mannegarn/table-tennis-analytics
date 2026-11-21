@@ -35,8 +35,8 @@
 --   empty answer is stored as a raw row with received_count = 0, and the
 --   database becomes the evidence:
 --
---     SELECT source_year, count(*) FROM ingest.events_unpacked
---     JOIN ingest.match_entries_payloads_raw USING (event_id)
+--     SELECT source_year, count(*) FROM ingest_wtt.events_unpacked
+--     JOIN ingest_wtt.match_entries_payloads_raw USING (event_id)
 --     WHERE received_count = 0 GROUP BY 1;
 --
 --   That also means an empty answer is never re-requested: row existence is what
@@ -47,7 +47,7 @@
 --   queue, never filter it). A `--limit 5` smoke run therefore picks the
 --   events whose data is still moving.
 
-CREATE OR REPLACE VIEW ingest.match_entries_pending AS
+CREATE OR REPLACE VIEW ingest_wtt.match_entries_pending AS
 WITH bounds AS (
     SELECT (current_timestamp AT TIME ZONE 'UTC')::date AS today
 ),
@@ -58,7 +58,7 @@ events AS (
         e.start_date,
         e.end_date,
         GREATEST(e.start_date, e.end_date) + 1 AS window_end
-    FROM ingest.events_unpacked AS e
+    FROM ingest_wtt.events_unpacked AS e
     ORDER BY e.event_id, e.last_seen_at DESC, e.source_year DESC
 )
 SELECT
@@ -75,7 +75,7 @@ SELECT
     r.received_count AS previous_received_count
 FROM events AS e
 CROSS JOIN bounds AS b
-LEFT JOIN ingest.match_entries_payloads_raw AS r ON r.event_id = e.event_id
+LEFT JOIN ingest_wtt.match_entries_payloads_raw AS r ON r.event_id = e.event_id
 WHERE e.start_date <= b.today
   AND (
         e.window_end >= b.today
@@ -83,13 +83,13 @@ WHERE e.start_date <= b.today
      OR (r.fetched_at AT TIME ZONE 'UTC')::date <= e.window_end
   );
 
-COMMENT ON VIEW ingest.match_entries_pending IS
+COMMENT ON VIEW ingest_wtt.match_entries_pending IS
     'Events worth requesting now: live events always, unseen events once, and '
     'an event whose last snapshot predates its final day once more. Read-only, '
     'derived, never stored (ADR 0005).';
-COMMENT ON COLUMN ingest.match_entries_pending.reason IS
+COMMENT ON COLUMN ingest_wtt.match_entries_pending.reason IS
     'live = in progress, keep refreshing; new = never fetched; stale = the '
     'last fetch happened on or before the final day of the event.';
-COMMENT ON COLUMN ingest.match_entries_pending.previous_received_count IS
+COMMENT ON COLUMN ingest_wtt.match_entries_pending.previous_received_count IS
     'How many match rows the last stored payload held, NULL when never fetched. '
     'Useful for spotting an event that went from 0 to many.';

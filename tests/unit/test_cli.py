@@ -159,16 +159,16 @@ def test_log_chunk_progress_and_report_collect_run_emit_expected_tallies(
         event="test_collect",
         unit="event",
         found_label="matches",
-        raw_table="ingest.match_entries_payloads_raw",
-        unpacked_table="ingest.match_entries_unpacked",
+        raw_table="ingest_wtt.match_entries_payloads_raw",
+        unpacked_table="ingest_wtt.match_entries_unpacked",
     )
 
     assert code == 0
     out = capsys.readouterr().out
     assert "2 succeeded (1 with data, 1 empty), 4 matches found" in out
     assert "0 failed" in out
-    assert "raw -> ingest.match_entries_payloads_raw" in out
-    assert "unpacked -> ingest.match_entries_unpacked" in out
+    assert "raw -> ingest_wtt.match_entries_payloads_raw" in out
+    assert "unpacked -> ingest_wtt.match_entries_unpacked" in out
 
     failed_code = report_collect_run(
         [*settled, _Summary(key=3, received_count=0, error="boom")],
@@ -197,13 +197,14 @@ def test_report_unpack_run_prints_and_logs_summary(
         unit="year",
         found_label="events",
         dry_run=True,
-        target_table="ingest.events_unpacked",
+        target_table="ingest_wtt.events_unpacked",
     )
 
     assert code == 0
+    out = capsys.readouterr().out
     assert (
         "Unpack complete: 2 years, 101 rows (1 without events) "
-        "-> ingest.events_unpacked [dry-run, rolled back]" in capsys.readouterr().out
+        "-> ingest_wtt.events_unpacked [dry-run, rolled back]" in out
     )
     records = [r for r in caplog.records if r.getMessage() == "unpack_complete"]
     assert len(records) == 1

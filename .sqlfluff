@@ -11,5 +11,8 @@ max_line_length = 100
 # ST06: column order follows the source payload, not sqlfluff's preference.
 exclude_rules = RF04, ST06
 
+[sqlfluff:templater:jinja]
+load_macros_from_path = dbt/macros
+
 [sqlfluff:templater:placeholder]
 param_style = pyformat

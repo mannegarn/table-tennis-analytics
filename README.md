@@ -35,7 +35,7 @@ integration is switched off.
 ```sh
 make setup       # creates .env from .env.example, then runs uv sync
 make db-up       # starts PostgreSQL in the background
-make db-migrate  # creates the ingest and analytics schemas and tables
+make db-migrate  # creates the ingest_wtt and ingest_ittf schemas and tables
 make db-check
 ```
 
@@ -53,10 +53,11 @@ uv run tt-db-check
 
 - `uv run tt-db-check` prints `Connected to PostgreSQL: PostgreSQL 16.4 ...`
 - `make db-migrate` applies `db/migrations` and records versions in
-  `ingest.schema_version`. Re-running it is a no-op.
-- `make db-psql` opens a shell; run `\dt ingest.*` to list ingestion tables.
-- `SELECT * FROM ingest.ingest_runs ORDER BY run_id DESC LIMIT 10;` shows the
-  most recent attempts, including failures that never landed a payload.
+  `public.schema_version`. Re-running it is a no-op.
+- `make db-psql` opens a shell; run `\dt ingest_wtt.*` and `\dt ingest_ittf.*`
+  to list ingestion tables.
+- `SELECT * FROM ingest_wtt.ingest_runs ORDER BY run_id DESC LIMIT 10;` shows
+  the most recent attempts, including failures that never landed a payload.
 - `ls logs/` shows the run log written alongside the console output.
 - `make dbt-debug` ends with `All checks passed!`
 - `make test` runs the suite; the integration test skips automatically when the database is down.
@@ -68,7 +69,7 @@ uv run tt-db-check
 ## Events collection
 
 The events calendar is fetched and upserted into
-`ingest.events_by_year_raw`. Each year is one row and one transaction. No
+`ingest_wtt.events_by_year_raw`. Each year is one row and one transaction. No
 payload files are written. A landing failure marks that year as failed and
 makes the command exit non-zero.
 
@@ -78,7 +79,7 @@ make events-collect YEARS="2023"    # one year, bypassing the view
 make events-collect LIMIT=5         # first five years in queue order
 ```
 
-Which years get fetched is derived, never stored (`ingest.events_years_pending`):
+Which years get fetched is derived, never stored (`ingest_wtt.events_years_pending`):
 
 | Year | Payload already landed? | Fetched? | `reason` |
 | --- | --- | --- | --- |
@@ -108,19 +109,19 @@ Each row stores the JSONB payload plus the fetch metadata: HTTP status, SHA-256,
 A year fails instead of landing when `source_final_count != received_count`, so a
 truncated or reshaped response cannot pass silently.
 
-Every attempt, successful or failed, is also written to `ingest.ingest_runs`
+Every attempt, successful or failed, is also written to `ingest_wtt.ingest_runs`
 with its start and finish time, status, HTTP status, row count and error. That
 is the durable history: a failed year leaves a row, so nothing depends on
 scrolling back through a terminal.
 
-`ingest.events_unpacked` holds one row per event per calendar: 2965 rows from
+`ingest_wtt.events_unpacked` holds one row per event per calendar: 2965 rows from
 2984 calendar rows. The difference is duplicates: 2021, 2022 and 2026 each list
 some events more than once, and the unpack de-duplicates them. The key is
 `(source_year, event_id)`, so a tournament listed in two years'
 calendars keeps a row in both instead of the later landing overwriting the
 earlier one. `first_seen_at` is written once and `last_seen_at` advances on
 every unpack, which is how an event WTT dropped is spotted without deleting
-anything. The statement lives in `src/tt_stats/events/land/sql/unpack_events.sql`
+anything. The statement lives in `src/tt_stats/events/sql/unpack_events.sql`
 and runs inside the same transaction as the raw insert, so a year is never
 half-landed.
 
@@ -137,7 +138,7 @@ run does not print one line per item. The bar carries elapsed time, estimated
 time remaining and a live rate, because "how long left" is the question a long
 scrape actually raises. The console handler only prints `WARNING` and above, so
 routine records cannot push the bar down a line; every record still goes to
-`logs/tt_stats.log` and to `ingest.ingest_runs`. Piped, captured and JSON runs
+`logs/tt_stats.log` and to `ingest_wtt.ingest_runs`. Piped, captured and JSON runs
 draw no bar and keep the per-item log records.
 
 ```text
@@ -178,7 +179,7 @@ the database. `data/` remains git-ignored for legacy captures and scratch files.
 
 One request per event returns that tournament's whole match list, so the
 request grain is the event and each response is stored as one row in
-`ingest.match_entries_payloads_raw`.
+`ingest_wtt.match_entries_payloads_raw`.
 
 ```sh
 make matches-collect                    # whatever the pending view says
@@ -186,7 +187,7 @@ make matches-collect LIMIT=5            # first five events in queue order
 make matches-collect EVENT_IDS="3098"   # one event, bypassing the view
 ```
 
-Which events are requested is derived in `ingest.match_entries_pending`, never
+Which events are requested is derived in `ingest_wtt.match_entries_pending`, never
 stored:
 
 | Event state | Fetched? | `reason` |
@@ -226,9 +227,9 @@ substantial from 2021.
 | `make db-check` | Verify the Python to PostgreSQL connection |
 | `make db-test-check` | Verify `tt_stats_test` exists, is migrated and count its fixture rows |
 | `make db-migrate` | Apply versioned SQL migrations |
-| `make events-collect` | Collect event calendars and land them in `ingest.events_by_year_raw` |
-| `make events-unpack` | Unpack landed calendars into `ingest.events_unpacked` |
-| `make matches-collect` | Collect match lists and land them in `ingest.match_entries_payloads_raw` |
+| `make events-collect` | Collect event calendars and land them in `ingest_wtt.events_by_year_raw` |
+| `make events-unpack` | Backfill-unpack landed calendars into `ingest_wtt.events_unpacked` |
+| `make matches-collect` | Collect match lists and land them in `ingest_wtt.match_entries_payloads_raw` |
 | `make events-unpack-preview` | Run the unpack for one year, print counts, roll back |
 | `make test` | Run the test suite |
 | `make test-integration` | Run only integration tests |
@@ -297,13 +298,17 @@ container.
 
 ## Project layout
 
-Domain first, then data level.
+Domain first. Each domain module holds only what is specific to its endpoint:
+the pending queue, the payload check, and the landing SQL. The fetch, land and
+record loop every collector runs is `src/tt_stats/core/collector.py`.
 
 ```
-src/tt_stats/core/        shared config, database, logging, run history, clients
-src/tt_stats/events/      collect and land events
-src/tt_stats/matches/     collect and land match entries and details
-src/tt_stats/players/     collect and land player details and playstyle
+src/tt_stats/core/            shared config, database, logging, run history,
+                              clients, and the collector loop
+src/tt_stats/events/          collect.py, land.py, unpack.py, sql/
+src/tt_stats/event_sponsors/  collect.py, land.py
+src/tt_stats/matches/         collect/ and land/: entries, details, commentary
+src/tt_stats/players/         collect.py, land.py, ittf_seed.py
 db/init/                  one-time SQL on first database start
 db/migrations/            versioned tables, unpack SQL, views, control tables
 dbt/models/<domain>/      marts models per domain, reading _unpacked tables
@@ -316,17 +321,22 @@ airflow/dags/             orchestration (later)
 
 ## Data layers
 
-Raw payloads land in the `ingest` schema as JSONB. The same transaction then
-unpacks the payload into `ingest.events_unpacked`, one row per event, using
-`src/tt_stats/events/land/sql/unpack_events.sql`. dbt reads ingestion tables as
-sources and writes every model to `analytics`.
+Schemas follow `level_source` (layer first, source second; see ADR 0012 and
+`docs/database-design.md`). Raw WTT payloads land in `ingest_wtt` as JSONB and
+unpack narrow queue keys in the same transaction; ITTF player profiles land in
+`ingest_ittf`. Migrations are tracked database-wide in `public.schema_version`.
+dbt reads `ingest_*` tables as sources and writes models into per-layer schemas.
 
 | Level | Schema | Naming | Example | Owner |
 | --- | --- | --- | --- | --- |
-| Raw | `ingest` | `<entity>_raw` | `ingest.events_by_year_raw` | ingestion |
-| Unpacked | `ingest` | `<entity>_unpacked` | `ingest.events_unpacked` | ingestion, in SQL |
-| Marts | `analytics` | `<entity>_marts` | `analytics.events_marts` | dbt |
-| Control | `ingest` | `ingest_*` | `ingest.ingest_runs` | ingestion |
+| Raw | `ingest_wtt`, `ingest_ittf` | `<entity>_raw` | `ingest_wtt.events_by_year_raw` | ingestion |
+| Unpacked | `ingest_wtt` | `<entity>_unpacked` | `ingest_wtt.events_unpacked` | ingestion, in SQL |
+| Control | `ingest_wtt`, `public` | `ingest_runs`, `schema_version` | `ingest_wtt.ingest_runs`, `public.schema_version` | ingestion |
+| Seeds | `seeds` | `<reference>` | `seeds.action_types` | dbt |
+| Staging | `staging_wtt`, `staging_ittf` | `stg_<entity>` | `staging_wtt.stg_events` | dbt |
+| Intermediate | `intermediate` | `int_<entity>` | `intermediate.int_event_equipment_sponsors` | dbt |
+| Source Marts | `marts_wtt`, `marts_ittf` | `dim_*` / `fct_*` | `marts_wtt.fct_singles` | dbt |
+| Unified Marts | `marts` | `dim_*` / `fct_*` | `marts.fct_singles` | dbt |
 
 Container tables describe the request grain, for example
 `match_entries_payloads_raw` is one row per event. From unpacking onward, names
@@ -338,11 +348,9 @@ dbt output, so a broken or unrun dbt model cannot stop data collection.
 
 ## dbt
 
-`dbt/dbt_project.yml` defines the project and the domain-first model paths
-(`models/<domain>/staging`, `models/<domain>/marts`). `dbt/profiles.yml` points
-at the same PostgreSQL instance and writes models to the `analytics` schema.
-Ingestion tables in `ingest` are declared as dbt sources, not models. No models
-exist yet; this is only the wiring.
+`dbt/dbt_project.yml` defines the project and per-layer schema routing, while
+`dbt/profiles.yml` points at the same PostgreSQL instance. Ingestion tables in
+`ingest_wtt` and `ingest_ittf` are declared as dbt sources, not models.
 
 ## Troubleshooting
 
@@ -350,7 +358,7 @@ exist yet; this is only the wiring.
 - **`connection refused` from `tt-db-check`** - the container is not running or
   is still starting. Check `make db-logs` and the compose healthcheck.
 - **Logs seem to vanish** - the console is ephemeral by design; read
-  `logs/tt_stats.log` or query `ingest.ingest_runs` for what actually happened.
+  `logs/tt_stats.log` or query `ingest_wtt.ingest_runs` for what actually happened.
 - **Init SQL did not run** - `db/init/*.sql` only executes on the first start of
   an empty volume. Use `make db-reset` to re-run it.
 - **dbt cannot connect** - confirm PostgreSQL is up, then `make dbt-debug`.

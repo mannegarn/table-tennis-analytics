@@ -1,4 +1,8 @@
-"""Unit tests for the match_commentary collector. No network, no database."""
+"""Unit tests for the match-commentary endpoint. No network, no database.
+
+The shared fetch/land/record loop is tested once, in test_collector.py. These
+cover the match-commentary payload rules and its wiring into that loop.
+"""
 
 import asyncio
 import json
@@ -9,16 +13,16 @@ import httpx
 import pytest
 
 from tt_stats.core.clients.wtt_api import WttClient
+from tt_stats.core.collector import FetchSummary, PayloadShapeError, collect
 from tt_stats.core.config import Settings
 from tt_stats.core.ingest_runs import RunRecord
 from tt_stats.matches.collect.match_commentary import (
-    MatchCommentarySummary,
+    MATCH_COMMENTARY,
     MatchKey,
-    PayloadShapeError,
-    collect_match_commentary,
     decode_commentary_payload,
-    main,
 )
+
+MatchCommentarySummary = FetchSummary[MatchKey]
 
 EVENT_ID = 3257
 DOCUMENT_CODE = "TTEWSINGLES-----------RND1002700----------"
@@ -79,15 +83,15 @@ async def test_collect_unwraps_and_lands_by_chunk() -> None:
     keys: list[MatchKey] = [(EVENT_ID, "DOC1"), (EVENT_ID, "DOC2"), (EVENT_ID, "DOC3")]
     landed_chunks: list[list[tuple[MatchKey, int]]] = []
     recorded_chunks: list[list[str]] = []
+    requested: list[MatchKey] = []
 
     async def handler(request: httpx.Request) -> httpx.Response:
+        requested.append(_requested_key(request))
         await asyncio.sleep(0.01)
         return httpx.Response(200, json=json.dumps([_line(1), _line(2)]))
 
     def land_chunk(items: Sequence[tuple[MatchCommentarySummary, Any]]) -> None:
-        landed_chunks.append(
-            [((s.event_id, s.document_code), len(rows)) for s, rows in items]
-        )
+        landed_chunks.append([(s.key, len(rows)) for s, rows in items])
 
     def record_many(runs: Sequence[RunRecord]) -> None:
         recorded_chunks.append([r.entity_key for r in runs])
@@ -95,14 +99,17 @@ async def test_collect_unwraps_and_lands_by_chunk() -> None:
     async with WttClient(
         settings=_settings(), transport=httpx.MockTransport(handler)
     ) as client:
-        results = await collect_match_commentary(
+        results = await collect(
+            MATCH_COMMENTARY,
             keys,
             client=client,
             land_chunk=land_chunk,
-            record_many=record_many,
+            record=record_many,
             chunk_size=2,
         )
 
+    # Requests within a chunk run concurrently, so compare as a set.
+    assert sorted(requested) == keys
     assert [r.received_count for r in results] == [2, 2, 2]
     assert landed_chunks == [
         [((EVENT_ID, "DOC1"), 2), ((EVENT_ID, "DOC2"), 2)],
@@ -112,11 +119,3 @@ async def test_collect_unwraps_and_lands_by_chunk() -> None:
         [f"{EVENT_ID}:DOC1", f"{EVENT_ID}:DOC2"],
         [f"{EVENT_ID}:DOC3"],
     ]
-
-
-@pytest.mark.parametrize("flag", ["--limit", "--chunk-size"])
-def test_main_rejects_non_positive_numbers(flag: str) -> None:
-    with pytest.raises(SystemExit) as caught:
-        main([flag, "0"])
-
-    assert caught.value.code == 2

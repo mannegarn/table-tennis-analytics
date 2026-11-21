@@ -1,0 +1,223 @@
+version: 2
+
+models:
+  - name: stg_events
+    description: >
+      Unpacked event calendar rows from ingest_wtt.events_by_year_raw (1 row per
+      source_year, event_id; deduplicates intra-year repeats and drops UI/CMS noise).
+    columns:
+      - name: source_year
+        description: Calendar year whose WTT payload listed this event.
+        data_tests:
+          - not_null
+      - name: event_id
+        description: WTT event identifier.
+        data_tests:
+          - not_null
+      - name: event_name
+        description: Event name as sent by WTT.
+        data_tests:
+          - not_null
+      - name: event_code
+        description: Optional WTT event code.
+      - name: event_type_id
+        description: WTT event category identifier.
+        data_tests:
+          - not_null
+      - name: event_type
+        description: WTT event category label (e.g. WTTC, WTT Star Contender).
+        data_tests:
+          - not_null
+      - name: event_tier_name
+        description: Modern WTT event tier label (nullable for historical events).
+      - name: start_date
+        description: Scheduled start date (no timezone upstream).
+        data_tests:
+          - not_null
+      - name: end_date
+        description: Scheduled end date (no timezone upstream).
+        data_tests:
+          - not_null
+      - name: country
+        description: Host country name.
+        data_tests:
+          - not_null
+      - name: city
+        description: Host city name (nullable).
+      - name: continent_code
+        description: Host continent slug.
+        data_tests:
+          - not_null
+      - name: subcontinent
+        description: Host subcontinent label.
+        data_tests:
+          - not_null
+
+  - name: stg_event_sponsors
+    description: >
+      Unpacked sponsor rows from ingest_wtt.event_sponsors_raw (1 row per event_id,
+      event_sponsor_id), trimming blank strings to NULL.
+    columns:
+      - name: event_id
+        description: WTT event identifier.
+        data_tests:
+          - not_null
+      - name: event_sponsor_id
+        description: WTT sponsor entry identifier within the event.
+        data_tests:
+          - not_null
+      - name: sponsor_type_id
+        description: WTT sponsor category identifier.
+        data_tests:
+          - not_null
+      - name: sponsor_type_name
+        description: WTT sponsor category label (e.g. Official Ball, Official Table).
+        data_tests:
+          - not_null
+      - name: logo
+        description: Relative logo path from WTT.
+        data_tests:
+          - not_null
+      - name: dark_logo
+        description: Relative dark-mode logo path from WTT (nullable).
+      - name: sponsor_link
+        description: Sponsor URL from WTT (nullable).
+
+  - name: stg_match_entries
+    description: >
+      Unpacked match entries table from ingest_wtt.match_entries_payloads_raw (1 row per
+      event_id, document_code). Drops 0%-filled enrichment slots (extended_info,
+      match_card, messagePayload) and converts blank/'0001-01-01T00:00:00' dates to NULL.
+    columns:
+      - name: event_id
+        description: WTT event identifier.
+        data_tests:
+          - not_null
+      - name: document_code
+        description: WTT match document code within the event.
+        data_tests:
+          - not_null
+      - name: match_id
+        description: Upstream match id (handles both 'id' and 'iD' spellings; not unique per ADR 0010).
+        data_tests:
+          - not_null
+      - name: sub_event_type
+        description: Sub-event category label (e.g. Men Singles, Women Doubles).
+        data_tests:
+          - not_null
+      - name: full_results
+        description: Upstream result status label (e.g. OFFICIAL).
+        data_tests:
+          - not_null
+      - name: start_date_local
+        description: Local match start timestamp (nullable; '0001-01-01T00:00:00' sentinel mapped to NULL).
+
+  - name: stg_match_details
+    description: >
+      Unpacked match details table from ingest_wtt.match_details_raw (1 row per non-empty
+      event_id, document_code). Extracts match metadata, game/overall scores, and
+      competitor 1/2 attributes + player IDs while excluding the raw full_msg blob.
+    columns:
+      - name: event_id
+        description: WTT event identifier.
+        data_tests:
+          - not_null
+      - name: document_code
+        description: WTT match document code within the event.
+        data_tests:
+          - not_null
+      - name: result_status
+        description: Match result status (e.g. OFFICIAL).
+      - name: overall_scores
+        description: Match score in games/sets (e.g. 3-0).
+      - name: results_game_scores
+        description: Comma-separated per-game scores (e.g. 11-7,11-4,11-9,0-0,0-0).
+
+  - name: stg_match_commentary
+    description: >
+      Unpacked match commentary table from ingest_wtt.match_commentary_raw (1 row per
+      event_id, document_code, sequence_number). Keeps action identifiers, text, and
+      millisecond-precision utc_time; drops utc_date, local_date/time, and source_ts.
+    columns:
+      - name: event_id
+        description: WTT event identifier.
+        data_tests:
+          - not_null
+      - name: document_code
+        description: WTT match document code within the event.
+        data_tests:
+          - not_null
+      - name: sequence_number
+        description: Action sequence number within the match.
+        data_tests:
+          - not_null
+      - name: commentary_id
+        description: UUID of the commentary action.
+      - name: action_type
+        description: WTT action code (e.g. STP, PT, SSR, SSD, TO, YC).
+      - name: commentary_text
+        description: Human-readable commentary text.
+      - name: utc_time
+        description: UTC time of action in HHMMSSmmm (millisecond precision).
+
+  - name: stg_wtt_players
+    description: >
+      Unpacked WTT player profile table from ingest_wtt.player_details_raw. Drops
+      0%-filled fields and currently redundant columns (player_family_name_first,
+      nationality_code/name, headshot_r/l), trims blank strings to NULL, and casts
+      dob to date.
+    columns:
+      - name: player_id
+        description: WTT/ITTF player identifier.
+        data_tests:
+          - not_null
+          - unique
+      - name: player_name
+        description: Full display name (Given FAMILY).
+        data_tests:
+          - not_null
+      - name: player_given_name
+        description: Given name.
+        data_tests:
+          - not_null
+      - name: player_family_name
+        description: Family name.
+        data_tests:
+          - not_null
+      - name: country_code
+        description: Three-letter country/association code.
+        data_tests:
+          - not_null
+      - name: country_name
+        description: Country/association name.
+        data_tests:
+          - not_null
+      - name: organization_code
+        description: Organization code (differs from country_code for a small subset).
+        data_tests:
+          - not_null
+      - name: organization_name
+        description: Organization name.
+        data_tests:
+          - not_null
+      - name: gender
+        description: Player gender (M or F).
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['M', 'F']
+      - name: age
+        description: Player age as reported by WTT at fetch time.
+        data_tests:
+          - not_null
+      - name: dob
+        description: Date of birth cast to date.
+        data_tests:
+          - not_null
+      - name: handedness
+        description: Raw trimmed handedness (normalized in players mart).
+      - name: grip
+        description: Raw trimmed grip (normalized in players mart).
+      - name: head_shot
+        description: Relative path/URL to player headshot image (nullable).

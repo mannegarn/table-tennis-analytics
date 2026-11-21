@@ -1,4 +1,4 @@
-"""Integration tests: ``ingest.event_sponsors_pending`` derives the work queue.
+"""Integration tests: ``ingest_wtt.event_sponsors_pending`` derives the work queue.
 
 Every case writes its own events and payloads, then reads the view. Runs against
 ``tt_stats_test``, truncated around each test by the autouse fixture.
@@ -11,7 +11,7 @@ import pytest
 from psycopg import Connection
 from psycopg.types.json import Jsonb
 
-from tt_stats.event_sponsors.collect.event_sponsors import pending_events
+from tt_stats.event_sponsors.collect import pending_events
 
 pytestmark = pytest.mark.integration
 
@@ -34,7 +34,7 @@ def _add_event(
     today = _today()
     connection.execute(
         """
-        INSERT INTO ingest.events_unpacked (
+        INSERT INTO ingest_wtt.events_unpacked (
             source_year, event_id, event_name, start_date, end_date
         )
         VALUES (%s, %s, %s, %s, %s);
@@ -59,7 +59,7 @@ def _add_payload(
     """Insert a landed sponsor list."""
     connection.execute(
         """
-        INSERT INTO ingest.event_sponsors_raw (
+        INSERT INTO ingest_wtt.event_sponsors_raw (
             event_id, payload, http_status, received_count,
             payload_sha256, fetched_at
         )
@@ -79,7 +79,7 @@ def _queue(connection: Connection[Any]) -> list[tuple[int, str]]:
     rows = connection.execute(
         """
         SELECT event_id, reason, start_date, end_date
-        FROM ingest.event_sponsors_pending
+        FROM ingest_wtt.event_sponsors_pending
         ORDER BY
             (reason = 'live') DESC,
             GREATEST(start_date, end_date) DESC,

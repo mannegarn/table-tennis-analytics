@@ -1,10 +1,10 @@
 -- 011: the match_commentary raw landing table, owned by ingestion.
 --
 -- One row per MATCH (event_id, document_code). No unpacked table is created in
--- ingest because no downstream scraper depends on commentary fields (ADR 0003);
+-- ingest_wtt because no downstream scraper depends on commentary fields (ADR 0003);
 -- full commentary unpacking lives in dbt staging (stg_match_commentary).
 
-CREATE TABLE IF NOT EXISTS ingest.match_commentary_raw (
+CREATE TABLE IF NOT EXISTS ingest_wtt.match_commentary_raw (
     event_id bigint NOT NULL,
     document_code text NOT NULL,
     payload jsonb NOT NULL,
@@ -28,5 +28,5 @@ CREATE TABLE IF NOT EXISTS ingest.match_commentary_raw (
         CHECK (payload_sha256 ~ '^[0-9a-f]{64}$')
 );
 
-COMMENT ON TABLE ingest.match_commentary_raw IS
+COMMENT ON TABLE ingest_wtt.match_commentary_raw IS
     'One raw WTT match commentary response per match, decoded to a JSONB array.';

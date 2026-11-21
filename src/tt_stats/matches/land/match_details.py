@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
     from psycopg import Connection
 
-    from tt_stats.matches.collect.match_details import MatchDetailsSummary
+    from tt_stats.core.collector import FetchSummary
 
 logger = get_logger(__name__)
 
@@ -26,7 +26,7 @@ UNPACK_PLAYERS_SQL_PATH = (
 
 def land_match_details(
     connection: Connection[Any],
-    summary: MatchDetailsSummary,
+    summary: FetchSummary[tuple[int, str]],
     payload: Any,
     *,
     unpack: bool = True,
@@ -37,7 +37,7 @@ def land_match_details(
 
 def land_match_details_chunk(
     connection: Connection[Any],
-    items: Sequence[tuple[MatchDetailsSummary, Any]],
+    items: Sequence[tuple[FetchSummary[tuple[int, str]], Any]],
     *,
     unpack: bool = True,
 ) -> None:
@@ -53,10 +53,11 @@ def land_match_details_chunk(
         if summary.status_code is None or summary.payload_sha256 is None:
             raise ValueError("summary is missing status or payload hash")
 
+        event_id, document_code = summary.key
         raw_params.append(
             (
-                summary.event_id,
-                summary.document_code,
+                event_id,
+                document_code,
                 Jsonb(payload),
                 summary.status_code,
                 summary.payload_sha256,
@@ -65,8 +66,8 @@ def land_match_details_chunk(
         )
         unpack_params.append(
             {
-                "event_id": summary.event_id,
-                "document_code": summary.document_code,
+                "event_id": event_id,
+                "document_code": document_code,
             }
         )
 
@@ -75,7 +76,7 @@ def land_match_details_chunk(
     with connection.transaction(), connection.cursor() as cursor:
         cursor.executemany(
             """
-            INSERT INTO ingest.match_details_raw (
+            INSERT INTO ingest_wtt.match_details_raw (
                 event_id,
                 document_code,
                 payload,

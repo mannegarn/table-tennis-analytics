@@ -1,12 +1,11 @@
-# Minimal dbt project definition.
+# dbt project configuration (`level_source` folder and schema layout).
 #
-# The model folders are domain-first, then data level, for example:
-#   models/events/staging, models/events/marts
-#   models/matches/staging, models/matches/marts
-#   models/players/staging, models/players/marts
+# Models are organized layer-first, then source-second:
+#   models/staging/wtt, models/staging/ittf
+#   models/intermediate
+#   models/marts/wtt, models/marts/ittf, models/marts/core
 #
-# No models exist yet. This file makes the project discoverable so
-# `dbt debug` can verify the warehouse connection.
+# Heavy WTT JSONB staging models stay materialized as tables.
 
 name: "tt_stats"
 version: "1.0.0"
@@ -24,15 +23,36 @@ clean-targets: ["target", "dbt_packages", "logs"]
 
 models:
   tt_stats:
-    +materialized: table
+    staging:
+      wtt:
+        +schema: staging_wtt
+        +materialized: table
+      ittf:
+        +schema: staging_ittf
+        +materialized: view
+    intermediate:
+      +schema: intermediate
+      +materialized: table
+    marts:
+      wtt:
+        +schema: marts_wtt
+        +materialized: table
+      ittf:
+        +schema: marts_ittf
+        +materialized: view
+      core:
+        +schema: marts
+        +materialized: view
 
 seeds:
   tt_stats:
+    +schema: seeds
     event_sponsors_manual:
       +column_types:
         event_id: integer
         ball_sponsor: varchar
         table_sponsor: varchar
+        start_date: date
         event_name: varchar
     sponsor_domains:
       +column_types:

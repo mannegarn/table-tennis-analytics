@@ -14,8 +14,9 @@ Format: Status, Context, Decision, Consequences. Kept deliberately brief.
 | [0004](0004-ingestion-never-reads-dbt-output.md) | Ingestion never reads dbt output; queues derive from raw | Accepted |
 | [0005](0005-derive-scrape-eligibility-never-store-it.md) | Derive scrape eligibility, never store a scrape flag | Accepted |
 | [0006](0006-fetch-all-match-details-defer-match-logs.md) | Fetch all match details; defer match logs | Accepted |
-| [0007](0007-ingest-and-analytics-schemas.md) | Separate ingest and analytics schemas | Accepted |
+| [0007](0007-ingest-and-analytics-schemas.md) | Separate ingest and analytics schemas | Superseded by 0012 |
 | [0008](0008-match-details-from-the-uncached-matchdata-route.md) | Match details from the uncached matchdata route; logs stay deferred | Superseded by 0009 |
 | [0009](0009-fetch-match-logs-alongside-match-details.md) | Fetch match logs alongside match details for serve and deuce analysis | Accepted |
 | [0010](0010-match-entries-identity-is-event-and-document-code.md) | Match identity is the event plus the document code, not the upstream id | Accepted |
 | [0011](0011-ci-quality-gates-and-dependency-security.md) | Layered CI quality gates and dependency security | Accepted |
+| [0012](0012-level-source-schemas.md) | Layer-and-source (`level_source`) schemas, local run history, and `public` migration ledger | Accepted |

@@ -6,7 +6,7 @@
 -- domain can derive its pending queue without scanning JSONB blobs.
 -- =============================================================================
 
-INSERT INTO ingest.match_details_players_unpacked (
+INSERT INTO ingest_wtt.match_details_players_unpacked (
     event_id,
     document_code,
     player_id,
@@ -19,7 +19,7 @@ SELECT DISTINCT ON (r.event_id, r.document_code, (p.value ->> 'playerId')::bigin
        (p.value ->> 'playerId')::bigint         AS player_id,
        clock_timestamp()                        AS first_seen_at,
        clock_timestamp()                        AS last_seen_at
-FROM ingest.match_details_raw AS r
+FROM ingest_wtt.match_details_raw AS r
 CROSS JOIN LATERAL jsonb_array_elements(r.payload -> 'competitiors') AS c
 CROSS JOIN LATERAL jsonb_array_elements(c.value -> 'players') AS p
 WHERE r.event_id = %(event_id)s

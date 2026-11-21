@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 from psycopg import Connection
 
-from tt_stats.event_sponsors.collect.event_sponsors import EventSponsorsSummary
+from tt_stats.core.collector import FetchSummary
 from tt_stats.event_sponsors.land import land_event_sponsors
 
 pytestmark = pytest.mark.integration
@@ -33,10 +33,10 @@ def _sponsor(sponsor_id: int) -> dict[str, Any]:
     }
 
 
-def _summary(payload: list[dict[str, Any]]) -> EventSponsorsSummary:
+def _summary(payload: list[dict[str, Any]]) -> FetchSummary[int]:
     body = json.dumps(payload).encode("utf-8")
-    return EventSponsorsSummary(
-        event_id=EVENT_ID,
+    return FetchSummary(
+        key=EVENT_ID,
         status_code=200,
         received_count=len(payload),
         payload_sha256=hashlib.sha256(body).hexdigest(),
@@ -58,7 +58,7 @@ def test_landing_upserts_one_row_and_is_idempotent(
     rows = db_connection.execute(
         """
         SELECT event_id, payload, http_status, received_count, payload_sha256, source
-        FROM ingest.event_sponsors_raw
+        FROM ingest_wtt.event_sponsors_raw
         WHERE event_id = %s;
         """,
         (EVENT_ID,),
@@ -85,7 +85,7 @@ def test_an_empty_sponsor_list_is_recorded_as_an_answer(
     row = db_connection.execute(
         """
         SELECT payload, received_count
-        FROM ingest.event_sponsors_raw
+        FROM ingest_wtt.event_sponsors_raw
         WHERE event_id = %s;
         """,
         (EVENT_ID,),
@@ -104,8 +104,8 @@ def test_landing_refuses_a_failed_summary(
     good = _summary(payload)
     land_event_sponsors(db_connection, good, payload)
 
-    failed = EventSponsorsSummary(
-        event_id=EVENT_ID,
+    failed = FetchSummary(
+        key=EVENT_ID,
         status_code=500,
         received_count=0,
         payload_sha256=None,
@@ -120,7 +120,7 @@ def test_landing_refuses_a_failed_summary(
     row = db_connection.execute(
         """
         SELECT received_count
-        FROM ingest.event_sponsors_raw
+        FROM ingest_wtt.event_sponsors_raw
         WHERE event_id = %s;
         """,
         (EVENT_ID,),
