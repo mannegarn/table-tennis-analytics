@@ -1,9 +1,9 @@
 version: 2
 
 sources:
-  - name: ingest
-    schema: ingest
-    description: Raw JSONB payloads and CSV/HTML profiles populated by the ingestion pipeline.
+  - name: wtt
+    schema: ingest_wtt
+    description: Raw WTT JSONB payloads populated by the ingestion pipeline.
     tables:
       - name: events_by_year_raw
         description: One raw WTT GetEventsCalendar response per calendar year (JSONB array of page objects with rows).
@@ -17,5 +17,3 @@ sources:
         description: One raw WTT match commentary response per (event_id, document_code), decoded to a JSONB array.
       - name: player_details_raw
         description: One raw WTT GetPlayers response per player_id.
-      - name: ittf_player_profiles
-        description: Player style, grip, and hand enrichment per player_id from ITTF master CSV or HTML.

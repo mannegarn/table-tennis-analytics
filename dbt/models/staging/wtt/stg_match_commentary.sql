@@ -12,7 +12,7 @@ select distinct on (
     nullif(btrim(e.value -> 'data' ->> 'ACTIONTYPE'), '') as action_type,
     nullif(btrim(e.value -> 'data' ->> 'COMMENTARYTEXT'), '') as commentary_text,
     nullif(btrim(e.value -> 'data' ->> 'UTCTIME'), '') as utc_time
-from {{ source('ingest', 'match_commentary_raw') }} as r
+from {{ source('wtt', 'match_commentary_raw') }} as r
 cross join lateral jsonb_array_elements(r.payload) as e
 where e.value -> 'data' ->> 'SEQUENCENUMBER' ~ '^[0-9]+$'
 order by

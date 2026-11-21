@@ -182,11 +182,10 @@ test-integration: ## Run only integration tests
 dbt-debug: ## Verify dbt can reach the warehouse
 	uv run dbt debug --project-dir dbt --profiles-dir dbt
 
-dbt-run: ## Seed CSVs and build dbt models (optional: SELECT=model)
-	uv run dbt seed --project-dir dbt --profiles-dir dbt
-	uv run dbt run --project-dir dbt --profiles-dir dbt $(ARGS_select)
+dbt-run: ## Seed, build and test dbt models in dependency order (optional: SELECT=model+)
+	uv run dbt build --project-dir dbt --profiles-dir dbt $(ARGS_select)
 
-dbt-test: ## Run dbt data tests (optional: SELECT=model)
+dbt-test: ## Run dbt data tests (optional: SELECT=model+)
 	uv run dbt test --project-dir dbt --profiles-dir dbt $(ARGS_select)
 
 dbt-clean: ## Remove dbt compiled artifacts and logs (dbt/target, dbt/logs)

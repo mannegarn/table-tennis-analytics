@@ -1,7 +1,7 @@
 version: 2
 
 models:
-  - name: fct_match_commentary
+  - name: wtt__fct_match_commentary
     description: >
       Fact table of match commentary actions at grain (event_id, document_code,
       sequence_number), enriched with human-readable action_name and

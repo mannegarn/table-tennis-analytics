@@ -17,7 +17,7 @@ select distinct on (
     nullif(btrim(e.value ->> 'City'), '') as city,
     nullif(btrim(e.value ->> 'ContinentCode'), '') as continent_code,
     nullif(btrim(e.value ->> 'Subcontinent'), '') as subcontinent
-from {{ source('ingest', 'events_by_year_raw') }} as r
+from {{ source('wtt', 'events_by_year_raw') }} as r
 cross join lateral jsonb_array_elements(r.payload -> 0 -> 'rows') as e
 where jsonb_typeof(r.payload -> 0 -> 'rows') = 'array'
 order by
