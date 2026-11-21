@@ -31,7 +31,7 @@ def _match_payload(document_code: str, player_id: str) -> dict[str, Any]:
     }
 
 
-def test_seed_backup_loads_raw_replaces_404_preserves_live_and_skips_unpack(
+def test_seed_backup_loads_raw_replaces_404_preserves_live_and_unpacks_players(
     db_connection: Connection[Any],
     tmp_path: Path,
 ) -> None:
@@ -102,9 +102,18 @@ def test_seed_backup_loads_raw_replaces_404_preserves_live_and_skips_unpack(
     assert rows[1]["payload"]["resultStatus"] == "OFFICIAL"
     assert rows[2]["payload"]["resultStatus"] == "OFFICIAL"
 
-    # Strictly raw load: nothing unpacked into match_details_players_unpacked.
-    unpacked_count = db_connection.execute(
-        "SELECT count(*) AS n FROM ingest_wtt.match_details_players_unpacked;"
-    ).fetchone()
-    assert unpacked_count is not None
-    assert unpacked_count["n"] == 0
+    # Players from seeded backup matches are unpacked in the same transaction
+    # so player_details_pending sees them (DOC_200 kept its playerless live payload).
+    unpacked_rows = db_connection.execute(
+        """
+        SELECT document_code, player_id
+        FROM ingest_wtt.match_details_players_unpacked
+        WHERE event_id = %s
+        ORDER BY document_code, player_id;
+        """,
+        (EVENT_ID,),
+    ).fetchall()
+    assert [(r["document_code"], r["player_id"]) for r in unpacked_rows] == [
+        (DOC_404, 1001),
+        (DOC_NEW, 1003),
+    ]

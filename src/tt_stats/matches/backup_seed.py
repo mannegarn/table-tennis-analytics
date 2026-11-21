@@ -16,6 +16,8 @@ from tt_stats.core.batching import chunks
 from tt_stats.core.config import get_settings
 from tt_stats.core.db import get_connection
 from tt_stats.core.logging_config import configure_logging, get_logger
+from tt_stats.core.sql_files import load_sql
+from tt_stats.matches.land.match_details import UNPACK_PLAYERS_SQL_PATH
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -126,16 +128,20 @@ def seed_match_details_backup(
     source: str = DEFAULT_SOURCE,
     fetched_at: datetime | None = None,
     batch_size: int = DEFAULT_BATCH_SIZE,
+    unpack: bool = True,
 ) -> SeedResult:
-    """Load raw backup match JSONs into ``ingest_wtt.match_details_raw`` only.
+    """Load backup match JSONs into ``ingest_wtt.match_details_raw`` and unpack players.
 
     Inserts missing matches and replaces existing 404 or empty ``{}`` rows.
-    Live-scraped 200 rows are never overwritten, and no unpacking is performed.
+    Live-scraped 200 rows are never overwritten. When ``unpack`` is True
+    (default), also populates ``ingest_wtt.match_details_players_unpacked`` in
+    the same transaction so ``player_details_pending`` sees seeded players.
     """
     if batch_size < 1:
         raise ValueError(f"batch_size must be at least 1, got {batch_size}")
 
     resolved_fetched_at = fetched_at or datetime.now(tz=UTC)
+    unpack_sql = load_sql(UNPACK_PLAYERS_SQL_PATH) if unpack else None
     files = sorted(backup_dir.glob("*.json"))
     matches_seen = 0
     rows_written = 0
@@ -158,10 +164,16 @@ def seed_match_details_backup(
                 )
                 for match in batch
             ]
+            unpack_params = [
+                {"event_id": match.event_id, "document_code": match.document_code}
+                for match in batch
+            ]
             with connection.transaction(), connection.cursor() as cursor:
                 cursor.executemany(_UPSERT_SQL, params)
                 if cursor.rowcount > 0:
                     rows_written += cursor.rowcount
+                if unpack_sql is not None:
+                    cursor.executemany(unpack_sql.encode("utf-8"), unpack_params)
 
     logger.info(
         "match_details_backup_seeded",
