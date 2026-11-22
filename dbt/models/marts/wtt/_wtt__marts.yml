@@ -75,6 +75,82 @@ models:
         data_tests:
           - not_null
 
+  - name: wtt__dim_players
+    description: >
+      WTT players dimension (1 row per WTT player_id), keyed by deterministic
+      60-bit player_sk and enriched with ITTF playing style, hand, and grip
+      (preferring normalized WTT hand/grip when present).
+    columns:
+      - name: player_sk
+        description: Deterministic 60-bit surrogate key hashed from 'ittf' and ittf_id.
+        data_tests:
+          - unique
+          - not_null
+      - name: ittf_id
+        description: Natural ITTF/WTT player identifier stored as text (nullable in future unified marts).
+        data_tests:
+          - unique
+          - not_null
+      - name: player_name
+        description: Full player display name from WTT.
+        data_tests:
+          - not_null
+      - name: player_given_name
+        description: Player given name from WTT.
+        data_tests:
+          - not_null
+      - name: player_family_name
+        description: Player family name from WTT.
+        data_tests:
+          - not_null
+      - name: country_code
+        description: Three-letter country/association code.
+        data_tests:
+          - not_null
+      - name: country_name
+        description: Country/association display name.
+        data_tests:
+          - not_null
+      - name: organization_code
+        description: Three-letter member organization code.
+        data_tests:
+          - not_null
+      - name: organization_name
+        description: Member organization display name.
+        data_tests:
+          - not_null
+      - name: dob
+        description: Player date of birth.
+        data_tests:
+          - not_null
+      - name: gender
+        description: Player gender (M or F).
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["M", "F"]
+      - name: hand
+        description: Playing hand (Left, Right, or NULL), preferring normalized WTT over ITTF.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Left", "Right"]
+      - name: grip
+        description: Playing grip (Shakehand, Penhold, or NULL), preferring normalized WTT over ITTF.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Shakehand", "Penhold"]
+      - name: style
+        description: Playing style from ITTF profile (Attacker, Defender, or NULL).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Attacker", "Defender"]
+      - name: head_shot
+        description: Player headshot image URL/filename from WTT (nullable).
+
   - name: wtt__fct_match_commentary
     description: >
       Fact table of match commentary actions at grain (event_id, document_code,

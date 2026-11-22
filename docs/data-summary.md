@@ -1,92 +1,48 @@
 # Database Data Summary
 
-- **Generated at**: 2026-11-14 09:36:21 UTC
-- **Database**: `tt_stats` (4586 MB)
-- **Applied migrations**: 17
+- **Generated at**: 2026-11-22 21:33:06 UTC
+- **Database**: `tt_stats` (5173 MB)
+- **Applied migrations**: 16
 
 ## Executive Data Overview
 
 | Entity | Actual Count | Usable Data Snapshot |
 | --- | --- | --- |
-| Tournaments | 2,965 | 533 with matches; 506 with sponsors |
-| Matches | 201,399 | 21,955 with non-empty details (21,955 with players); 67,883 with commentary (6,674,908 rows) |
-| Players | 4,394 | 4,394 with WTT profile; 1,068 with ITTF profile (2,931 total ITTF rows) |
+| Tournaments | 2,969 | 535 with matches; 508 with sponsors |
+| Matches | 202,031 | 51,637 with non-empty details (51,636 with players); 68,128 with commentary (6,731,794 rows) |
+| Players | 6,782 | 6,432 with WTT profile; 2,931 with ITTF profile (2,931 total ITTF rows) |
 
 ## High-Level Data Coverage (Has Data vs. Does Not Have Data)
 
 | Entity / Check | Total | Has Data | No Data | Notes |
 | --- | --- | --- | --- | --- |
 | Calendar years fetched -> have events | 102 | 93 (91.2%) | 9 (8.8%) | range 1926-2027, 2 pending |
-| Tournaments -> match list fetched | 2,965 | 2,841 (95.8%) | 124 (4.2%) | 5 pending |
-| Tournaments -> have matches (>0) | 2,965 | 533 (18.0%) | 2,432 (82.0%) | remaining fetched events returned [] or are pending |
-| Tournaments -> sponsors fetched | 2,965 | 2,840 (95.8%) | 125 (4.2%) | 5 pending |
-| Tournaments -> have sponsors (>0) | 2,965 | 506 (17.1%) | 2,459 (82.9%) | remaining fetched events had 0 sponsors or are pending |
-| Matches -> match details fetched | 201,399 | 201,202 (99.9%) | 197 (0.1%) | 564 pending |
-| Matches -> have non-empty details | 201,399 | 21,955 (10.9%) | 179,444 (89.1%) | 179,247 fetched rows returned empty {} |
-| Matches -> have unpacked players | 201,399 | 21,955 (10.9%) | 179,444 (89.1%) | from match_details_players_unpacked |
-| Matches -> commentary fetched | 201,399 | 201,399 (100.0%) | 0 (0.0%) | 555 pending |
-| Matches -> have commentary (>0 rows) | 201,399 | 67,883 (33.7%) | 133,516 (66.3%) | 6,674,908 total rows |
-| Seen players -> WTT details fetched | 4,394 | 4,394 (100.0%) | 0 (0.0%) | 0 pending |
-| Seen players -> WTT profile unpacked | 4,394 | 4,394 (100.0%) | 0 (0.0%) | non-empty GetPlayers response |
-| Seen players -> ITTF profile | 4,394 | 1,068 (24.3%) | 3,326 (75.7%) | 3,326 pending; 2,931 total ITTF rows |
+| Tournaments -> match list fetched | 2,969 | 2,843 (95.8%) | 126 (4.2%) | 2 pending |
+| Tournaments -> have matches (>0) | 2,969 | 535 (18.0%) | 2,434 (82.0%) | remaining fetched events returned [] or are pending |
+| Tournaments -> sponsors fetched | 2,969 | 2,843 (95.8%) | 126 (4.2%) | 2 pending |
+| Tournaments -> have sponsors (>0) | 2,969 | 508 (17.1%) | 2,461 (82.9%) | remaining fetched events had 0 sponsors or are pending |
+| Matches -> match details fetched | 202,031 | 202,022 (100.0%) | 9 (0.0%) | 240 pending |
+| Matches -> have non-empty details | 202,031 | 51,637 (25.6%) | 150,394 (74.4%) | 150,385 fetched rows returned empty {} |
+| Matches -> have unpacked players | 202,031 | 51,636 (25.6%) | 150,395 (74.4%) | from match_details_players_unpacked |
+| Matches -> commentary fetched | 202,031 | 202,031 (100.0%) | 0 (0.0%) | 231 pending |
+| Matches -> have commentary (>0 rows) | 202,031 | 68,128 (33.7%) | 133,903 (66.3%) | 6,731,794 total rows |
+| Seen players -> WTT details fetched | 6,782 | 6,782 (100.0%) | 0 (0.0%) | 0 pending |
+| Seen players -> WTT profile unpacked | 6,782 | 6,432 (94.8%) | 350 (5.2%) | non-empty GetPlayers response |
+| Seen players -> ITTF profile | 6,782 | 2,931 (43.2%) | 3,851 (56.8%) | 3,851 pending; 2,931 total ITTF rows |
 
 ## Tournaments & Calendar
 
 - **Calendar years fetched**: 102 (1926-2027), with **93** having events and **9** empty.
-- **Calendar event rows**: 2,967 unpacked from 2,986 raw items.
-- **Distinct tournaments (`event_id`)**: 2,965 (date span: 1926-12-06 to 2027-12-12).
-
-## Event Sponsors Field Completeness (`ingest.event_sponsors_unpacked`)
-
-| Field | Total Rows | Has Data | Missing / Empty |
-| --- | --- | --- | --- |
-| sponsor_type_id | 1,635 | 1,635 (100.0%) | 0 (0.0%) |
-| sponsor_type_name | 1,635 | 1,635 (100.0%) | 0 (0.0%) |
-| logo | 1,635 | 1,635 (100.0%) | 0 (0.0%) |
-| dark_logo | 1,635 | 813 (49.7%) | 822 (50.3%) |
-| sponsor_link | 1,635 | 1,230 (75.2%) | 405 (24.8%) |
-
-## Match Commentary Field Completeness (`ingest.match_commentary_unpacked`)
-
-| Field | Total Rows | Has Data | Missing / Empty |
-| --- | --- | --- | --- |
-| commentary_id | 6,674,908 | 6,674,908 (100.0%) | 0 (0.0%) |
-| action_type | 6,674,908 | 6,674,908 (100.0%) | 0 (0.0%) |
-| commentary_text | 6,674,908 | 6,674,558 (100.0%) | 350 (0.0%) |
-| utc_date | 6,674,908 | 6,674,908 (100.0%) | 0 (0.0%) |
-| local_date | 6,674,908 | 6,263,330 (93.8%) | 411,578 (6.2%) |
-| source_ts | 6,674,908 | 6,674,908 (100.0%) | 0 (0.0%) |
+- **Calendar event rows**: 2,971 unpacked from 2,990 raw items.
+- **Distinct tournaments (`event_id`)**: 2,969 (date span: 1926-12-06 to 2027-12-12).
 
 ## Players & Profile Enrichment
 
-- **Distinct players seen in matches**: 4,394
-- **WTT `player_details_raw` rows**: 4,394 (unpacked: 4,394)
-- **ITTF `ittf_player_profiles` rows**: 2,931 (1,068 matched to seen players, 1,863 not yet seen in WTT matches)
+- **Distinct players seen in matches**: 6,782
+- **WTT `player_details_raw` rows**: 6,782 (unpacked: 6,432)
+- **ITTF `ittf_player_profiles` rows**: 2,931 (2,931 matched to seen players, 0 not yet seen in WTT matches)
 
-### WTT Player Details Completeness (`ingest.player_details_unpacked`)
-
-| Field | Total Rows | Has Data | Missing / Empty |
-| --- | --- | --- | --- |
-| player_name | 4,394 | 4,394 (100.0%) | 0 (0.0%) |
-| country_code | 4,394 | 4,394 (100.0%) | 0 (0.0%) |
-| country_name | 4,394 | 4,394 (100.0%) | 0 (0.0%) |
-| nationality_code | 4,394 | 4,394 (100.0%) | 0 (0.0%) |
-| gender | 4,394 | 4,394 (100.0%) | 0 (0.0%) |
-| age | 4,394 | 4,394 (100.0%) | 0 (0.0%) |
-| dob | 4,394 | 4,394 (100.0%) | 0 (0.0%) |
-| handedness | 4,394 | 637 (14.5%) | 3,757 (85.5%) |
-| grip | 4,394 | 634 (14.4%) | 3,760 (85.6%) |
-| style | 4,394 | 0 (0.0%) | 4,394 (100.0%) |
-| equipment_sponsor | 4,394 | 0 (0.0%) | 4,394 (100.0%) |
-| blade_type | 4,394 | 0 (0.0%) | 4,394 (100.0%) |
-| racket_covering_a | 4,394 | 0 (0.0%) | 4,394 (100.0%) |
-| racket_covering_b | 4,394 | 0 (0.0%) | 4,394 (100.0%) |
-| active_since | 4,394 | 0 (0.0%) | 4,394 (100.0%) |
-| earnings_career | 4,394 | 0 (0.0%) | 4,394 (100.0%) |
-| head_shot | 4,394 | 956 (21.8%) | 3,438 (78.2%) |
-| bio | 4,394 | 0 (0.0%) | 4,394 (100.0%) |
-
-### ITTF Player Profiles Completeness (`ingest.ittf_player_profiles`)
+### ITTF Player Profiles Completeness (`ingest_ittf.ittf_player_profiles`)
 
 | Field | Total Rows | Has Data | Missing / Empty |
 | --- | --- | --- | --- |
@@ -100,33 +56,43 @@
 | --- | --- | --- | --- | --- |
 | 20260615_master_players.csv | 2,931 | 2,846 | 2,846 | 2,846 |
 
-## Ingestion Run History (`ingest.ingest_runs`)
+## Ingestion Run History (`ingest_wtt.ingest_runs`)
 
-| Source | Total Runs | Succeeded | Failed | Last Run |
+| Endpoint | Total Runs | Succeeded | Failed | Last Run |
 | --- | --- | --- | --- | --- |
-| wtt_matchcentre | 405,481 | 204,907 (50.5%) | 200,574 (49.5%) | 2026-11-13 22:50 UTC |
-| wtt_match_commentary | 211,906 | 204,473 (96.5%) | 7,433 (3.5%) | 2026-11-14 09:26 UTC |
-| wtt_player_details | 4,394 | 4,394 (100.0%) | 0 (0.0%) | 2026-11-13 23:35 UTC |
-| wtt_getofficialresult | 2,853 | 2,853 (100.0%) | 0 (0.0%) | 2026-11-14 09:20 UTC |
-| wtt_geteventequipmentwithlogo | 2,844 | 2,844 (100.0%) | 0 (0.0%) | 2026-11-12 19:24 UTC |
-| wtt_eventcalendar | 108 | 108 (100.0%) | 0 (0.0%) | 2026-11-14 09:19 UTC |
+| wtt_matchcentre | 204,287 | 204,188 (100.0%) | 99 (0.0%) | 2026-11-22 14:24 UTC |
+| wtt_match_commentary | 204,147 | 204,147 (100.0%) | 0 (0.0%) | 2026-11-22 14:24 UTC |
+| wtt_player_details | 6,782 | 6,782 (100.0%) | 0 (0.0%) | 2026-11-22 14:23 UTC |
+| wtt_geteventequipmentwithlogo | 2,863 | 2,863 (100.0%) | 0 (0.0%) | 2026-11-22 14:24 UTC |
+| wtt_getofficialresult | 2,863 | 2,863 (100.0%) | 0 (0.0%) | 2026-11-22 14:24 UTC |
+| wtt_eventcalendar | 122 | 122 (100.0%) | 0 (0.0%) | 2026-11-22 14:24 UTC |
 
 ## Table Inventory (Row Counts & Disk Size)
 
 | Table | Rows | Total Size |
 | --- | --- | --- |
-| `ingest.match_commentary_unpacked` | 6,674,908 | 2764 MB |
-| `ingest.match_details_raw` | 201,202 | 841 MB |
-| `ingest.match_commentary_raw` | 201,399 | 631 MB |
-| `ingest.ingest_runs` | 627,586 | 269 MB |
-| `ingest.match_entries_unpacked` | 201,399 | 45 MB |
-| `ingest.match_details_players_unpacked` | 48,818 | 13 MB |
-| `ingest.player_details_raw` | 4,394 | 5504 kB |
-| `ingest.match_entries_payloads_raw` | 2,841 | 3704 kB |
-| `ingest.player_details_unpacked` | 4,394 | 1208 kB |
-| `ingest.events_unpacked` | 2,967 | 1056 kB |
-| `ingest.event_sponsors_raw` | 2,840 | 888 kB |
-| `ingest.ittf_player_profiles` | 2,931 | 640 kB |
-| `ingest.events_by_year_raw` | 102 | 544 kB |
-| `ingest.event_sponsors_unpacked` | 1,635 | 456 kB |
-| `ingest.schema_version` | 17 | 32 kB |
+| `ingest_ittf.ittf_player_profiles` | 2,931 | 1752 kB |
+| `ingest_wtt.match_details_raw` | 202,022 | 972 MB |
+| `ingest_wtt.match_commentary_raw` | 202,031 | 627 MB |
+| `ingest_wtt.ingest_runs` | 421,064 | 166 MB |
+| `ingest_wtt.match_entries_unpacked` | 202,031 | 45 MB |
+| `ingest_wtt.match_details_players_unpacked` | 109,105 | 29 MB |
+| `ingest_wtt.player_details_raw` | 6,782 | 8160 kB |
+| `ingest_wtt.match_entries_payloads_raw` | 2,843 | 3744 kB |
+| `ingest_wtt.event_sponsors_raw` | 2,843 | 904 kB |
+| `ingest_wtt.events_unpacked` | 2,971 | 840 kB |
+| `ingest_wtt.events_by_year_raw` | 102 | 640 kB |
+| `intermediate.int_event_equipment_sponsors` | 419 | 40 kB |
+| `marts_wtt.fct_match_commentary` | 6,720,243 | 1970 MB |
+| `marts_wtt.dim_players` | 6,432 | 1064 kB |
+| `marts_wtt.dim_events` | 2,969 | 520 kB |
+| `seeds.event_sponsors_manual` | 242 | 56 kB |
+| `seeds.action_types` | 23 | 16 kB |
+| `seeds.sponsor_domains` | 17 | 16 kB |
+| `seeds.player_identity_overrides` | 0 | 0 bytes |
+| `staging_wtt.stg_match_commentary` | 6,720,243 | 1289 MB |
+| `staging_wtt.stg_match_entries` | 202,031 | 25 MB |
+| `staging_wtt.stg_match_details` | 51,637 | 23 MB |
+| `staging_wtt.stg_wtt_players` | 6,432 | 944 kB |
+| `staging_wtt.stg_events` | 2,971 | 552 kB |
+| `staging_wtt.stg_event_sponsors` | 1,639 | 312 kB |

@@ -56,3 +56,22 @@ seeds:
         description: Scheduled event start date synced from marts_wtt.dim_events (nullable).
       - name: event_name
         description: Optional human-readable event name for reference while editing the CSV.
+
+  - name: player_identity_overrides
+    description: >
+      User-maintained manual cross-source player identity links. Points at
+      target_ittf_id or (target_source_system, target_source_player_id), never
+      at a pasted player_sk hash.
+    columns:
+      - name: source_system
+        description: Source system of the player record to override (e.g. pro_a).
+      - name: source_player_id
+        description: Natural player identifier in source_system.
+      - name: target_ittf_id
+        description: Canonical ITTF player ID when linking to an ITTF-registered player (nullable).
+      - name: target_source_system
+        description: Target source system when linking two non-ITTF league players (nullable).
+      - name: target_source_player_id
+        description: Target natural player identifier in target_source_system (nullable).
+      - name: notes
+        description: Free-text rationale or verification notes for the override.

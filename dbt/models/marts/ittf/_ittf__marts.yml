@@ -1,0 +1,31 @@
+version: 2
+
+models:
+  - name: ittf__dim_player_profiles
+    description: >
+      ITTF player profile attributes (hand, normalized grip, style) keyed by
+      player_id. Exposed as a view in marts_ittf for WTT and future marts.
+    columns:
+      - name: player_id
+        description: ITTF/WTT player identifier.
+        data_tests:
+          - not_null
+          - unique
+      - name: hand
+        description: Playing hand (Left, Right, or NULL).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Left", "Right"]
+      - name: grip
+        description: Normalized grip (Shakehand, Penhold, or NULL).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Shakehand", "Penhold"]
+      - name: style
+        description: Playing style (Attacker, Defender, or NULL).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Attacker", "Defender"]

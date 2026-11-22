@@ -154,7 +154,7 @@ event_id,ball_sponsor,table_sponsor,start_date,event_name
 3030,Yinhe,Butterfly,2025-02-17,WTT Feeder Cappadocia 2025
 3031,Yinhe,Butterfly,2025-09-16,WTT Feeder Cappadocia II 2025
 3058,Yinhe,Stag,2025-06-03,WTT Feeder Prishtina 2025
-3059,,,2025-11-29,WTT Feeder Parma 2025
+3059,,Stag,2025-11-29,WTT Feeder Parma 2025
 3065,Yinhe,Donic,2025-11-24,WTT Feeder Düsseldorf II 2025
 3066,,Butterfly,2025-11-05,WTT Feeder Vila Nova de Gaia 2025
 3069,Yinhe,Joola,2025-04-05,WTT Feeder Havirov 2025
@@ -179,7 +179,7 @@ event_id,ball_sponsor,table_sponsor,start_date,event_name
 3108,Butterfly,DHS,2025-05-17,ITTF World Table Tennis Championships Finals Doha 2025
 3109,,DHS,2025-04-14,ITTF MEN'S AND WOMEN'S WORLD CUP MACAO 2025 PRESENTED BY GALAXY ENTERTAINMENT GROUP
 3110,DHS,Donic,2025-10-21,WTT Star Contender London 2025
-3112,,,2025-12-10,WTT Finals Hong Kong 2025
+3112,,DHS,2025-12-10,WTT Finals Hong Kong 2025
 3121,DHS,Butterfly,2025-07-22,WTT Contender Lagos 2025
 3128,DHS,Double Fish,2025-08-14,Europe Smash - Sweden 2025
 3131,Yinhe,Yinhe,2025-08-11,WTT Feeder Vientiane 2025 Presented by ICBC Bank
@@ -190,26 +190,26 @@ event_id,ball_sponsor,table_sponsor,start_date,event_name
 3178,Double Fish,Butterfly,2025-08-09,WTT Feeder Spokane II 2025
 3191,Yinhe,Tibhar,2025-11-10,WTT Feeder Gdansk 2025
 3199,Yinhe,Stag,2025-09-11,WTT Feeder Istanbul 2025
-3231,,,2026-01-07,WTT Champions Doha 2026
-3232,,,2026-01-13,WTT Star Contender Doha 2026
-3233,,,2026-02-10,WTT Star Contender Chennai 2026
-3234,,,2026-02-19,Singapore Smash 2026 Presented by Resorts World Sentosa
-3235,,,2026-03-10,WTT Champions Chongqing 2026 Presented by AITO
-3236,,,2026-03-24,WTT Contender Tunis 2026
-3237,,,2026-04-07,WTT Contender Taiyuan 2026
-3238,,,2026-05-19,WTT Contender Lagos 2026
-3239,,,2026-06-01,WTT Contender Skopje 2026
-3240,,,2026-06-09,WTT Contender Zagreb 2026
-3242,,,2026-06-26,United States Smash 2026
-3244,,,2026-07-21,WTT Star Contender São José dos Campos 2026
-3245,,,2026-08-04,WTT Champions Yokohama 2026
-3246,,,2026-08-08,Europe Smash - Sweden 2026
-3247,,,2026-09-01,WTT Contender Almaty 2026
-3248,,,2026-09-08,WTT Champions Macao 2026 Presented by Galaxy Entertainment Group
-3249,,,2026-10-01,China Smash 2026 Presented by Beijing Shijingshan Culture & Tourism Group
-3250,,,2026-10-27,WTT Champions Montpellier 2026
-3251,,,2026-01-19,WTT Contender Muscat 2026
-3252,,,2026-11-03,WTT Champions Frankfurt 2026
+3231,,DHS,2026-01-07,WTT Champions Doha 2026
+3232,,Stag,2026-01-13,WTT Star Contender Doha 2026
+3233,,Stag,2026-02-10,WTT Star Contender Chennai 2026
+3234,,DHS,2026-02-19,Singapore Smash 2026 Presented by Resorts World Sentosa
+3235,,DHS,2026-03-10,WTT Champions Chongqing 2026 Presented by AITO
+3236,,Stag,2026-03-24,WTT Contender Tunis 2026
+3237,,Stag,2026-04-07,WTT Contender Taiyuan 2026
+3238,,Butterfly,2026-05-19,WTT Contender Lagos 2026
+3239,,Tibhar,2026-06-01,WTT Contender Skopje 2026
+3240,,Tibhar,2026-06-09,WTT Contender Zagreb 2026
+3242,,Joola,2026-06-26,United States Smash 2026
+3244,,Tibhar,2026-07-21,WTT Star Contender São José dos Campos 2026
+3245,,Butterfly,2026-08-04,WTT Champions Yokohama 2026
+3246,,Double Fish,2026-08-08,Europe Smash - Sweden 2026
+3247,,Butterfly,2026-09-01,WTT Contender Almaty 2026
+3248,,DHS,2026-09-08,WTT Champions Macao 2026 Presented by Galaxy Entertainment Group
+3249,,DHS,2026-10-01,China Smash 2026 Presented by Beijing Shijingshan Culture & Tourism Group
+3250,,Tibhar,2026-10-27,WTT Champions Montpellier 2026
+3251,,Stag,2026-01-19,WTT Contender Muscat 2026
+3252,,Donic,2026-11-03,WTT Champions Frankfurt 2026
 3253,,,2026-09-08,WTT Contender Panagyurishte 2026 Presented by ASAREL
 3254,,,2026-09-15,WTT Star Contender Astana 2026 - President’s Cup Presented By Nomad Table Tennis Academy
 3256,,,2026-11-16,WTT Star Contender Muscat 2026
@@ -239,5 +239,5 @@ event_id,ball_sponsor,table_sponsor,start_date,event_name
 3374,,,2026-08-19,WTT Feeder Berlin 2026
 3375,,,2026-09-23,WTT Feeder Linz 2026
 3376,,,2026-10-28,WTT Feeder Chennai 2026 Presented by Sports Development Authority of Tamil Nadu
-3379,,,2026-03-30,ITTF Men’s & Women’s World Cup Macao 2026 Presented by Galaxy Entertainment Group
+3379,,DHS,2026-03-30,ITTF Men’s & Women’s World Cup Macao 2026 Presented by Galaxy Entertainment Group
 3415,,,2026-09-08,WTT Feeder Puerto Princesa 2026
