@@ -1,5 +1,8 @@
 {{ config(materialized='table') }}
 
+-- Extract the top-level fields from the TOASTed payload in a single pass via
+-- jsonb_to_record so PostgreSQL detoasts and decompresses each ~55 KB payload
+-- once per row instead of once per JSONB operator.
 with source as (
     select
         event_id,
@@ -9,169 +12,205 @@ with source as (
     where
         payload <> '{}'::jsonb
         and jsonb_typeof(payload) = 'object'
+),
+
+unpacked as (
+    select
+        s.event_id,
+        s.document_code,
+        p."subEventName" as sub_event_name_raw,
+        p."subEventDescription" as sub_event_description_raw,
+        p."venueName" as venue_name_raw,
+        p."tableName" as table_name_raw,
+        p."tableNumber" as table_number_raw,
+        p."matchDateTime" as match_date_time,
+        p."matchConfig" as match_config,
+        p."resultStatus" as result_status_raw,
+        p."overallScores" as overall_scores_raw,
+        p."resultOverallScores" as result_overall_scores_raw,
+        p."resultsGameScores" as results_game_scores_raw,
+        p."currentGameNumber" as current_game_number_raw,
+        p.competitiors -> 0 as comp_1,
+        p.competitiors -> 1 as comp_2
+    from source as s
+    cross join lateral jsonb_to_record(s.payload) as p (
+        "subEventName" text,
+        "subEventDescription" text,
+        "venueName" text,
+        "tableName" text,
+        "tableNumber" text,
+        "matchDateTime" jsonb,
+        "matchConfig" jsonb,
+        "resultStatus" text,
+        "overallScores" text,
+        "resultOverallScores" text,
+        "resultsGameScores" text,
+        "currentGameNumber" text,
+        competitiors jsonb
+    )
 )
 
 select
     event_id,
     document_code,
-    nullif(btrim(payload ->> 'subEventName'), '') as sub_event_name,
-    nullif(btrim(payload ->> 'subEventDescription'), '') as sub_event_description,
-    nullif(btrim(payload ->> 'venueName'), '') as venue_name,
-    nullif(btrim(payload ->> 'tableName'), '') as table_name,
-    nullif(btrim(payload ->> 'tableNumber'), '') as table_number,
-    nullif(btrim(payload -> 'matchDateTime' ->> 'duration'), '') as duration,
+    nullif(btrim(sub_event_name_raw), '') as sub_event_name,
+    nullif(btrim(sub_event_description_raw), '') as sub_event_description,
+    nullif(btrim(venue_name_raw), '') as venue_name,
+    nullif(btrim(table_name_raw), '') as table_name,
+    nullif(btrim(table_number_raw), '') as table_number,
+    nullif(btrim(match_date_time ->> 'duration'), '') as duration,
     to_timestamp(
-        nullif(btrim(payload -> 'matchDateTime' ->> 'startDateUTC'), ''),
+        nullif(btrim(match_date_time ->> 'startDateUTC'), ''),
         'MM/DD/YYYY HH24:MI:SS'
     ) at time zone 'UTC' as start_date_utc,
     to_timestamp(
-        nullif(btrim(payload -> 'matchDateTime' ->> 'startDateLocal'), ''),
+        nullif(btrim(match_date_time ->> 'startDateLocal'), ''),
         'MM/DD/YYYY HH24:MI:SS'
     )::timestamp as start_date_local,
     case
         when
             coalesce(
-                payload -> 'matchConfig' ->> 'bestOfXGames',
-                payload -> 'matchConfig' ->> 'bestOf'
+                match_config ->> 'bestOfXGames',
+                match_config ->> 'bestOf'
             ) ~ '^[0-9]+$'
             then coalesce(
-                payload -> 'matchConfig' ->> 'bestOfXGames',
-                payload -> 'matchConfig' ->> 'bestOf'
+                match_config ->> 'bestOfXGames',
+                match_config ->> 'bestOf'
             )::integer
     end as best_of,
     case
-        when (payload -> 'matchConfig' ->> 'maxChallengesPerCompetitor') ~ '^[0-9]+$'
-            then (payload -> 'matchConfig' ->> 'maxChallengesPerCompetitor')::integer
+        when (match_config ->> 'maxChallengesPerCompetitor') ~ '^[0-9]+$'
+            then (match_config ->> 'maxChallengesPerCompetitor')::integer
     end as max_challenges_per_competitor,
     case
         when
             lower(
                 coalesce(
-                    payload -> 'matchConfig' ->> 'ttrReview',
-                    payload -> 'matchConfig' ->> 'tTRReview'
+                    match_config ->> 'ttrReview',
+                    match_config ->> 'tTRReview'
                 )
             ) in ('true', 'false')
             then lower(
                 coalesce(
-                    payload -> 'matchConfig' ->> 'ttrReview',
-                    payload -> 'matchConfig' ->> 'tTRReview'
+                    match_config ->> 'ttrReview',
+                    match_config ->> 'tTRReview'
                 )
             )::boolean
     end as ttr_review,
-    nullif(btrim(payload ->> 'resultStatus'), '') as result_status,
-    nullif(btrim(payload ->> 'overallScores'), '') as overall_scores,
-    nullif(btrim(payload ->> 'resultOverallScores'), '') as result_overall_scores,
-    nullif(btrim(payload ->> 'resultsGameScores'), '') as results_game_scores,
+    nullif(btrim(result_status_raw), '') as result_status,
+    nullif(btrim(overall_scores_raw), '') as overall_scores,
+    nullif(btrim(result_overall_scores_raw), '') as result_overall_scores,
+    nullif(btrim(results_game_scores_raw), '') as results_game_scores,
     case
-        when (payload ->> 'currentGameNumber') ~ '^[0-9]+$'
-            then (payload ->> 'currentGameNumber')::integer
+        when current_game_number_raw ~ '^[0-9]+$'
+            then current_game_number_raw::integer
     end as current_game_number,
-    nullif(btrim(payload -> 'competitiors' -> 0 ->> 'competitiorId'), '') as comp_1_id,
-    nullif(btrim(payload -> 'competitiors' -> 0 ->> 'competitiorName'), '') as comp_1_name,
-    nullif(btrim(payload -> 'competitiors' -> 0 ->> 'competitiorOrg'), '') as comp_1_org,
-    nullif(btrim(payload -> 'competitiors' -> 0 ->> 'competitorType'), '') as comp_1_type,
-    nullif(btrim(payload -> 'competitiors' -> 0 ->> 'scores'), '') as comp_1_scores,
-    nullif(btrim(payload -> 'competitiors' -> 0 ->> 'irm'), '') as comp_1_irm,
+    nullif(btrim(comp_1 ->> 'competitiorId'), '') as comp_1_id,
+    nullif(btrim(comp_1 ->> 'competitiorName'), '') as comp_1_name,
+    nullif(btrim(comp_1 ->> 'competitiorOrg'), '') as comp_1_org,
+    nullif(btrim(comp_1 ->> 'competitorType'), '') as comp_1_type,
+    nullif(btrim(comp_1 ->> 'scores'), '') as comp_1_scores,
+    nullif(btrim(comp_1 ->> 'irm'), '') as comp_1_irm,
     case
-        when btrim(payload -> 'competitiors' -> 0 ->> 'compTimeout') ~ '^[0-9]+$'
-            then btrim(payload -> 'competitiors' -> 0 ->> 'compTimeout')::integer
+        when btrim(comp_1 ->> 'compTimeout') ~ '^[0-9]+$'
+            then btrim(comp_1 ->> 'compTimeout')::integer
     end as comp_1_timeout,
     case
-        when btrim(payload -> 'competitiors' -> 0 ->> 'compMedicalTimeout') ~ '^[0-9]+$'
-            then btrim(payload -> 'competitiors' -> 0 ->> 'compMedicalTimeout')::integer
+        when btrim(comp_1 ->> 'compMedicalTimeout') ~ '^[0-9]+$'
+            then btrim(comp_1 ->> 'compMedicalTimeout')::integer
     end as comp_1_medical_timeout,
     case
-        when btrim(payload -> 'competitiors' -> 0 ->> 'compCardY') ~ '^[0-9]+$'
-            then btrim(payload -> 'competitiors' -> 0 ->> 'compCardY')::integer
+        when btrim(comp_1 ->> 'compCardY') ~ '^[0-9]+$'
+            then btrim(comp_1 ->> 'compCardY')::integer
     end as comp_1_card_y,
     case
-        when btrim(payload -> 'competitiors' -> 0 ->> 'compCardYR1') ~ '^[0-9]+$'
-            then btrim(payload -> 'competitiors' -> 0 ->> 'compCardYR1')::integer
+        when btrim(comp_1 ->> 'compCardYR1') ~ '^[0-9]+$'
+            then btrim(comp_1 ->> 'compCardYR1')::integer
     end as comp_1_card_yr1,
     case
-        when btrim(payload -> 'competitiors' -> 0 ->> 'compCardYR2') ~ '^[0-9]+$'
-            then btrim(payload -> 'competitiors' -> 0 ->> 'compCardYR2')::integer
+        when btrim(comp_1 ->> 'compCardYR2') ~ '^[0-9]+$'
+            then btrim(comp_1 ->> 'compCardYR2')::integer
     end as comp_1_card_yr2,
     case
-        when (payload -> 'competitiors' -> 0 -> 'players' -> 0 ->> 'playerId') ~ '^[0-9]+$'
-            then (payload -> 'competitiors' -> 0 -> 'players' -> 0 ->> 'playerId')::bigint
+        when (comp_1 -> 'players' -> 0 ->> 'playerId') ~ '^[0-9]+$'
+            then (comp_1 -> 'players' -> 0 ->> 'playerId')::bigint
     end as comp_1_player_1_id,
     nullif(
-        btrim(payload -> 'competitiors' -> 0 -> 'players' -> 0 ->> 'playerName'), ''
+        btrim(comp_1 -> 'players' -> 0 ->> 'playerName'), ''
     ) as comp_1_player_1_name,
     nullif(
-        btrim(payload -> 'competitiors' -> 0 -> 'players' -> 0 ->> 'playerOrgCode'), ''
+        btrim(comp_1 -> 'players' -> 0 ->> 'playerOrgCode'), ''
     ) as comp_1_player_1_org,
     case
-        when (payload -> 'competitiors' -> 0 -> 'players' -> 0 ->> 'playerPosition') ~ '^[0-9]+$'
-            then (payload -> 'competitiors' -> 0 -> 'players' -> 0 ->> 'playerPosition')::integer
+        when (comp_1 -> 'players' -> 0 ->> 'playerPosition') ~ '^[0-9]+$'
+            then (comp_1 -> 'players' -> 0 ->> 'playerPosition')::integer
     end as comp_1_player_1_position,
     case
-        when (payload -> 'competitiors' -> 0 -> 'players' -> 1 ->> 'playerId') ~ '^[0-9]+$'
-            then (payload -> 'competitiors' -> 0 -> 'players' -> 1 ->> 'playerId')::bigint
+        when (comp_1 -> 'players' -> 1 ->> 'playerId') ~ '^[0-9]+$'
+            then (comp_1 -> 'players' -> 1 ->> 'playerId')::bigint
     end as comp_1_player_2_id,
     nullif(
-        btrim(payload -> 'competitiors' -> 0 -> 'players' -> 1 ->> 'playerName'), ''
+        btrim(comp_1 -> 'players' -> 1 ->> 'playerName'), ''
     ) as comp_1_player_2_name,
     nullif(
-        btrim(payload -> 'competitiors' -> 0 -> 'players' -> 1 ->> 'playerOrgCode'), ''
+        btrim(comp_1 -> 'players' -> 1 ->> 'playerOrgCode'), ''
     ) as comp_1_player_2_org,
     case
-        when (payload -> 'competitiors' -> 0 -> 'players' -> 1 ->> 'playerPosition') ~ '^[0-9]+$'
-            then (payload -> 'competitiors' -> 0 -> 'players' -> 1 ->> 'playerPosition')::integer
+        when (comp_1 -> 'players' -> 1 ->> 'playerPosition') ~ '^[0-9]+$'
+            then (comp_1 -> 'players' -> 1 ->> 'playerPosition')::integer
     end as comp_1_player_2_position,
-    nullif(btrim(payload -> 'competitiors' -> 1 ->> 'competitiorId'), '') as comp_2_id,
-    nullif(btrim(payload -> 'competitiors' -> 1 ->> 'competitiorName'), '') as comp_2_name,
-    nullif(btrim(payload -> 'competitiors' -> 1 ->> 'competitiorOrg'), '') as comp_2_org,
-    nullif(btrim(payload -> 'competitiors' -> 1 ->> 'competitorType'), '') as comp_2_type,
-    nullif(btrim(payload -> 'competitiors' -> 1 ->> 'scores'), '') as comp_2_scores,
-    nullif(btrim(payload -> 'competitiors' -> 1 ->> 'irm'), '') as comp_2_irm,
+    nullif(btrim(comp_2 ->> 'competitiorId'), '') as comp_2_id,
+    nullif(btrim(comp_2 ->> 'competitiorName'), '') as comp_2_name,
+    nullif(btrim(comp_2 ->> 'competitiorOrg'), '') as comp_2_org,
+    nullif(btrim(comp_2 ->> 'competitorType'), '') as comp_2_type,
+    nullif(btrim(comp_2 ->> 'scores'), '') as comp_2_scores,
+    nullif(btrim(comp_2 ->> 'irm'), '') as comp_2_irm,
     case
-        when btrim(payload -> 'competitiors' -> 1 ->> 'compTimeout') ~ '^[0-9]+$'
-            then btrim(payload -> 'competitiors' -> 1 ->> 'compTimeout')::integer
+        when btrim(comp_2 ->> 'compTimeout') ~ '^[0-9]+$'
+            then btrim(comp_2 ->> 'compTimeout')::integer
     end as comp_2_timeout,
     case
-        when btrim(payload -> 'competitiors' -> 1 ->> 'compMedicalTimeout') ~ '^[0-9]+$'
-            then btrim(payload -> 'competitiors' -> 1 ->> 'compMedicalTimeout')::integer
+        when btrim(comp_2 ->> 'compMedicalTimeout') ~ '^[0-9]+$'
+            then btrim(comp_2 ->> 'compMedicalTimeout')::integer
     end as comp_2_medical_timeout,
     case
-        when btrim(payload -> 'competitiors' -> 1 ->> 'compCardY') ~ '^[0-9]+$'
-            then btrim(payload -> 'competitiors' -> 1 ->> 'compCardY')::integer
+        when btrim(comp_2 ->> 'compCardY') ~ '^[0-9]+$'
+            then btrim(comp_2 ->> 'compCardY')::integer
     end as comp_2_card_y,
     case
-        when btrim(payload -> 'competitiors' -> 1 ->> 'compCardYR1') ~ '^[0-9]+$'
-            then btrim(payload -> 'competitiors' -> 1 ->> 'compCardYR1')::integer
+        when btrim(comp_2 ->> 'compCardYR1') ~ '^[0-9]+$'
+            then btrim(comp_2 ->> 'compCardYR1')::integer
     end as comp_2_card_yr1,
     case
-        when btrim(payload -> 'competitiors' -> 1 ->> 'compCardYR2') ~ '^[0-9]+$'
-            then btrim(payload -> 'competitiors' -> 1 ->> 'compCardYR2')::integer
+        when btrim(comp_2 ->> 'compCardYR2') ~ '^[0-9]+$'
+            then btrim(comp_2 ->> 'compCardYR2')::integer
     end as comp_2_card_yr2,
     case
-        when (payload -> 'competitiors' -> 1 -> 'players' -> 0 ->> 'playerId') ~ '^[0-9]+$'
-            then (payload -> 'competitiors' -> 1 -> 'players' -> 0 ->> 'playerId')::bigint
+        when (comp_2 -> 'players' -> 0 ->> 'playerId') ~ '^[0-9]+$'
+            then (comp_2 -> 'players' -> 0 ->> 'playerId')::bigint
     end as comp_2_player_1_id,
     nullif(
-        btrim(payload -> 'competitiors' -> 1 -> 'players' -> 0 ->> 'playerName'), ''
+        btrim(comp_2 -> 'players' -> 0 ->> 'playerName'), ''
     ) as comp_2_player_1_name,
     nullif(
-        btrim(payload -> 'competitiors' -> 1 -> 'players' -> 0 ->> 'playerOrgCode'), ''
+        btrim(comp_2 -> 'players' -> 0 ->> 'playerOrgCode'), ''
     ) as comp_2_player_1_org,
     case
-        when (payload -> 'competitiors' -> 1 -> 'players' -> 0 ->> 'playerPosition') ~ '^[0-9]+$'
-            then (payload -> 'competitiors' -> 1 -> 'players' -> 0 ->> 'playerPosition')::integer
+        when (comp_2 -> 'players' -> 0 ->> 'playerPosition') ~ '^[0-9]+$'
+            then (comp_2 -> 'players' -> 0 ->> 'playerPosition')::integer
     end as comp_2_player_1_position,
     case
-        when (payload -> 'competitiors' -> 1 -> 'players' -> 1 ->> 'playerId') ~ '^[0-9]+$'
-            then (payload -> 'competitiors' -> 1 -> 'players' -> 1 ->> 'playerId')::bigint
+        when (comp_2 -> 'players' -> 1 ->> 'playerId') ~ '^[0-9]+$'
+            then (comp_2 -> 'players' -> 1 ->> 'playerId')::bigint
     end as comp_2_player_2_id,
     nullif(
-        btrim(payload -> 'competitiors' -> 1 -> 'players' -> 1 ->> 'playerName'), ''
+        btrim(comp_2 -> 'players' -> 1 ->> 'playerName'), ''
     ) as comp_2_player_2_name,
     nullif(
-        btrim(payload -> 'competitiors' -> 1 -> 'players' -> 1 ->> 'playerOrgCode'), ''
+        btrim(comp_2 -> 'players' -> 1 ->> 'playerOrgCode'), ''
     ) as comp_2_player_2_org,
     case
-        when (payload -> 'competitiors' -> 1 -> 'players' -> 1 ->> 'playerPosition') ~ '^[0-9]+$'
-            then (payload -> 'competitiors' -> 1 -> 'players' -> 1 ->> 'playerPosition')::integer
+        when (comp_2 -> 'players' -> 1 ->> 'playerPosition') ~ '^[0-9]+$'
+            then (comp_2 -> 'players' -> 1 ->> 'playerPosition')::integer
     end as comp_2_player_2_position
-from source
+from unpacked

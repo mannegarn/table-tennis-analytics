@@ -2,7 +2,7 @@
     alias='fct_match_commentary',
     materialized='table',
     post_hook=[
-        "create index on {{ this }} (event_id, document_code) include (action_type)",
+        "create unique index on {{ this }} (event_id, document_code, sequence_number) include (action_type)",
         "analyze {{ this }}",
     ],
 ) }}
