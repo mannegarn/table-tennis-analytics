@@ -65,7 +65,7 @@ class Settings(BaseSettings):
     # concurrency limit: ``max_concurrent_requests`` bounds the requests in
     # flight, while the chunk bounds how much unlanded work one crash can lose
     # and how often the run reports progress.
-    max_concurrent_requests: int = 20
+    max_concurrent_requests: int = 50
     request_timeout_seconds: float = 40.0
     chunk_size: int = 50
     max_retry_attempts: int = 6
