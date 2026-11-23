@@ -5,13 +5,16 @@ description = "End-to-end table tennis data platform: ingest, land, transform an
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "google-genai>=1.0",
     "httpx>=0.27",
+    "imageio-ffmpeg>=0.6.0",
     "polars>=1.0",
     "psycopg[binary]>=3.2",
     "pydantic-settings>=2.6",
     "pytest-coverage>=0.0",
     "tenacity>=9.0",
     "tqdm>=4.66",
+    "yt-dlp>=2025.1.15",
 ]
 
 [project.scripts]
@@ -25,6 +28,7 @@ tt-match-details-collect = "tt_stats.matches.collect.match_details:main"
 tt-match-details-seed = "tt_stats.matches.backup_seed:main"
 tt-match-commentary-collect = "tt_stats.matches.collect.match_commentary:main"
 tt-event-sponsors-collect = "tt_stats.event_sponsors.collect:main"
+tt-event-sponsors-identify = "tt_stats.event_sponsors.video_identify:main"
 tt-event-sponsors-sync = "tt_stats.event_sponsors.manual_sync:main"
 tt-player-details-collect = "tt_stats.players.collect:main"
 tt-ittf-players-seed = "tt_stats.players.ittf_seed:main"
@@ -55,6 +59,7 @@ pythonpath = ["src"]
 testpaths = ["tests"]
 addopts = "-q"
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 markers = [
     "integration: requires a running PostgreSQL instance or the live WTT API",
 ]
@@ -102,3 +107,7 @@ disallow_untyped_defs = true
 no_implicit_optional = true
 strict_equality = true
 show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = ["imageio_ffmpeg", "yt_dlp"]
+ignore_missing_imports = true

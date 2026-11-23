@@ -56,6 +56,8 @@ seeds:
         description: Scheduled event start date synced from marts_wtt.dim_events (nullable).
       - name: event_name
         description: Optional human-readable event name for reference while editing the CSV.
+      - name: table_sponsor_source
+        description: Optional provenance flag indicating how table_sponsor was populated (e.g. gemini_youtube when filled automatically).
 
   - name: player_identity_overrides
     description: >

@@ -41,7 +41,7 @@ endef
 # Collectors share one pending queue and one API; never run them side by side.
 .NOTPARALLEL:
 
-.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-collect events-unpack events-unpack-preview matches-collect matches-unpack matches-unpack-preview match-details-collect match-details-seed match-commentary-collect event-sponsors-collect event-sponsors-sync player-details-collect collect-all ittf-players-seed update-summary test test-integration dbt-debug dbt-run dbt-test dbt-clean lint lint-sql format typecheck check hooks-install hooks-run
+.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-collect events-unpack events-unpack-preview matches-collect matches-unpack matches-unpack-preview match-details-collect match-details-seed match-commentary-collect event-sponsors-collect event-sponsors-identify event-sponsors-sync player-details-collect collect-all ittf-players-seed update-summary test test-integration dbt-debug dbt-run dbt-test dbt-clean lint lint-sql format typecheck check hooks-install hooks-run
 
 help: ## Show available commands
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -184,6 +184,9 @@ test-integration: ## Run only integration tests
 
 dbt-debug: ## Verify dbt can reach the warehouse
 	uv run dbt debug --project-dir dbt --profiles-dir dbt
+
+event-sponsors-identify: ## Identify missing table_sponsor values via YouTube + Gemini Vision (optional: EVENT_IDS="1 2" LIMIT=N)
+	uv run tt-event-sponsors-identify $(strip $(ARGS_events) $(ARGS_limit))
 
 event-sponsors-sync: ## Sync senior match-detail events into dbt/seeds/event_sponsors_manual.csv (preserves manual edits)
 	uv run tt-event-sponsors-sync

@@ -231,6 +231,8 @@ substantial from 2021.
 | `make events-unpack` | Backfill-unpack landed calendars into `ingest_wtt.events_unpacked` |
 | `make matches-collect` | Collect match lists and land them in `ingest_wtt.match_entries_payloads_raw` |
 | `make events-unpack-preview` | Run the unpack for one year, print counts, roll back |
+| `make event-sponsors-sync` | Sync new senior match-detail events into `dbt/seeds/event_sponsors_manual.csv` |
+| `make event-sponsors-identify` | Identify missing `table_sponsor` values via YouTube (`yt-dlp` + `ffmpeg`) and Gemini Vision |
 | `make test` | Run the test suite |
 | `make test-integration` | Run only integration tests |
 | `make dbt-debug` | Verify dbt can reach the warehouse |
@@ -288,6 +290,8 @@ git-ignored. `.env.example` is committed and mirrors it.
 | `LOGS_DIR` | Log directory; defaults to `logs/` in the repo |
 | `LOG_FILE_MAX_BYTES` | Size at which the log rotates; defaults to 5 MB |
 | `LOG_FILE_BACKUP_COUNT` | Rotated files kept; defaults to 3 |
+| `GEMINI_API_KEY` | Optional Google AI Studio key for `make event-sponsors-identify` |
+| `GEMINI_MODEL` | Gemini model for `make event-sponsors-identify`; defaults to `gemini-3.8-flash` |
 
 `DATABASE_URL` is optional and, when set, overrides the individual parts.
 
@@ -306,7 +310,7 @@ record loop every collector runs is `src/tt_stats/core/collector.py`.
 src/tt_stats/core/            shared config, database, logging, run history,
                               clients, and the collector loop
 src/tt_stats/events/          collect.py, land.py, unpack.py, sql/
-src/tt_stats/event_sponsors/  collect.py, land.py
+src/tt_stats/event_sponsors/  collect.py, land.py, manual_sync.py, video_identify.py
 src/tt_stats/matches/         collect/ and land/: entries, details, commentary
 src/tt_stats/players/         collect.py, land.py, ittf_seed.py
 db/init/                  one-time SQL on first database start
