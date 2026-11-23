@@ -58,3 +58,29 @@ seeds:
       +column_types:
         domain: varchar
         sponsor_name: varchar
+    round_codes:
+      +column_types:
+        raw_round_token: varchar
+        round_code: varchar
+        round_name: varchar
+        round_stage: varchar
+        round_order: smallint
+    result_types:
+      +column_types:
+        result_code: varchar
+        result_type: varchar
+        is_default_result: boolean
+        is_rating_eligible: boolean
+        description: varchar
+    match_format_overrides:
+      +column_types:
+        override_id: varchar
+        event_id: integer
+        discipline: varchar
+        round_code: varchar
+        document_code: varchar
+        match_format: varchar
+        best_of: integer
+        scheduled_games: integer
+        scoring_rule: varchar
+        notes: varchar
