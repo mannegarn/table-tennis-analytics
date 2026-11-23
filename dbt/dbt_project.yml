@@ -54,6 +54,7 @@ seeds:
         table_sponsor: varchar
         start_date: date
         event_name: varchar
+        table_sponsor_source: varchar
     sponsor_domains:
       +column_types:
         domain: varchar

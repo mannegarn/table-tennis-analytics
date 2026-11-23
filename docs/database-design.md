@@ -90,7 +90,9 @@ National leagues (e.g. France Pro A) include players without an `ittf_id` and al
    - Attributes are merged by source priority (e.g. `coalesce(ittf.hand, pro_a.hand)`, `coalesce(ittf.style, pro_a.style)`).
 
 **Identity edge cases (observed or expected)**
-- **Real name collisions already exist**: 5 exact (name, country) pairs with different WTT IDs (`LEE Yubin`, `LEE Daeun`, `LEE Junho` — KOR; `Juan GONZALEZ`, `Boris VILLAVICENCIO` — ECU). 7 names also collide when compared case-insensitively.
+- **Name collisions & duplicate ITTF IDs (`assert_wtt_dim_players_name_collisions`)**: 11 exact `(player_name, country_code)` collisions are surfaced as a dbt warning in `marts_wtt.dim_players`:
+  - **7 distinct-player groups (different DOBs)**: `LEE Yubin`, `LEE Daeun` (3 rows), `LEE Junho` (KOR); `Juan GONZALEZ`, `Boris VILLAVICENCIO` (ECU); `Francisco LOPEZ` (VEN); `Sara STOJANOVSKA` (MKD).
+  - **4 likely duplicate ITTF IDs (left unmerged for now; ITTF site heavily rate-limits manual ID lookups)**: `Anja HANDEN` (SWE: `202486`, `218792`, DOB `2003-12-28`), `Luca KUMAHARA` (BRA: `113418` F / `206781` M, DOB `1995-07-27`), `Natalia PARTYKA` (POL: `107177`, `214830`, DOB `1989-07-27`), and `Merve DEMIR` (TUR: `131677` `2001-09-06` vs `217412` `2001-06-09`, possible DD/MM swap).
 - League data often has no date of birth, so `exact_name_country_dob` will rarely match league players. Expect many `source_only` rows and rely on overrides.
 - Expect romanisation variants (`Yun-Ju` / `Yunju`), family-name-first ordering, accents, players changing association, and married-name changes.
 - Use `pg_trgm` (already installed) to **suggest** candidate pairs for the overrides CSV, never to merge automatically.
@@ -115,7 +117,7 @@ To support best-of-5/7 (WTT/leagues) alongside fixed-set/point formats (MLTT) in
 Small, human-curated tables live in `dbt/seeds/` and are **automatically reloaded** on every `make dbt-run`:
 - `dbt/seeds/action_types.csv` — commentary action code labels & categories
 - `dbt/seeds/sponsor_domains.csv` — bare website domain -> canonical brand name
-- `dbt/seeds/event_sponsors_manual.csv` — YouTube-verified table & ball sponsors per event
+- `dbt/seeds/event_sponsors_manual.csv` — YouTube-verified table & ball sponsors per event (includes `table_sponsor_source`; new senior events are synced via `make event-sponsors-sync` and missing `table_sponsor` values can be auto-identified via `make event-sponsors-identify` using `yt-dlp`, `ffmpeg`, and Gemini Vision)
 - *(Future)* `dbt/seeds/player_identity_overrides.csv` — manual cross-source player links
 
 ---

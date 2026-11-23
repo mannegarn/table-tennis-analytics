@@ -27,6 +27,7 @@ CSV_FIELDNAMES: tuple[str, ...] = (
     "table_sponsor",
     "start_date",
     "event_name",
+    "table_sponsor_source",
 )
 
 # Senior Men's or Women's matches in stg_match_details (excludes U11..U21 youth
@@ -97,7 +98,7 @@ def merge_manual_sponsor_rows(
     Rules:
     - Never drop an existing row from the CSV.
     - Never overwrite non-empty ``ball_sponsor``, ``table_sponsor``, ``start_date``,
-      or ``event_name`` on existing rows.
+      ``event_name``, or ``table_sponsor_source`` on existing rows.
     - Backfill blank ``start_date`` / ``event_name`` on existing rows from
       ``warehouse_events`` when available.
     - Append events with ``is_senior_mw_detail=True`` that are not yet in the CSV,
@@ -132,6 +133,7 @@ def merge_manual_sponsor_rows(
             "table_sponsor": raw.get("table_sponsor", "").strip(),
             "start_date": start_date_str,
             "event_name": event_name,
+            "table_sponsor_source": raw.get("table_sponsor_source", "").strip(),
         }
 
     added = 0
@@ -144,6 +146,7 @@ def merge_manual_sponsor_rows(
             "table_sponsor": "",
             "start_date": meta.start_date.isoformat() if meta.start_date else "",
             "event_name": meta.event_name,
+            "table_sponsor_source": "",
         }
         added += 1
 

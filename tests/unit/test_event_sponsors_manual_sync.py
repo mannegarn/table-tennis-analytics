@@ -26,6 +26,7 @@ def test_merge_preserves_manual_edits_and_backfills_start_date() -> None:
             "ball_sponsor": "Ownwin",
             "table_sponsor": "DHS",
             "event_name": "ITTF Mixed Team World Cup 2023",
+            "table_sponsor_source": "gemini_youtube",
         },
     ]
     warehouse = [
@@ -68,14 +69,16 @@ def test_merge_preserves_manual_edits_and_backfills_start_date() -> None:
         "table_sponsor": "Double Fish",
         "start_date": "2021-03-08",
         "event_name": "WTT Star Contender Doha 2021 (Mar 2021)",
+        "table_sponsor_source": "",
     }
-    # Existing non-senior-MW event (Mixed Team) is preserved.
+    # Existing non-senior-MW event (Mixed Team) and source tag are preserved.
     assert rows[1] == {
         "event_id": "2860",
         "ball_sponsor": "Ownwin",
         "table_sponsor": "DHS",
         "start_date": "2023-12-04",
         "event_name": "ITTF Mixed Team World Cup 2023",
+        "table_sponsor_source": "gemini_youtube",
     }
     # New senior M/W detail event is appended with blank sponsors.
     assert rows[2] == {
@@ -84,6 +87,7 @@ def test_merge_preserves_manual_edits_and_backfills_start_date() -> None:
         "table_sponsor": "",
         "start_date": "2026-11-16",
         "event_name": "WTT Star Contender Muscat 2026",
+        "table_sponsor_source": "",
     }
 
 

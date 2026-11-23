@@ -85,6 +85,10 @@ class Settings(BaseSettings):
     user_agent: str = DEFAULT_WTT_USER_AGENT
     verify_ssl: bool = True
 
+    # Gemini Vision API (optional; required only by tt-event-sponsors-identify).
+    gemini_api_key: str | None = None
+    gemini_model: str = "gemini-3.8-flash"
+
     # Local scratch area for captures, logs and notebooks. Defaults to the
     # repository's ``data/`` directory rather than the current working
     # directory, so running a command from elsewhere cannot scatter files.
