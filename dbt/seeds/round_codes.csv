@@ -1,0 +1,35 @@
+raw_round_token,round_code,round_name,round_stage,round_order
+QER-,QUAL,Qualification Elimination Round,qualifying,10
+QER0,QUAL,Qualification Elimination Round,qualifying,10
+R256,QUAL,Preliminary Round (R256),qualifying,10
+RND1,QUAL,Qualifying Round 1,qualifying,10
+RND2,QUAL,Qualifying Round 2,qualifying,10
+RND3,QUAL,Qualifying Round 3,qualifying,10
+RND4,QUAL,Qualifying Round 4,qualifying,10
+GP##,GROUP,Group Stage,group,20
+R128,R128,Round of 128,knockout,30
+R64-,R64,Round of 64,knockout,40
+R32-,R32,Round of 32,knockout,50
+8FNL,R16,Round of 16,knockout,60
+QFNL,QF,Quarterfinal,knockout,70
+SFNL,SF,Semifinal,knockout,80
+34--,BRONZE,Bronze Medal / 3rd Place,knockout,85
+FNL2,BRONZE,Bronze Medal Match,knockout,85
+FNL-,F,Final,knockout,90
+CON2,CONSOLATION,Consolation Round 2,consolation,100
+CON3,CONSOLATION,Consolation Quarterfinal,consolation,100
+CON4,CONSOLATION,Consolation Semifinal,consolation,100
+CON5,CONSOLATION,Consolation Final,consolation,100
+56--,PLACEMENT,Position 5-6,placement,110
+58--,PLACEMENT,Position 5-8,placement,110
+78--,PLACEMENT,Position 7-8,placement,110
+910-,PLACEMENT,Position 9-10,placement,110
+912-,PLACEMENT,Position 9-12,placement,110
+916-,PLACEMENT,Position 9-16,placement,110
+1112,PLACEMENT,Position 11-12,placement,110
+1314,PLACEMENT,Position 13-14,placement,110
+1516,PLACEMENT,Position 15-16,placement,110
+1616,PLACEMENT,Position 13-16,placement,110
+1718,PLACEMENT,Position 17-18,placement,110
+1720,PLACEMENT,Position 17-20,placement,110
+1724,PLACEMENT,Position 17-24,placement,110

@@ -1,0 +1,9 @@
+result_code,result_type,is_default_result,is_rating_eligible,description
+PLAYED,played,false,true,Completed match with a decisive game score
+DRAW,draw,false,true,Completed fixed-game match ending in a tie (e.g. 2-2 in World Cup groups)
+WO,walkover,true,false,Walkover (match awarded without play; includes 0-0 double walkovers)
+INJ,injury,true,false,Match ended or forfeited due to injury
+RET,retired,true,false,Player retired during the match
+DSQ,disqualified,true,false,Player disqualified
+DNS,did_not_start,true,false,Player did not start
+NO_SCORE,no_score,false,false,Official record with 0-0 score and no usable result

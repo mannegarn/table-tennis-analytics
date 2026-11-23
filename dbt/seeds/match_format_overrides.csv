@@ -1,0 +1,11 @@
+override_id,event_id,discipline,round_code,document_code,match_format,best_of,scheduled_games,scoring_rule,notes
+tokyo_2020_singles,2345,singles,,,best_of_7,7,,games_won,Tokyo 2020 Olympic Games singles payloads omit matchConfig.bestOfXGames (all singles were best of 7)
+paris_2024_singles,2603,singles,,,best_of_7,7,,games_won,Paris 2024 Olympic Games singles payloads wrongly report bestOfXGames=5 (all singles were best of 7)
+macao_wc_2024_group,2937,singles,GROUP,,fixed_4_games,,4,games_won,ITTF World Cup Macao 2024 group stage uses fixed 4-game format (bestOfXGames=0 upstream; 2-2 draws valid)
+macao_wc_2025_group,3109,singles,GROUP,,fixed_4_games,,4,games_won,ITTF World Cup Macao 2025 group stage uses fixed 4-game format (bestOfXGames=0 upstream; 2-2 draws valid)
+varazdin_2026_u19_gp5,3326,singles,GROUP,TTEMSINGLES--------U19GP05000100----------,best_of_5,5,,games_won,WTT Youth Contender Varazdin 2026 match wrongly reports bestOfXGames=4 on a 3-0 best-of-5 match
+varazdin_2026_u19_gp6,3326,singles,GROUP,TTEMSINGLES--------U19GP06000100----------,best_of_5,5,,games_won,WTT Youth Contender Varazdin 2026 match wrongly reports bestOfXGames=4 on a 3-0 best-of-5 match
+doha_2021_rnd2_11,2410,singles,,TTEMSINGLES-----------RND2001100----------,best_of_5,5,,games_won,WTT Contender Doha 2021 match omits matchConfig.bestOfXGames (3-0 best-of-5)
+budapest_2021_rnd1_18,2487,singles,,TTEMSINGLES-----------RND1001800----------,best_of_5,5,,games_won,WTT Contender Budapest 2021 match omits matchConfig.bestOfXGames (3-0 best-of-5)
+tunis_2022_rnd1_6,2568,singles,,TTEMSINGLES-----------RND1000600----------,best_of_5,5,,games_won,WTT Contender Tunis 2022 match omits matchConfig.bestOfXGames (3-0 best-of-5)
+rio_2023_r32_6,2722,singles,,TTEMSINGLES-----------R32-000600----------,best_of_5,5,,games_won,WTT Contender Rio de Janeiro 2023 match omits matchConfig.bestOfXGames (3-2 best-of-5)

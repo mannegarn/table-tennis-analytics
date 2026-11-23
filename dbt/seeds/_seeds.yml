@@ -75,3 +75,134 @@ seeds:
         description: Target natural player identifier in target_source_system (nullable).
       - name: notes
         description: Free-text rationale or verification notes for the override.
+
+  - name: round_codes
+    description: >
+      Lookup table mapping raw 4-character WTT document_code round tokens (with
+      GP## for groups and FNL2 for non-team bronze medal matches) to canonical
+      round_code labels, human-readable round names, stages, and sort order.
+    columns:
+      - name: raw_round_token
+        description: Normalized 4-character round token extracted from WTT document_code.
+        data_tests:
+          - not_null
+          - unique
+      - name: round_code
+        description: Canonical round identifier.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - GROUP
+                  - QUAL
+                  - R128
+                  - R64
+                  - R32
+                  - R16
+                  - QF
+                  - SF
+                  - BRONZE
+                  - F
+                  - CONSOLATION
+                  - PLACEMENT
+      - name: round_name
+        description: Human-readable round description.
+        data_tests:
+          - not_null
+      - name: round_stage
+        description: Broad tournament stage grouping.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["qualifying", "group", "knockout", "consolation", "placement"]
+      - name: round_order
+        description: Numeric sort order reflecting tournament progression.
+        data_tests:
+          - not_null
+
+  - name: result_types
+    description: >
+      Lookup table mapping match outcome codes (PLAYED, DRAW, NO_SCORE, and WTT
+      default suffixes WO/INJ/RET/DSQ/DNS) to canonical result_type, default
+      status, and rating eligibility flags.
+    columns:
+      - name: result_code
+        description: Raw outcome or suffix code (PLAYED, DRAW, WO, INJ, RET, DSQ, DNS, NO_SCORE).
+        data_tests:
+          - not_null
+          - unique
+      - name: result_type
+        description: Canonical match result classification.
+        data_tests:
+          - not_null
+          - unique
+          - accepted_values:
+              arguments:
+                values:
+                  - played
+                  - draw
+                  - walkover
+                  - injury
+                  - retired
+                  - disqualified
+                  - did_not_start
+                  - no_score
+      - name: is_default_result
+        description: True when the match ended by walkover, injury, retirement, disqualification, or DNS.
+        data_tests:
+          - not_null
+      - name: is_rating_eligible
+        description: True when the match result is eligible for rating models (e.g. Glicko-2).
+        data_tests:
+          - not_null
+      - name: description
+        description: Plain-English explanation of the result classification.
+        data_tests:
+          - not_null
+
+  - name: match_format_overrides
+    description: >
+      Curated overrides for known upstream WTT matchConfig.bestOfXGames gaps or
+      errors (e.g. Olympic best-of-7 formats and World Cup fixed-4-game groups).
+      Matches either a specific (event_id, document_code) or a broader
+      (event_id, discipline, round_code) scope when document_code is NULL.
+    columns:
+      - name: override_id
+        description: Stable human-readable identifier for the override rule.
+        data_tests:
+          - not_null
+          - unique
+      - name: event_id
+        description: WTT event identifier.
+        data_tests:
+          - not_null
+      - name: discipline
+        description: Normalized discipline filter (e.g. singles); nullable for exact document_code overrides.
+      - name: round_code
+        description: Optional canonical round_code filter (e.g. GROUP); NULL applies to all rounds.
+      - name: document_code
+        description: Optional exact WTT document_code for single-match overrides.
+      - name: match_format
+        description: Canonical match format (e.g. best_of_5, best_of_7, fixed_4_games).
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["best_of_3", "best_of_5", "best_of_7", "fixed_4_games"]
+      - name: best_of
+        description: Corrected best-of game count (NULL for fixed-game formats such as fixed_4_games).
+      - name: scheduled_games
+        description: Fixed number of games played for non-best-of formats (e.g. 4 for World Cup groups).
+      - name: scoring_rule
+        description: Match winner scoring rule.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["games_won", "points_won"]
+      - name: notes
+        description: Verification rationale for the override.
+        data_tests:
+          - not_null
