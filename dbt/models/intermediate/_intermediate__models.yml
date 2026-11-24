@@ -28,3 +28,219 @@ models:
           - accepted_values:
               arguments:
                 values: ["manual_csv", "sponsor_link"]
+
+  - name: int_wtt_senior_singles_games
+    description: >
+      Unpacked per-game scores for OFFICIAL senior able-bodied WTT singles
+      matches (standalone matches and played/drawn team-tie singles rubbers),
+      at grain (event_id, document_code, game_number). Strips 0-0 padding while
+      preserving original 1-based game slot numbers, and flags whether each game
+      obeys table-tennis scoring rules.
+    columns:
+      - name: event_id
+        description: WTT event identifier.
+        data_tests:
+          - not_null
+      - name: document_code
+        description: WTT match or team-rubber document code within the event.
+        data_tests:
+          - not_null
+      - name: is_team_rubber
+        description: True when sourced from stg_team_match_rubbers; false for standalone singles matches.
+        data_tests:
+          - not_null
+      - name: game_number
+        description: 1-based game slot number from results_game_scores.
+        data_tests:
+          - not_null
+      - name: p1_points
+        description: Points scored by competitor 1 in this game.
+        data_tests:
+          - not_null
+      - name: p2_points
+        description: Points scored by competitor 2 in this game.
+        data_tests:
+          - not_null
+      - name: point_margin
+        description: Unsigned absolute point difference between p1_points and p2_points.
+        data_tests:
+          - not_null
+      - name: winner_side
+        description: Winning side for the game (1 or 2; NULL if tied on an anomalous upstream score).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [1, 2]
+                quote: false
+      - name: is_valid_game_score
+        description: True when the game score obeys target-point and win-by-advantage (or sudden-death) rules.
+        data_tests:
+          - not_null
+
+  - name: int_wtt_senior_singles
+    description: >
+      Standardized OFFICIAL senior able-bodied WTT singles matches combining
+      standalone singles matches and played/defaulted team-tie singles rubbers
+      (excluding unplayed team dead rubbers), at grain (event_id, document_code).
+      Applies round normalization, match format overrides, result classification,
+      game-total aggregation, and anomaly/rating-eligibility flags.
+    columns:
+      - name: event_id
+        description: WTT event identifier.
+        data_tests:
+          - not_null
+      - name: document_code
+        description: WTT match or team-rubber document code within the event.
+        data_tests:
+          - not_null
+      - name: is_team_rubber
+        description: True when sourced from stg_team_match_rubbers; false for standalone singles matches.
+        data_tests:
+          - not_null
+      - name: parent_document_code
+        description: Parent team-tie document_code when is_team_rubber is true (nullable).
+      - name: rubber_number
+        description: 1-based rubber slot within a team tie when is_team_rubber is true (nullable).
+      - name: p1_player_id
+        description: Competitor 1 ITTF/WTT player ID (with numeric comp_1_id fallback on standalone singles).
+        data_tests:
+          - not_null
+      - name: p1_player_org
+        description: Match-time represented association code for competitor 1 (nullable).
+      - name: p2_player_id
+        description: Competitor 2 ITTF/WTT player ID (with numeric comp_2_id fallback on standalone singles).
+        data_tests:
+          - not_null
+      - name: p2_player_org
+        description: Match-time represented association code for competitor 2 (nullable).
+      - name: gender_category
+        description: Match gender category (men or women).
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["men", "women"]
+      - name: raw_round_token
+        description: Normalized 4-character round token mapped to seeds.round_codes.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('round_codes')
+                field: raw_round_token
+      - name: round_code
+        description: Canonical round code from seeds.round_codes.
+        data_tests:
+          - not_null
+      - name: round_stage
+        description: Broad tournament stage from seeds.round_codes.
+        data_tests:
+          - not_null
+      - name: round_order
+        description: Numeric progression order from seeds.round_codes.
+        data_tests:
+          - not_null
+      - name: start_date_utc
+        description: Match start timestamp in UTC (nullable).
+      - name: start_date_local
+        description: Local match start timestamp without timezone (nullable).
+      - name: match_format
+        description: Canonical match format after applying seeds.match_format_overrides.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["best_of_3", "best_of_5", "best_of_7", "fixed_3_games", "fixed_4_games"]
+      - name: best_of
+        description: Best-of game count (NULL for fixed-game formats).
+      - name: scheduled_games
+        description: Fixed number of games for non-best-of formats (NULL for best-of formats).
+      - name: scoring_rule
+        description: Match winner scoring rule (games_won or points_won).
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["games_won", "points_won"]
+      - name: max_points_per_game
+        description: Configured target points per game (nullable).
+      - name: advantage_per_game
+        description: Configured minimum winning point margin per game (nullable).
+      - name: sudden_death_point
+        description: Configured sudden-death tie point (99 = none; nullable).
+      - name: result_code
+        description: Raw outcome code mapped to seeds.result_types.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('result_types')
+                field: result_code
+      - name: result_type
+        description: Canonical match result classification from seeds.result_types.
+        data_tests:
+          - not_null
+      - name: is_default_result
+        description: True when match ended by walkover, injury, retirement, disqualification, or DNS.
+        data_tests:
+          - not_null
+      - name: has_result
+        description: True when result_type is not no_score.
+        data_tests:
+          - not_null
+      - name: winner_side
+        description: Winning side (1 or 2; NULL for draws, no_score, or 0-0 double walkovers).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [1, 2]
+                quote: false
+      - name: defaulting_side
+        description: Defaulting side (1 or 2) when is_default_result is true and winner_side is known (nullable).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [1, 2]
+                quote: false
+      - name: has_score_anomaly
+        description: True when a played/drawn match has an overall-vs-game score mismatch or format violation.
+        data_tests:
+          - not_null
+      - name: has_invalid_game_score
+        description: True when at least one unpacked game row has is_valid_game_score = false.
+        data_tests:
+          - not_null
+      - name: is_rating_eligible
+        description: True when the match result is eligible for rating models (played/draw without score anomaly).
+        data_tests:
+          - not_null
+      - name: overall_score_raw
+        description: Raw upstream overall_scores string (nullable).
+      - name: games_won_p1
+        description: Games won by player 1 for played/draw matches (NULL for defaults/no_score).
+      - name: games_won_p2
+        description: Games won by player 2 for played/draw matches (NULL for defaults/no_score).
+      - name: points_won_p1
+        description: Total points won by player 1 summed from int_wtt_senior_singles_games for played/draw matches (NULL for defaults/no_score or missing games).
+      - name: points_won_p2
+        description: Total points won by player 2 summed from int_wtt_senior_singles_games for played/draw matches (NULL for defaults/no_score or missing games).
+      - name: derived_games_p1
+        description: Games won by player 1 derived from int_wtt_senior_singles_games (nullable).
+      - name: derived_games_p2
+        description: Games won by player 2 derived from int_wtt_senior_singles_games (nullable).
+      - name: p1_timeout
+        description: Competitor 1 timeout count/flag (nullable).
+      - name: p2_timeout
+        description: Competitor 2 timeout count/flag (nullable).
+      - name: p1_card_y
+        description: Competitor 1 yellow cards (nullable).
+      - name: p2_card_y
+        description: Competitor 2 yellow cards (nullable).
+      - name: p1_card_yr1
+        description: Competitor 1 first yellow-red cards (nullable).
+      - name: p2_card_yr1
+        description: Competitor 2 first yellow-red cards (nullable).
+      - name: p1_card_yr2
+        description: Competitor 1 second yellow-red cards (nullable).
+      - name: p2_card_yr2
+        description: Competitor 2 second yellow-red cards (nullable).
