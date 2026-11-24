@@ -84,3 +84,87 @@ def test_land_chunk_upserts_raw_and_unpacks_distinct_players(
         (DOC_1, 101),
         (DOC_1, 102),
     ]
+
+
+def test_land_chunk_unpacks_nested_team_rubber_players(
+    db_connection: Connection[Any],
+) -> None:
+    doc_camel = "TTEMTEAM--------------QFNL00010000--------"
+    doc_pascal = "TTEMTEAM-----------U15QFNL00010000--------"
+
+    camel_payload: dict[str, Any] = {
+        "eventId": str(EVENT_ID),
+        "documentCode": doc_camel,
+        "competitiors": [{"players": [{"playerId": "301"}]}],
+        "teamParentData": {
+            "extended_info": {
+                "matches": [
+                    {
+                        "value": "TTEMTEAM--------------QFNL00010001--------",
+                        "match_result": {
+                            "competitiors": [
+                                {"players": [{"playerId": "301"}]},
+                                {"players": [{"playerId": "302"}]},
+                            ]
+                        },
+                    },
+                    {
+                        "value": "TTEMTEAM--------------QFNL00010002--------",
+                        "match_result": {
+                            "competitiors": [
+                                {"players": [{"playerId": "303"}]},
+                                {"players": [{"playerId": ""}]},
+                            ]
+                        },
+                    },
+                    {
+                        "value": "TTEMTEAM--------------QFNL00010003--------",
+                    },
+                ]
+            }
+        },
+    }
+
+    pascal_payload: dict[str, Any] = {
+        "eventId": str(EVENT_ID),
+        "documentCode": doc_pascal,
+        "teamParentData": {
+            "extended_info": {
+                "matches": [
+                    {
+                        "Value": "TTEMTEAM-----------U15QFNL00010001--------",
+                        "match_result": {
+                            "Competitiors": [
+                                {"Players": [{"PlayerId": "401"}]},
+                                {"Players": [{"PlayerId": "402"}]},
+                            ]
+                        },
+                    }
+                ]
+            }
+        },
+    }
+
+    items = [
+        (_summary(doc_camel, camel_payload), camel_payload),
+        (_summary(doc_pascal, pascal_payload), pascal_payload),
+    ]
+    land_match_details_chunk(db_connection, items)
+    land_match_details_chunk(db_connection, items)
+
+    players = db_connection.execute(
+        """
+        SELECT document_code, player_id
+        FROM ingest_wtt.match_details_players_unpacked
+        WHERE event_id = %s
+        ORDER BY document_code, player_id;
+        """,
+        (EVENT_ID,),
+    ).fetchall()
+    assert [(r["document_code"], r["player_id"]) for r in players] == [
+        (doc_camel, 301),
+        (doc_camel, 302),
+        (doc_camel, 303),
+        (doc_pascal, 401),
+        (doc_pascal, 402),
+    ]

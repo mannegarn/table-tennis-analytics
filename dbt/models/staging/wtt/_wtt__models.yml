@@ -133,6 +133,186 @@ models:
       - name: results_game_scores
         description: Comma-separated per-game scores (e.g. 11-7,11-4,11-9,0-0,0-0).
 
+  - name: stg_team_match_rubbers
+    description: >
+      Unpacked individual team rubbers from ingest_wtt.match_details_raw
+      teamParentData.extended_info.matches (1 row per event_id, document_code
+      where match_result is present). Coalesces camelCase and PascalCase keys
+      and classifies rubber_number, team_category, discipline, age_category,
+      and raw_round_token.
+    columns:
+      - name: event_id
+        description: WTT event identifier.
+        data_tests:
+          - not_null
+      - name: document_code
+        description: Canonical 42-char WTT rubber document code within the event.
+        data_tests:
+          - not_null
+      - name: parent_document_code
+        description: Parent team tie document code in stg_match_details.
+        data_tests:
+          - not_null
+      - name: rubber_number
+        description: 1-based rubber position (1..5) parsed from characters 33..34 of document_code.
+        data_tests:
+          - not_null
+      - name: team_match_no
+        description: Upstream teamMatchNo ordinal when numeric (nullable).
+      - name: team_category
+        description: Team event category derived from document_code (men, women, mixed).
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["men", "women", "mixed"]
+      - name: discipline
+        description: Rubber discipline (singles, doubles, mixed_doubles).
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["singles", "doubles", "mixed_doubles"]
+      - name: age_category
+        description: Age group parsed from document_code (senior or U11..U21).
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["senior", "U11", "U13", "U15", "U17", "U19", "U21"]
+      - name: is_youth
+        description: True when age_category is a youth bracket (U11..U21).
+        data_tests:
+          - not_null
+      - name: raw_round_token
+        description: Normalized 4-character round token mapped to seeds.round_codes (GP## for groups, FNL2 for Olympic team bronze medal ties).
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('round_codes')
+                field: raw_round_token
+      - name: sub_event_name
+        description: Sub-event title from match_result (e.g. Men's Teams).
+      - name: sub_event_description
+        description: Round and rubber description from match_result.
+      - name: venue_name
+        description: Match venue name (nullable).
+      - name: table_name
+        description: Table name label (nullable).
+      - name: table_number
+        description: Table code/number (nullable).
+      - name: duration
+        description: Match duration string (HH:MM:SS, nullable).
+      - name: start_date_utc
+        description: Match start timestamp in UTC (nullable; 01/01/0001 sentinels mapped to NULL).
+      - name: start_date_local
+        description: Local match start timestamp without timezone (nullable; 01/01/0001 sentinels mapped to NULL).
+      - name: best_of
+        description: Upstream matchConfig.bestOfXGames (nullable; e.g. Tokyo 2020 omits it and Mixed Team WC uses fixed 3-game rubbers).
+      - name: max_points_per_game
+        description: Configured target points per game (usually 11; nullable).
+      - name: advantage_per_game
+        description: Configured minimum winning point margin per game (usually 2; nullable).
+      - name: sudden_death_point
+        description: Configured sudden-death point cap (usually 99 for none; nullable).
+      - name: max_challenges_per_competitor
+        description: Configured TTR challenges allowed per competitor (nullable).
+      - name: ttr_review
+        description: Whether Table Tennis Review (TTR) was enabled (nullable).
+      - name: result_status
+        description: Match result status (e.g. OFFICIAL).
+        data_tests:
+          - not_null
+      - name: overall_scores
+        description: Overall score in games/sets (e.g. 3-0, 3-0 WO, 2-1; nullable).
+      - name: result_overall_scores
+        description: Duplicate overall score string from upstream (nullable).
+      - name: results_game_scores
+        description: Comma-separated per-game scores (e.g. 11-7,11-4,11-9,0-0,0-0; nullable).
+      - name: current_game_number
+        description: Current or final game number (nullable).
+      - name: comp_1_id
+        description: Upstream competitor 1 identifier.
+      - name: comp_1_name
+        description: Upstream competitor 1 display name.
+      - name: comp_1_org
+        description: Upstream competitor 1 organization code.
+      - name: comp_1_type
+        description: Competitor 1 slot type (H or A).
+      - name: comp_1_scores
+        description: Comma-separated competitor 1 game scores (do not use for defaults; use results_game_scores).
+      - name: comp_1_irm
+        description: Competitor 1 injury/result marker (e.g. OK).
+      - name: comp_1_timeout
+        description: Competitor 1 timeout flag/count.
+      - name: comp_1_medical_timeout
+        description: Competitor 1 medical timeout flag/count.
+      - name: comp_1_card_y
+        description: Competitor 1 yellow cards.
+      - name: comp_1_card_yr1
+        description: Competitor 1 first yellow-red cards.
+      - name: comp_1_card_yr2
+        description: Competitor 1 second yellow-red cards.
+      - name: comp_1_player_1_id
+        description: Competitor 1 primary player ITTF/WTT ID.
+        data_tests:
+          - not_null
+      - name: comp_1_player_1_name
+        description: Competitor 1 primary player display name.
+      - name: comp_1_player_1_org
+        description: Competitor 1 primary player organization code.
+      - name: comp_1_player_1_position
+        description: Competitor 1 primary player position within pair/side.
+      - name: comp_1_player_2_id
+        description: Competitor 1 partner ITTF/WTT ID (NULL for singles).
+      - name: comp_1_player_2_name
+        description: Competitor 1 partner display name (NULL for singles).
+      - name: comp_1_player_2_org
+        description: Competitor 1 partner organization code (NULL for singles).
+      - name: comp_1_player_2_position
+        description: Competitor 1 partner position within pair (NULL for singles).
+      - name: comp_2_id
+        description: Upstream competitor 2 identifier.
+      - name: comp_2_name
+        description: Upstream competitor 2 display name.
+      - name: comp_2_org
+        description: Upstream competitor 2 organization code.
+      - name: comp_2_type
+        description: Competitor 2 slot type (H or A).
+      - name: comp_2_scores
+        description: Comma-separated competitor 2 game scores (do not use for defaults; use results_game_scores).
+      - name: comp_2_irm
+        description: Competitor 2 injury/result marker (e.g. OK).
+      - name: comp_2_timeout
+        description: Competitor 2 timeout flag/count.
+      - name: comp_2_medical_timeout
+        description: Competitor 2 medical timeout flag/count.
+      - name: comp_2_card_y
+        description: Competitor 2 yellow cards.
+      - name: comp_2_card_yr1
+        description: Competitor 2 first yellow-red cards.
+      - name: comp_2_card_yr2
+        description: Competitor 2 second yellow-red cards.
+      - name: comp_2_player_1_id
+        description: Competitor 2 primary player ITTF/WTT ID.
+        data_tests:
+          - not_null
+      - name: comp_2_player_1_name
+        description: Competitor 2 primary player display name.
+      - name: comp_2_player_1_org
+        description: Competitor 2 primary player organization code.
+      - name: comp_2_player_1_position
+        description: Competitor 2 primary player position within pair/side.
+      - name: comp_2_player_2_id
+        description: Competitor 2 partner ITTF/WTT ID (NULL for singles).
+      - name: comp_2_player_2_name
+        description: Competitor 2 partner display name (NULL for singles).
+      - name: comp_2_player_2_org
+        description: Competitor 2 partner organization code (NULL for singles).
+      - name: comp_2_player_2_position
+        description: Competitor 2 partner position within pair (NULL for singles).
+
   - name: stg_match_commentary
     description: >
       Unpacked match commentary table from ingest_wtt.match_commentary_raw (1 row per

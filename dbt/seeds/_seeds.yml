@@ -181,18 +181,18 @@ seeds:
         data_tests:
           - not_null
       - name: discipline
-        description: Normalized discipline filter (e.g. singles); nullable for exact document_code overrides.
+        description: Normalized discipline filter (e.g. singles); nullable when applying to all disciplines in an event or for exact document_code overrides.
       - name: round_code
         description: Optional canonical round_code filter (e.g. GROUP); NULL applies to all rounds.
       - name: document_code
         description: Optional exact WTT document_code for single-match overrides.
       - name: match_format
-        description: Canonical match format (e.g. best_of_5, best_of_7, fixed_4_games).
+        description: Canonical match format (e.g. best_of_5, best_of_7, fixed_3_games, fixed_4_games).
         data_tests:
           - not_null
           - accepted_values:
               arguments:
-                values: ["best_of_3", "best_of_5", "best_of_7", "fixed_4_games"]
+                values: ["best_of_3", "best_of_5", "best_of_7", "fixed_3_games", "fixed_4_games"]
       - name: best_of
         description: Corrected best-of game count (NULL for fixed-game formats such as fixed_4_games).
       - name: scheduled_games
