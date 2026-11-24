@@ -24,7 +24,7 @@ WAREHOUSE_SCHEMAS: tuple[str, ...] = (
     "ingest_ittf",
     "staging_wtt",
     "staging_ittf",
-    "intermediate",
+    "intermediate_wtt",
     "marts_wtt",
     "marts_ittf",
     "marts",

@@ -16,7 +16,7 @@ WTT match records arrive with several upstream structural quirks that must be so
 
 ## Decision
 
-1. **Canonical score & outcome model (`intermediate.int_wtt_senior_singles` & `int_wtt_senior_singles_games`):**
+1. **Canonical score & outcome model (`intermediate_wtt.int_wtt_senior_singles` & `int_wtt_senior_singles_games`):**
    - Use `overall_scores` and `results_game_scores` (with `0-0` padding stripped while preserving 1-based `game_number` slots) as the primary score source.
    - Apply two explicit, auditable CSV seeds in `seeds`:
      - `match_format_overrides.csv` (scoped by `is_team_rubber`, `discipline`, `round_code`, and `document_code`).

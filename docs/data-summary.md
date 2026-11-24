@@ -1,6 +1,6 @@
 # Database Data Summary
 
-- **Generated at**: 2026-11-24 16:25:55 UTC
+- **Generated at**: 2026-11-24 16:37:25 UTC
 - **Database**: `tt_stats` (5606 MB)
 - **Applied migrations**: 17
 
@@ -82,14 +82,14 @@
 | `ingest_wtt.event_sponsors_raw` | 2,844 | 904 kB |
 | `ingest_wtt.events_unpacked` | 2,972 | 840 kB |
 | `ingest_wtt.events_by_year_raw` | 102 | 640 kB |
-| `intermediate.int_wtt_senior_singles_games` | 133,151 | 12 MB |
-| `intermediate.int_wtt_senior_singles` | 34,140 | 10 MB |
-| `intermediate.int_event_equipment_sponsors` | 420 | 40 kB |
+| `intermediate_wtt.int_wtt_senior_singles_games` | 133,151 | 12 MB |
+| `intermediate_wtt.int_wtt_senior_singles` | 34,140 | 10 MB |
+| `intermediate_wtt.int_event_equipment_sponsors` | 420 | 40 kB |
 | `marts_wtt.fct_match_commentary` | 6,770,095 | 2240 MB |
 | `marts_wtt.dim_matches` | 205,503 | 73 MB |
 | `marts_wtt.fct_senior_singles_matches` | 34,140 | 15 MB |
 | `marts_wtt.fct_senior_singles_games` | 133,151 | 11 MB |
-| `marts_wtt.dim_players` | 6,464 | 1032 kB |
+| `marts_wtt.dim_players` | 6,464 | 1064 kB |
 | `marts_wtt.dim_events` | 2,970 | 520 kB |
 | `seeds.event_sponsors_manual` | 243 | 56 kB |
 | `seeds.match_score_overrides` | 45 | 48 kB |
@@ -102,7 +102,7 @@
 | `staging_wtt.stg_match_commentary` | 6,770,095 | 1298 MB |
 | `staging_wtt.stg_match_entries` | 202,291 | 33 MB |
 | `staging_wtt.stg_match_details` | 51,897 | 25 MB |
-| `staging_wtt.stg_team_match_rubbers` | 3,212 | 2056 kB |
+| `staging_wtt.stg_team_match_rubbers` | 3,212 | 1880 kB |
 | `staging_wtt.stg_wtt_players` | 6,463 | 952 kB |
-| `staging_wtt.stg_event_sponsors` | 1,640 | 520 kB |
-| `staging_wtt.stg_events` | 2,972 | 520 kB |
+| `staging_wtt.stg_events` | 2,972 | 552 kB |
+| `staging_wtt.stg_event_sponsors` | 1,640 | 312 kB |

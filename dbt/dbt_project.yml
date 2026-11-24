@@ -31,7 +31,7 @@ models:
         +schema: staging_ittf
         +materialized: view
     intermediate:
-      +schema: intermediate
+      +schema: intermediate_wtt
       +materialized: table
     marts:
       wtt:
