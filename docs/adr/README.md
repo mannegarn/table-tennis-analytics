@@ -20,3 +20,4 @@ Format: Status, Context, Decision, Consequences. Kept deliberately brief.
 | [0010](0010-match-entries-identity-is-event-and-document-code.md) | Match identity is the event plus the document code, not the upstream id | Accepted |
 | [0011](0011-ci-quality-gates-and-dependency-security.md) | Layered CI quality gates and dependency security | Accepted |
 | [0012](0012-level-source-schemas.md) | Layer-and-source (`level_source`) schemas, local run history, and `public` migration ledger | Accepted |
+| [0013](0013-match-cleaning-and-senior-singles-marts.md) | Match cleaning, team-tie rubber unification, and senior singles marts | Accepted |

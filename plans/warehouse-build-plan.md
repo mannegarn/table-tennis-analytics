@@ -71,19 +71,19 @@ Full match rules: `docs/database-design.md` §10 (single source of truth).
 - `ittf__dim_player_profiles` (view), `wtt__dim_players` (`player_sk`, nullable `ittf_id`, `coalesce` of `hand`/`grip`/`style`).
 - `player_identity_overrides.csv` seed. A warn-level test lists `(name, country)` pairs with more than one `player_sk` (5 exist today, e.g. `LEE Yubin` KOR). Never merge on name alone.
 
-## Phase 5 — Match Staging
-- `stg_match_details`: `best_of` from `bestOfXGames`, `max_points_per_game`, `advantage_per_game`, `sudden_death_point`; the overall score split into `overall_games_1/2` and `result_suffix` (`WO`/`INJ`/`RET`/`DSQ`).
-- `stg_match_entries`: `age_category`, `is_youth`, `discipline` parsed from `document_code` and `sub_event_type`.
-- Tests for score format, age category, discipline, and a warn-level `LIVE` count.
+## Phase 5 — Match Staging (Implemented)
+- `stg_match_details`: `best_of` (`bestOfXGames`/`bestOf`), `max_points_per_game`, `advantage_per_game`, `sudden_death_point`, overall score split (`overall_games_p1`, `overall_games_p2`, `result_suffix`), and session-TZ-invariant timestamp macros.
+- `stg_match_entries` & `stg_team_match_rubbers`: `discipline`, `gender_category`, `age_category`, `is_youth`, `para_class`, `is_para`, `raw_round_token`, `group_number`, `match_number_in_round`.
+- `match_format_overrides.csv` (`is_team_rubber`-scoped) & `match_score_overrides.csv` seeds, plus `has_wtt_profile` player stubs in `wtt__dim_players`.
 
-## Phase 6 — Match Marts
-- `wtt__dim_matches` (all disciplines, `is_live`), `wtt__fct_singles`, `wtt__fct_match_games` (`played` matches only, `0-0` padding dropped), and `match_sk` on commentary.
-- Tests: no second player in singles; games-won consistency; best-of consistency; game validity (warn first); result-type and default-flag consistency; no `LIVE` in `fct_singles`.
-- Verify the `defaulting_side` assumption (the loser is the defaulting player) against commentary before analysis relies on it.
+## Phase 6 — Intermediate & Match Marts (Implemented, ADR 0013)
+- `int_wtt_senior_singles_games` & `int_wtt_senior_singles` (canonical `overall_scores` + `results_game_scores`, format overrides, score overrides, anomaly/eligibility flags, `BYE`/Event `2615` R4/R5 exclusions).
+- `wtt__dim_matches` (all entries + unpacked team rubbers, reconciled team rounds, `is_live`, `has_match_details`, `has_commentary`), `wtt__fct_senior_singles_matches` (represented association `p1/p2_country_code`, draws with `NULL` winner/loser, defaults with `NULL` game/point totals), `wtt__fct_senior_singles_games` (unsigned `point_margin`), and `match_sk` + `(match_sk, sequence_number)` index on `wtt__fct_match_commentary`.
+- Full `error` invariant tests + `warn` upstream data monitors in `dbt/tests/`.
 
-## Phase 7 — Unified `marts` & Docs
-- Thin views in `models/marts/core/` over `marts_wtt.*`. Each future league adds `ingest_<league>` → `staging_<league>` → `marts_<league>` and one `UNION ALL` branch.
-- Update README, regenerate `docs/data-summary.md`, write ADR 0013, point notebooks and app at `marts.*`.
+## Phase 7 — Unified `marts` & Docs (Implemented)
+- Thin views in `models/marts/core/` (`dim_events`, `dim_players`, `dim_matches`, `fct_senior_singles_matches`, `fct_senior_singles_games`, `fct_match_commentary`) over `marts_wtt.*`. Each future league adds `ingest_<league>` → `staging_<league>` → `marts_<league>` and one `UNION ALL` branch.
+- Regenerated `docs/data-summary.md` and added ADR 0013.
 
 ## Ingestion Follow-ups (outside dbt, ADR 0004)
 - `LIVE` payloads should be re-fetched so they flip to `OFFICIAL`. Queues derive from raw only, so this is a pending view over `payload ->> 'resultStatus' = 'LIVE'`, not a dbt model.

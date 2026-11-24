@@ -16,8 +16,8 @@ Both **Postgres schemas** and **dbt model folders** strictly follow **`level_sou
 | **Seeds** | `seeds` | `dbt/seeds/` | Tables | User-editable CSVs auto-loaded on `make dbt-run`. |
 | **Staging** | `staging_wtt`, `staging_ittf`, *(future)* `staging_<league>` | `dbt/models/staging/wtt/`, `dbt/models/staging/ittf/`, `dbt/models/staging/<league>/` | Views for thin models (`staging_ittf`); **tables for anything that expands JSONB** (all WTT staging) | 1:1 with raw tables: type casting, trimming, null normalization, column pruning, and parsing of codes embedded in IDs. |
 | **Intermediate** | `intermediate` | `dbt/models/intermediate/` | Tables / Views | Cross-source enrichment & identity crosswalks (`int_event_equipment_sponsors`, `int_player_identity_map`). |
-| **Source Marts** | `marts_wtt`, `marts_ittf` *(view)*, *(future)* `marts_<league>` | `dbt/models/marts/wtt/`, `dbt/models/marts/ittf/`, `dbt/models/marts/<league>/` | Tables *(views for lightweight enrichment like `marts_ittf`)* | Clean, source-scoped business entities (`marts_wtt.dim_events`, `dim_players`, `dim_matches`, `fct_singles`, `fct_match_games`, `fct_match_commentary`; `marts_ittf.dim_player_profiles`). |
-| **Unified Marts** | `marts` | `dbt/models/marts/core/` | **Views** until a second league exists, then re-evaluate | "Marts of marts": `UNION ALL`s source marts into `marts.dim_events`, `dim_players`, `dim_matches`, `fct_singles`, `fct_match_games`, `fct_match_commentary`. |
+| **Source Marts** | `marts_wtt`, `marts_ittf` *(view)*, *(future)* `marts_<league>` | `dbt/models/marts/wtt/`, `dbt/models/marts/ittf/`, `dbt/models/marts/<league>/` | Tables *(views for lightweight enrichment like `marts_ittf`)* | Clean, source-scoped business entities (`marts_wtt.dim_events`, `dim_players`, `dim_matches`, `fct_senior_singles_matches`, `fct_senior_singles_games`, `fct_match_commentary`; `marts_ittf.dim_player_profiles`). |
+| **Unified Marts** | `marts` | `dbt/models/marts/core/` | **Views** until a second league exists, then re-evaluate | "Marts of marts": `UNION ALL`s source marts into `marts.dim_events`, `dim_players`, `dim_matches`, `fct_senior_singles_matches`, `fct_senior_singles_games`, `fct_match_commentary`. |
 
 > **dbt note — schema names**: Set `+schema:` per folder in `dbt_project.yml` and add a 5-line `dbt/macros/generate_schema_name.sql` macro so dbt writes to `staging_wtt`, `marts_wtt`, `marts_ittf`, `marts`, etc. literally instead of prefixing them with the profile schema. The macro returns `target.schema` when no custom schema is set and `custom_schema_name | trim` otherwise. The profile's default schema is `dbt_default`; every model sets `+schema`, so that schema stays empty (a test asserts it).
 
@@ -72,7 +72,7 @@ Every `_sk` column gets `unique` and `not_null` tests. They also catch dedupe bu
 - **WTT `player_id` already is the ITTF ID.** Hash WTT players as `'ittf|' || player_id` (not `'wtt|'`) through a dedicated `player_sk()` macro, so a league player with the same ITTF ID lands on the same key.
 - **`player_sk` changes when identity is resolved.** A league-only player keyed by `source_system|source_player_id` gets a new `player_sk` once linked to an ITTF ID or by override. So **facts carry both**: a permanent `p1_source_player_sk`/`p2_source_player_sk`, and `p1_player_sk`/`p2_player_sk` looked up through `int_player_identity_map` at build time. Never store `player_sk` anywhere outside the marts. Ratings (Glicko-2) are always recomputed from scratch.
 
-> **Why this helps `fct_match_commentary`**: keeping `match_sk` on `dim_matches`, `fct_singles` and `fct_match_commentary` turns a composite `(event_id, document_code)` string join into a single `bigint` join. Commentary also covers doubles and team matches, so it references `dim_matches` (all disciplines), not `fct_singles`.
+> **Why this helps `fct_match_commentary`**: keeping `match_sk` on `dim_matches`, `fct_senior_singles_matches` and `fct_match_commentary` turns a composite `(event_id, document_code)` string join into a single `bigint` join. Commentary also covers doubles and team matches, so it references `dim_matches` (all disciplines), not `fct_senior_singles_matches`.
 
 ---
 
@@ -103,7 +103,7 @@ National leagues (e.g. France Pro A) include players without an `ittf_id` and al
 
 ## 4. Handling Different Match Formats (e.g. MLTT)
 
-To support best-of-5/7 (WTT/leagues) alongside fixed-set/point formats (MLTT) in one `fct_singles` table:
+To support best-of-5/7 (WTT/leagues) alongside fixed-set/point formats (MLTT) in one `fct_senior_singles_matches` table:
 - Add `match_format` (`'best_of_5'`, `'best_of_7'`, `'fixed_3_sets'`, etc.) and `scoring_rule` (`'games_won'`, `'points_won'`).
 - Derive WTT's `match_format` from `matchConfig.bestOfXGames` (not `bestOf`, which does not exist upstream), and record `max_points_per_game`, `advantage_per_game` and `sudden_death_point` from the same object.
 - Store `games_won_p1` / `games_won_p2`, `points_won_p1` / `points_won_p2`, and `winner_side` (`1`, `2`, or `null` for draw).
@@ -127,10 +127,10 @@ Small, human-curated tables live in `dbt/seeds/` and are **automatically reloade
 ```mermaid
 erDiagram
     dim_events ||--o{ dim_matches : "event_sk"
-    dim_matches ||--o| fct_singles : "match_sk"
-    dim_players ||--o{ fct_singles : "p1 / p2 player_sk"
-    dim_players ||--o{ fct_singles : "defaulting_player_sk"
-    fct_singles ||--o{ fct_match_games : "match_sk"
+    dim_matches ||--o| fct_senior_singles_matches : "match_sk"
+    dim_players ||--o{ fct_senior_singles_matches : "p1 / p2 player_sk"
+    dim_players ||--o{ fct_senior_singles_matches : "defaulting_player_sk"
+    fct_senior_singles_matches ||--o{ fct_senior_singles_games : "match_sk"
     dim_matches ||--o{ fct_match_commentary : "match_sk"
     action_types ||--o{ fct_match_commentary : "action_type"
     int_event_equipment_sponsors ||--|| dim_events : "event_id"
@@ -168,7 +168,7 @@ erDiagram
         boolean is_live
     }
 
-    fct_singles {
+    fct_senior_singles_matches {
         bigint match_sk PK
         bigint p1_player_sk FK
         bigint p2_player_sk FK
@@ -190,7 +190,7 @@ erDiagram
         smallint winner_side
     }
 
-    fct_match_games {
+    fct_senior_singles_games {
         bigint match_sk PK
         smallint game_number PK
         smallint p1_points
@@ -231,26 +231,26 @@ erDiagram
 3. Keys and `dim_events` (deduplicated WTT events, `event_sk`, equipment sponsors)
 4. `dim_players` (WTT + ITTF profile enrichment, `player_sk`, nullable `ittf_id`)
 5. Match staging (`best_of`, result suffix, age category, discipline; see §10)
-6. `dim_matches`, `fct_singles`, `fct_match_games`, and `match_sk` on `fct_match_commentary`
+6. `dim_matches`, `fct_senior_singles_matches`, `fct_senior_singles_games`, and `match_sk` on `fct_match_commentary`
 7. Unified `marts` views
 
 ---
 
 ## 8. Singles vs. Doubles Separation
 
-- **Separate tables, not nullable partner columns**: `fct_singles` is **singles only** (`p1_player_sk` and `p2_player_sk`, both `NOT NULL`), keeping 1v1 ratings (Glicko-2) and head-to-head queries clean.
-- **`NOT NULL` alone does not separate singles from doubles**, because player 1 is populated on both sides of a doubles match. The filter is `sub_event_type like '%Singles'` **and** both second-player IDs are NULL. `competitorType` is `H` on every row and is no help. Add a test asserting no `fct_singles` row has a second player.
-- **Team events are not matches**: the 1,414 "Men's/Women's/Mixed/U15 Team" entries are whole ties with no match details. They stay in `dim_matches` (`discipline = 'team'`) but never appear in `fct_singles`.
-- **Doubles deferred**: Doubles and mixed doubles will live in a separate `fct_doubles` table later when needed, sharing `dim_events`, `dim_players`, `dim_matches` and `match_sk` conventions without complicating `fct_singles`.
+- **Separate tables, not nullable partner columns**: `fct_senior_singles_matches` is **singles only** (`p1_player_sk` and `p2_player_sk`, both `NOT NULL`), keeping 1v1 ratings (Glicko-2) and head-to-head queries clean.
+- **`NOT NULL` alone does not separate singles from doubles**, because player 1 is populated on both sides of a doubles match. The filter is `sub_event_type like '%Singles'` **and** both second-player IDs are NULL. `competitorType` is `H` on every row and is no help. Add a test asserting no `fct_senior_singles_matches` row has a second player.
+- **Team events are not matches**: the 1,414 "Men's/Women's/Mixed/U15 Team" entries are whole ties with no match details. They stay in `dim_matches` (`discipline = 'team'`) but never appear in `fct_senior_singles_matches`.
+- **Doubles deferred**: Doubles and mixed doubles will live in a separate `fct_doubles` table later when needed, sharing `dim_events`, `dim_players`, `dim_matches` and `match_sk` conventions without complicating `fct_senior_singles_matches`.
 
 ---
 
 ## 9. Reference Benchmarks & Inspirations
 
-1. **JeffSackmann/tennis_MatchChartingProject & tennis_atp** (`github.com/JeffSackmann`) — Gold-standard racquet-sport separation between match-level results (`fct_singles`) and point-by-point logs (`fct_match_commentary`).
+1. **JeffSackmann/tennis_MatchChartingProject & tennis_atp** (`github.com/JeffSackmann`) — Gold-standard racquet-sport separation between match-level results (`fct_senior_singles_matches`) and point-by-point logs (`fct_match_commentary`).
 2. **dbt-labs/jaffle-shop & jaffle-shop-classic** (`github.com/dbt-labs/jaffle-shop`) — Canonical dbt structure across `staging/` (`stg_*`), `intermediate/` (`int_*`), and `marts/` (`dim_*`, `fct_*`) with YAML schema tests and documentation.
 3. **alan-turing-institute/AIrsenal** (`github.com/alan-turing-institute/AIrsenal`) — Clean separation of raw fixture/result ingestion, relational DB storage, rating/strength estimation, and downstream modeling.
-4. **sublee/glicko2 & ryankirkman/pyglicko2** (`github.com/sublee/glicko2`) — Lightweight Python reference implementations of Glicko-2 (`μ`, `φ`, `σ`) for chronological Polars passes over `fct_singles`.
+4. **sublee/glicko2 & ryankirkman/pyglicko2** (`github.com/sublee/glicko2`) — Lightweight Python reference implementations of Glicko-2 (`μ`, `φ`, `σ`) for chronological Polars passes over `fct_senior_singles_matches`.
 
 ---
 
@@ -268,7 +268,7 @@ Match data is the hardest part to clean. These rules come from querying the live
 | Singles entries with details, by group | about 11% in every age group, including senior |
 | Matches with commentary | 67,953 |
 
-- `fct_singles` takes **`stg_match_entries` as its grain** and **left-joins** details. An inner join would lose about 89% of matches.
+- `fct_senior_singles_matches` takes **`stg_match_entries` as its grain** and **left-joins** details. An inner join would lose about 89% of matches.
 - `has_result` is true only when a usable result exists. Rating and head-to-head queries filter on it.
 - Match entries carry no scores (`full_results` is always `OFFICIAL` and means nothing).
 - Commentary covers 3x as many matches as details. Deriving results from point-won (`PT`) actions could close the gap later. Not in scope yet.
@@ -286,7 +286,7 @@ The overall score is `"<games>-<games>"` optionally followed by a suffix. Parse 
 | `DSQ` | `disqualified` | 2 | Fabricated `0-11` games |
 | *(none, `0-0`)* | `no_score` | 12 | `OFFICIAL` but `0-0`; no usable result |
 
-**All default results stay in `fct_singles`** so they can be analysed (who receives or causes the most walkovers, injuries, retirements and disqualifications). Columns:
+**All default results stay in `fct_senior_singles_matches`** so they can be analysed (who receives or causes the most walkovers, injuries, retirements and disqualifications). Columns:
 
 - `result_type` — as above.
 - `is_default_result` — true for `walkover`, `injury`, `retired`, `disqualified`.
@@ -296,14 +296,14 @@ The overall score is `"<games>-<games>"` optionally followed by a suffix. Parse 
 
 **Defaults have no trustworthy game or point scores:**
 - `games_won_p1/p2` and `points_won_p1/p2` are **NULL** for default results; `winner_side` is still set from the numeric score.
-- `fct_match_games` contains `played` matches only. The 9 `INJ`/`RET` matches with partial real scores are deferred.
+- `fct_senior_singles_games` contains `played` matches only. The 9 `INJ`/`RET` matches with partial real scores are deferred.
 - **`comp_1_scores` / `comp_2_scores` must not be used.** They disagree with `results_game_scores` on defaults (e.g. `0-3 INJ` has comp scores `5,0,0` and game scores `5-11,7-11,0-11`). `results_game_scores` is the single source of truth.
 - Strip the `0-0` padding games (every match is padded to 5 game slots).
 
 ### 10.3 `LIVE` matches are excluded
 
 - 11 rows in `match_details_raw` have `resultStatus = 'LIVE'`, captured mid-match (e.g. `2-3` in game 5), so their scores are incomplete.
-- **Excluded** from `fct_singles` and `fct_match_games`.
+- **Excluded** from `fct_senior_singles_matches` and `fct_senior_singles_games`.
 - **Kept in `dim_matches`** with `is_live = true`, so `fct_match_commentary.match_sk` still resolves.
 - A **warn-level** dbt test reports the `LIVE` count, so a growing number is visible.
 - Ingestion follow-up (ADR 0004: queues derive from raw, never from dbt): re-fetch `LIVE` payloads so they flip to `OFFICIAL`.
@@ -331,7 +331,7 @@ Singles are not all senior. 82% of singles entries (146,632 of 178,555) are yout
 
 | Test | Severity |
 |---|---|
-| `fct_singles` has no row with a second player on either side | error |
+| `fct_senior_singles_matches` has no row with a second player on either side | error |
 | `age_category` is never NULL | error |
 | `match_sk`, `event_sk`, `player_sk` unique and not null | error |
 | Derived games-won from `results_game_scores` equals numeric `overall_scores` for `played` | error |

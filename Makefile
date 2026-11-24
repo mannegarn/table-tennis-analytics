@@ -28,7 +28,7 @@ ARGS_select := $(if $(SELECT),--select $(SELECT))
 # match_entries_unpacked), and players last (reads match_details_players_unpacked).
 COLLECT_PRE := events-collect event-sponsors-collect matches-collect
 COLLECT_PARALLEL := match-details-collect match-commentary-collect
-COLLECT_POST := player-details-collect ittf-players-seed
+COLLECT_POST := player-details-collect ittf-players-seed event-sponsors-refresh
 
 # Abort a recipe whose required variable is empty, instead of running it with a
 # blank argument. The value comes from .env or the command line.
@@ -41,7 +41,7 @@ endef
 # Collectors share one pending queue and one API; never run them side by side.
 .NOTPARALLEL:
 
-.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-collect events-unpack events-unpack-preview matches-collect matches-unpack matches-unpack-preview match-details-collect match-details-seed match-commentary-collect event-sponsors-collect event-sponsors-identify event-sponsors-sync player-details-collect collect-all ittf-players-seed update-summary test test-integration dbt-debug dbt-run dbt-test dbt-clean lint lint-sql format typecheck check hooks-install hooks-run
+.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-collect events-unpack events-unpack-preview matches-collect matches-unpack matches-unpack-preview match-details-collect match-details-seed match-commentary-collect event-sponsors-collect event-sponsors-identify event-sponsors-sync event-sponsors-refresh player-details-collect collect-all ittf-players-seed update-summary test test-integration dbt-debug dbt-run dbt-test dbt-clean lint lint-sql format typecheck check hooks-install hooks-run
 
 help: ## Show available commands
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -190,6 +190,11 @@ event-sponsors-identify: ## Identify missing table_sponsor values via YouTube + 
 
 event-sponsors-sync: ## Sync senior match-detail events into dbt/seeds/event_sponsors_manual.csv (preserves manual edits)
 	uv run tt-event-sponsors-sync
+
+event-sponsors-refresh: ## Refresh event models, sync new senior events into event_sponsors_manual.csv, and identify missing table sponsors
+	uv run dbt build --project-dir dbt --profiles-dir dbt --select +wtt__dim_events stg_match_details
+	uv run tt-event-sponsors-sync
+	uv run tt-event-sponsors-identify $(strip $(ARGS_events) $(ARGS_limit))
 
 dbt-run: ## Seed, build and test dbt models in dependency order (optional: SELECT=model+; full run also syncs event_sponsors_manual.csv)
 	uv run dbt build --project-dir dbt --profiles-dir dbt $(ARGS_select)
