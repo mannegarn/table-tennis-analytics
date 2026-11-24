@@ -1,0 +1,21 @@
+select
+    event_sk,
+    source_system,
+    source_event_id,
+    event_name,
+    event_type,
+    event_tier_name,
+    event_year,
+    start_date,
+    end_date,
+    duration_days,
+    country,
+    city,
+    continent_code,
+    ball_sponsor,
+    table_sponsor,
+    has_matches,
+    has_match_details,
+    has_commentary,
+    has_sponsors
+from {{ ref('wtt__dim_events') }}

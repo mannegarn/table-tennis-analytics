@@ -1,0 +1,15 @@
+version: 2
+
+models:
+  - name: dim_events
+    description: Unified events dimension view (currently backed by wtt__dim_events).
+  - name: dim_players
+    description: Unified players dimension view (currently backed by wtt__dim_players).
+  - name: dim_matches
+    description: Unified match catalog dimension view (currently backed by wtt__dim_matches).
+  - name: fct_senior_singles_matches
+    description: Unified senior able-bodied singles matches fact view (currently backed by wtt__fct_senior_singles_matches).
+  - name: fct_senior_singles_games
+    description: Unified senior able-bodied singles per-game fact view (currently backed by wtt__fct_senior_singles_games).
+  - name: fct_match_commentary
+    description: Unified match commentary fact view (currently backed by wtt__fct_match_commentary).

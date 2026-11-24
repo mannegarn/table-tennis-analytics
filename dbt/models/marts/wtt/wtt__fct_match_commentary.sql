@@ -3,11 +3,13 @@
     materialized='table',
     post_hook=[
         "create unique index on {{ this }} (event_id, document_code, sequence_number) include (action_type)",
+        "create index on {{ this }} (match_sk, sequence_number)",
         "analyze {{ this }}",
     ],
 ) }}
 
 select
+    {{ surrogate_key("'wtt'", ['c.event_id', 'c.document_code']) }} as match_sk,
     c.event_id,
     c.document_code,
     c.sequence_number,
