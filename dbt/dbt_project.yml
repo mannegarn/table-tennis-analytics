@@ -78,10 +78,18 @@ seeds:
         override_id: varchar
         event_id: integer
         discipline: varchar
+        is_team_rubber: boolean
         round_code: varchar
         document_code: varchar
         match_format: varchar
         best_of: integer
         scheduled_games: integer
         scoring_rule: varchar
+        notes: varchar
+    match_score_overrides:
+      +column_types:
+        event_id: integer
+        document_code: varchar
+        overall_scores: varchar
+        results_game_scores: varchar
         notes: varchar

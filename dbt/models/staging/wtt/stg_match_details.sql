@@ -1,4 +1,7 @@
-{{ config(materialized='table') }}
+{{ config(
+    materialized='table',
+    post_hook="analyze {{ this }}",
+) }}
 
 -- Extract the top-level fields from the TOASTed payload in a single pass via
 -- jsonb_to_record so PostgreSQL detoasts and decompresses each ~55 KB payload
@@ -48,6 +51,19 @@ unpacked as (
         "currentGameNumber" text,
         competitiors jsonb
     )
+),
+
+prepared as (
+    select
+        *,
+        nullif(btrim(match_date_time ->> 'startDateUTC'), '') as start_date_utc_raw,
+        nullif(btrim(match_date_time ->> 'startDateLocal'), '') as start_date_local_raw,
+        nullif(btrim(overall_scores_raw), '') as overall_scores,
+        regexp_match(
+            nullif(btrim(overall_scores_raw), ''),
+            '^([0-9]+)-([0-9]+)(?: ([A-Z]+))?$'
+        ) as overall_score_parts
+    from unpacked
 )
 
 select
@@ -59,51 +75,33 @@ select
     nullif(btrim(table_name_raw), '') as table_name,
     nullif(btrim(table_number_raw), '') as table_number,
     nullif(btrim(match_date_time ->> 'duration'), '') as duration,
-    to_timestamp(
-        nullif(btrim(match_date_time ->> 'startDateUTC'), ''),
-        'MM/DD/YYYY HH24:MI:SS'
-    ) at time zone 'UTC' as start_date_utc,
-    to_timestamp(
-        nullif(btrim(match_date_time ->> 'startDateLocal'), ''),
-        'MM/DD/YYYY HH24:MI:SS'
-    )::timestamp as start_date_local,
+    {{ parse_wtt_timestamp_utc('start_date_utc_raw') }} as start_date_utc,
+    {{ parse_wtt_timestamp_local('start_date_local_raw') }} as start_date_local,
+    {{ jsonb_cast_int('match_config', 'bestOfXGames', 'bestOf') }} as best_of,
+    {{ jsonb_cast_int('match_config', 'maxPointsPerGame') }} as max_points_per_game,
+    {{ jsonb_cast_int('match_config', 'advantagePerGame') }} as advantage_per_game,
+    {{ jsonb_cast_int('match_config', 'suddenDeathPoint') }} as sudden_death_point,
+    {{ jsonb_cast_int('match_config', 'maxChallengesPerCompetitor') }}
+        as max_challenges_per_competitor,
     case
         when
-            coalesce(
-                match_config ->> 'bestOfXGames',
-                match_config ->> 'bestOf'
-            ) ~ '^[0-9]+$'
-            then coalesce(
-                match_config ->> 'bestOfXGames',
-                match_config ->> 'bestOf'
-            )::integer
-    end as best_of,
-    case
-        when (match_config ->> 'maxChallengesPerCompetitor') ~ '^[0-9]+$'
-            then (match_config ->> 'maxChallengesPerCompetitor')::integer
-    end as max_challenges_per_competitor,
-    case
-        when
-            lower(
-                coalesce(
-                    match_config ->> 'ttrReview',
-                    match_config ->> 'tTRReview'
-                )
-            ) in ('true', 'false')
-            then lower(
-                coalesce(
-                    match_config ->> 'ttrReview',
-                    match_config ->> 'tTRReview'
-                )
-            )::boolean
+            lower(btrim(coalesce(match_config ->> 'ttrReview', match_config ->> 'tTRReview')))
+            in ('true', 'false')
+            then
+                lower(
+                    btrim(coalesce(match_config ->> 'ttrReview', match_config ->> 'tTRReview'))
+                )::boolean
     end as ttr_review,
     nullif(btrim(result_status_raw), '') as result_status,
-    nullif(btrim(overall_scores_raw), '') as overall_scores,
+    overall_scores,
+    overall_score_parts[1]::smallint as overall_games_p1,
+    overall_score_parts[2]::smallint as overall_games_p2,
+    overall_score_parts[3] as result_suffix,
     nullif(btrim(result_overall_scores_raw), '') as result_overall_scores,
     nullif(btrim(results_game_scores_raw), '') as results_game_scores,
     case
-        when current_game_number_raw ~ '^[0-9]+$'
-            then current_game_number_raw::integer
+        when btrim(current_game_number_raw) ~ '^[0-9]+$'
+            then btrim(current_game_number_raw)::integer
     end as current_game_number,
     nullif(btrim(comp_1 ->> 'competitiorId'), '') as comp_1_id,
     nullif(btrim(comp_1 ->> 'competitiorName'), '') as comp_1_name,
@@ -213,4 +211,4 @@ select
         when (comp_2 -> 'players' -> 1 ->> 'playerPosition') ~ '^[0-9]+$'
             then (comp_2 -> 'players' -> 1 ->> 'playerPosition')::integer
     end as comp_2_player_2_position
-from unpacked
+from prepared

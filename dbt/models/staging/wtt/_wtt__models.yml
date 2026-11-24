@@ -87,7 +87,9 @@ models:
     description: >
       Unpacked match entries table from ingest_wtt.match_entries_payloads_raw (1 row per
       event_id, document_code). Drops 0%-filled enrichment slots (extended_info,
-      match_card, messagePayload) and converts blank/'0001-01-01T00:00:00' dates to NULL.
+      match_card, messagePayload), converts blank/'0001-01-01T00:00:00' dates to NULL,
+      and parses discipline, gender_category, age_category, para_class, and round tokens
+      from document_code and sub_event_type.
     columns:
       - name: event_id
         description: WTT event identifier.
@@ -105,6 +107,49 @@ models:
         description: Sub-event category label (e.g. Men Singles, Women Doubles).
         data_tests:
           - not_null
+      - name: discipline
+        description: Normalized match discipline (singles, doubles, mixed_doubles, team).
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["singles", "doubles", "mixed_doubles", "team"]
+      - name: gender_category
+        description: Category gender parsed from character 4 of document_code (men, women, mixed).
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["men", "women", "mixed"]
+      - name: age_category
+        description: Age bracket parsed from document_code (senior or U11..U21).
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["senior", "U11", "U13", "U15", "U17", "U19", "U21"]
+      - name: is_youth
+        description: True when age_category is a youth bracket (U11..U21).
+        data_tests:
+          - not_null
+      - name: para_class
+        description: Para table tennis class code parsed from positions 16..19 of document_code (e.g. MS6, MS8, WS9, WS10; NULL for able-bodied events).
+      - name: is_para
+        description: True when para_class is present (Para showcase matches).
+        data_tests:
+          - not_null
+      - name: raw_round_token
+        description: Normalized 4-character round token from positions 23..26 of document_code mapped to seeds.round_codes (GP## for groups, FNL2 for non-team bronze medal matches).
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('round_codes')
+                field: raw_round_token
+      - name: group_number
+        description: Group number parsed from GP## round tokens (nullable for non-group rounds).
+      - name: match_number_in_round
+        description: Numeric match ordinal parsed from positions 27..30 of document_code (nullable).
       - name: full_results
         description: Upstream result status label (e.g. OFFICIAL).
         data_tests:
@@ -115,8 +160,9 @@ models:
   - name: stg_match_details
     description: >
       Unpacked match details table from ingest_wtt.match_details_raw (1 row per non-empty
-      event_id, document_code). Extracts match metadata, game/overall scores, and
-      competitor 1/2 attributes + player IDs while excluding the raw full_msg blob.
+      event_id, document_code). Extracts match metadata, matchConfig rules, parsed
+      overall/game scores, and competitor 1/2 attributes + player IDs while excluding the
+      raw full_msg blob.
     columns:
       - name: event_id
         description: WTT event identifier.
@@ -126,10 +172,33 @@ models:
         description: WTT match document code within the event.
         data_tests:
           - not_null
+      - name: best_of
+        description: Upstream matchConfig.bestOfXGames (nullable; e.g. Tokyo 2020 omits it and World Cup groups report 0).
+      - name: max_points_per_game
+        description: Configured target points per game from matchConfig.maxPointsPerGame (usually 11; 7 on Youth Smash).
+      - name: advantage_per_game
+        description: Configured minimum winning point margin per game from matchConfig.advantagePerGame (usually 2).
+      - name: sudden_death_point
+        description: Configured sudden-death point cap from matchConfig.suddenDeathPoint (99 for none; 6 on Youth Smash).
       - name: result_status
-        description: Match result status (e.g. OFFICIAL).
+        description: Match result status (OFFICIAL or LIVE).
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["OFFICIAL", "LIVE"]
       - name: overall_scores
-        description: Match score in games/sets (e.g. 3-0).
+        description: Raw match score in games/sets including optional default suffix (e.g. 3-0, 3-0 WO).
+      - name: overall_games_p1
+        description: Numeric competitor 1 games parsed from overall_scores (NULL for non-standard team breakdown strings).
+      - name: overall_games_p2
+        description: Numeric competitor 2 games parsed from overall_scores (NULL for non-standard team breakdown strings).
+      - name: result_suffix
+        description: Default result suffix parsed from overall_scores (WO, INJ, RET, DSQ, DNS, or NULL).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["WO", "INJ", "RET", "DSQ", "DNS"]
       - name: results_game_scores
         description: Comma-separated per-game scores (e.g. 11-7,11-4,11-9,0-0,0-0).
 
@@ -194,14 +263,24 @@ models:
         description: True when age_category is a youth bracket (U11..U21).
         data_tests:
           - not_null
+      - name: para_class
+        description: Para classification code parsed from document_code positions 16..19 (e.g. MS7, WS4, nullable).
+      - name: is_para
+        description: True when para_class is present on the team rubber document_code.
+        data_tests:
+          - not_null
       - name: raw_round_token
-        description: Normalized 4-character round token mapped to seeds.round_codes (GP## for groups, FNL2 for Olympic team bronze medal ties).
+        description: Normalized 4-character round token mapped to seeds.round_codes (GP## for groups including Mixed Team WC Stage 2, FNL2 for Olympic team bronze medal ties).
         data_tests:
           - not_null
           - relationships:
               arguments:
                 to: ref('round_codes')
                 field: raw_round_token
+      - name: group_number
+        description: Group number parsed from GP## round tokens (nullable for non-group rounds).
+      - name: match_number_in_round
+        description: Numeric match ordinal parsed from positions 27..30 of document_code (nullable).
       - name: sub_event_name
         description: Sub-event title from match_result (e.g. Men's Teams).
       - name: sub_event_description
@@ -231,11 +310,24 @@ models:
       - name: ttr_review
         description: Whether Table Tennis Review (TTR) was enabled (nullable).
       - name: result_status
-        description: Match result status (e.g. OFFICIAL).
+        description: Match result status (OFFICIAL or LIVE).
         data_tests:
           - not_null
+          - accepted_values:
+              arguments:
+                values: ["OFFICIAL", "LIVE"]
       - name: overall_scores
         description: Overall score in games/sets (e.g. 3-0, 3-0 WO, 2-1; nullable).
+      - name: overall_games_p1
+        description: Numeric competitor 1 games parsed from overall_scores (nullable).
+      - name: overall_games_p2
+        description: Numeric competitor 2 games parsed from overall_scores (nullable).
+      - name: result_suffix
+        description: Default result suffix parsed from overall_scores (WO, INJ, RET, DSQ, DNS, or NULL).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["WO", "INJ", "RET", "DSQ", "DNS"]
       - name: result_overall_scores
         description: Duplicate overall score string from upstream (nullable).
       - name: results_game_scores

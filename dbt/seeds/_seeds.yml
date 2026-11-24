@@ -167,9 +167,11 @@ seeds:
   - name: match_format_overrides
     description: >
       Curated overrides for known upstream WTT matchConfig.bestOfXGames gaps or
-      errors (e.g. Olympic best-of-7 formats and World Cup fixed-4-game groups).
-      Matches either a specific (event_id, document_code) or a broader
-      (event_id, discipline, round_code) scope when document_code is NULL.
+      errors (e.g. Olympic best-of-7 individual singles vs best-of-5 team
+      rubbers, World Cup fixed-4-game groups, and Mixed Team World Cup
+      fixed-3-game rubbers). Matches either a specific (event_id, document_code)
+      or a broader (event_id, discipline, is_team_rubber, round_code) scope when
+      document_code is NULL.
     columns:
       - name: override_id
         description: Stable human-readable identifier for the override rule.
@@ -182,8 +184,19 @@ seeds:
           - not_null
       - name: discipline
         description: Normalized discipline filter (e.g. singles, doubles, mixed_doubles); nullable only for exact document_code overrides.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["singles", "doubles", "mixed_doubles"]
+      - name: is_team_rubber
+        description: Optional scope filter (true = team-tie rubbers only, false = standalone matches only, NULL = both).
       - name: round_code
         description: Optional canonical round_code filter (e.g. GROUP); NULL applies to all rounds.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('round_codes')
+                field: round_code
       - name: document_code
         description: Optional exact WTT document_code for single-match overrides.
       - name: match_format
@@ -206,5 +219,29 @@ seeds:
                 values: ["games_won", "points_won"]
       - name: notes
         description: Verification rationale for the override.
+        data_tests:
+          - not_null
+
+  - name: match_score_overrides
+    description: >
+      Curated per-match score overrides for verified upstream WTT
+      resultsGameScores or overallScores defects (e.g. frozen mid-game scores
+      or zeroed-out games where comp_1_scores/comp_2_scores hold the verified
+      regulation final scores). Keyed by (event_id, document_code).
+    columns:
+      - name: event_id
+        description: WTT event identifier.
+        data_tests:
+          - not_null
+      - name: document_code
+        description: Exact WTT match or team-rubber document_code within the event.
+        data_tests:
+          - not_null
+      - name: overall_scores
+        description: Optional corrected overall score string (e.g. 3-1); NULL keeps upstream overall_scores.
+      - name: results_game_scores
+        description: Optional corrected comma-separated per-game scores string; NULL keeps upstream results_game_scores.
+      - name: notes
+        description: Verification rationale and provenance for the score override.
         data_tests:
           - not_null

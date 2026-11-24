@@ -1,4 +1,7 @@
-{{ config(materialized='table') }}
+{{ config(
+    materialized='table',
+    post_hook="analyze {{ this }}",
+) }}
 
 -- Extract individual team rubbers from teamParentData.extended_info.matches
 -- in a single pass via jsonb_to_record on each match_result object.
@@ -151,7 +154,13 @@ prepared as (
                 ),
                 ''
             )
-        ) as ttr_review_raw
+        ) as ttr_review_raw,
+        regexp_match(
+            overall_scores,
+            '^([0-9]+)-([0-9]+)(?: ([A-Z]+))?$'
+        ) as overall_score_parts,
+        substring(document_code from 23 for 4) as round_token_pos23,
+        substring(document_code from 27 for 4) as match_num_pos27
     from unpacked
 ),
 
@@ -177,44 +186,34 @@ parsed as (
             'U' || (regexp_match(document_code, '^TTE[MWX]TEAM-+U([0-9]{2})'))[1],
             'senior'
         ) as age_category,
-        (
-            regexp_match(document_code, '^TTE[MWX]TEAM-+U([0-9]{2})')
-        )[1] is not null as is_youth,
         case
-            when substring(document_code from 23 for 4) ~ '^GP[0-9]{2}$' then 'GP##'
+            when substring(document_code from 16 for 4) ~ '^[MWX][SDT][0-9]+'
+                then btrim(substring(document_code from 16 for 4), '-')
+        end as para_class,
+        case
+            when round_token_pos23 ~ '^GP[0-9]{2}$' then 'GP##'
+            when sub_event_description ilike 'stage 2 - group%' then 'GP##'
             when
-                substring(document_code from 23 for 4) = 'FNL-'
+                round_token_pos23 = 'FNL-'
                 and sub_event_description ilike '%bronze%' then 'FNL2'
-            else substring(document_code from 23 for 4)
+            else round_token_pos23
         end as raw_round_token,
+        case
+            when round_token_pos23 ~ '^GP[0-9]{2}$'
+                then substring(round_token_pos23 from 3 for 2)::smallint
+        end as group_number,
+        case
+            when match_num_pos27 ~ '^[0-9]{4}$'
+                then match_num_pos27::integer
+        end as match_number_in_round,
         sub_event_name,
         sub_event_description,
         venue_name,
         table_name,
         table_number,
         {{ jsonb_text('match_date_time', 'duration', 'Duration') }} as duration,
-        case
-            when
-                start_date_utc_raw ~ '^[0-9]{2}/[0-9]{2}/[0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2}$'
-                and start_date_utc_raw not like '01/01/0001%'
-                then
-                    to_timestamp(start_date_utc_raw, 'MM/DD/YYYY HH24:MI:SS')
-                    at time zone 'UTC'
-            when
-                start_date_utc_raw ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}:[0-9]{2}'
-                and start_date_utc_raw not like '0001-01-01%'
-                then start_date_utc_raw::timestamp at time zone 'UTC'
-        end as start_date_utc,
-        case
-            when
-                start_date_local_raw ~ '^[0-9]{2}/[0-9]{2}/[0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2}$'
-                and start_date_local_raw not like '01/01/0001%'
-                then to_timestamp(start_date_local_raw, 'MM/DD/YYYY HH24:MI:SS')::timestamp
-            when
-                start_date_local_raw ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}:[0-9]{2}'
-                and start_date_local_raw not like '0001-01-01%'
-                then start_date_local_raw::timestamp
-        end as start_date_local,
+        {{ parse_wtt_timestamp_utc('start_date_utc_raw') }} as start_date_utc,
+        {{ parse_wtt_timestamp_local('start_date_local_raw') }} as start_date_local,
         case
             when best_of_raw ~ '^[0-9]+$' then best_of_raw::integer
         end as best_of,
@@ -234,6 +233,9 @@ parsed as (
         end as ttr_review,
         result_status,
         overall_scores,
+        overall_score_parts[1]::smallint as overall_games_p1,
+        overall_score_parts[2]::smallint as overall_games_p2,
+        overall_score_parts[3] as result_suffix,
         result_overall_scores,
         results_game_scores,
         case
@@ -311,8 +313,12 @@ select
         else 'doubles'
     end as discipline,
     age_category,
-    is_youth,
+    age_category <> 'senior' as is_youth,
+    para_class,
+    para_class is not null as is_para,
     raw_round_token,
+    group_number,
+    match_number_in_round,
     sub_event_name,
     sub_event_description,
     venue_name,
@@ -329,6 +335,9 @@ select
     ttr_review,
     result_status,
     overall_scores,
+    overall_games_p1,
+    overall_games_p2,
+    result_suffix,
     result_overall_scores,
     results_game_scores,
     current_game_number,
