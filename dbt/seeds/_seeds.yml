@@ -181,7 +181,7 @@ seeds:
         data_tests:
           - not_null
       - name: discipline
-        description: Normalized discipline filter (e.g. singles); nullable when applying to all disciplines in an event or for exact document_code overrides.
+        description: Normalized discipline filter (e.g. singles, doubles, mixed_doubles); nullable only for exact document_code overrides.
       - name: round_code
         description: Optional canonical round_code filter (e.g. GROUP); NULL applies to all rounds.
       - name: document_code

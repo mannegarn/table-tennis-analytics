@@ -23,10 +23,7 @@ rubber_elements as (
     select
         s.event_id,
         s.document_code as parent_document_code,
-        coalesce(
-            nullif(btrim(m.value ->> 'value'), ''),
-            nullif(btrim(m.value ->> 'Value'), '')
-        ) as elem_document_code,
+        {{ jsonb_text('m.value', 'value', 'Value') }} as elem_document_code,
         m.value -> 'match_result' as match_result
     from source as s
     cross join
@@ -125,19 +122,10 @@ unpacked as (
 prepared as (
     select
         *,
-        nullif(
-            btrim(coalesce(match_date_time ->> 'startDateUTC', match_date_time ->> 'StartDateUTC')),
-            ''
-        ) as start_date_utc_raw,
-        nullif(
-            btrim(
-                coalesce(
-                    match_date_time ->> 'startDateLocal',
-                    match_date_time ->> 'StartDateLocal'
-                )
-            ),
-            ''
-        ) as start_date_local_raw,
+        {{ jsonb_text('match_date_time', 'startDateUTC', 'StartDateUTC') }}
+            as start_date_utc_raw,
+        {{ jsonb_text('match_date_time', 'startDateLocal', 'StartDateLocal') }}
+            as start_date_local_raw,
         coalesce(comp_1 -> 'players', comp_1 -> 'Players') -> 0 as comp_1_p1,
         coalesce(comp_1 -> 'players', comp_1 -> 'Players') -> 1 as comp_1_p2,
         coalesce(comp_2 -> 'players', comp_2 -> 'Players') -> 0 as comp_2_p1,
@@ -152,42 +140,6 @@ prepared as (
             ),
             ''
         ) as best_of_raw,
-        nullif(
-            btrim(
-                coalesce(
-                    match_config ->> 'maxPointsPerGame',
-                    match_config ->> 'MaxPointsPerGame'
-                )
-            ),
-            ''
-        ) as max_points_per_game_raw,
-        nullif(
-            btrim(
-                coalesce(
-                    match_config ->> 'advantagePerGame',
-                    match_config ->> 'AdvantagePerGame'
-                )
-            ),
-            ''
-        ) as advantage_per_game_raw,
-        nullif(
-            btrim(
-                coalesce(
-                    match_config ->> 'suddenDeathPoint',
-                    match_config ->> 'SuddenDeathPoint'
-                )
-            ),
-            ''
-        ) as sudden_death_point_raw,
-        nullif(
-            btrim(
-                coalesce(
-                    match_config ->> 'maxChallengesPerCompetitor',
-                    match_config ->> 'MaxChallengesPerCompetitor'
-                )
-            ),
-            ''
-        ) as max_challenges_raw,
         lower(
             nullif(
                 btrim(
@@ -208,7 +160,10 @@ parsed as (
         event_id,
         document_code,
         parent_document_code,
-        substring(document_code from 33 for 2)::smallint as rubber_number,
+        case
+            when substring(document_code from 33 for 2) ~ '^[0-9]{2}$'
+                then substring(document_code from 33 for 2)::smallint
+        end as rubber_number,
         case
             when btrim(team_match_no_raw) ~ '^[0-9]+$'
                 then btrim(team_match_no_raw)::integer
@@ -237,39 +192,43 @@ parsed as (
         venue_name,
         table_name,
         table_number,
-        nullif(
-            btrim(coalesce(match_date_time ->> 'duration', match_date_time ->> 'Duration')),
-            ''
-        ) as duration,
+        {{ jsonb_text('match_date_time', 'duration', 'Duration') }} as duration,
         case
             when
-                start_date_utc_raw is not null
+                start_date_utc_raw ~ '^[0-9]{2}/[0-9]{2}/[0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2}$'
                 and start_date_utc_raw not like '01/01/0001%'
                 then
                     to_timestamp(start_date_utc_raw, 'MM/DD/YYYY HH24:MI:SS')
                     at time zone 'UTC'
+            when
+                start_date_utc_raw ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}:[0-9]{2}'
+                and start_date_utc_raw not like '0001-01-01%'
+                then start_date_utc_raw::timestamp at time zone 'UTC'
         end as start_date_utc,
         case
             when
-                start_date_local_raw is not null
+                start_date_local_raw ~ '^[0-9]{2}/[0-9]{2}/[0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2}$'
                 and start_date_local_raw not like '01/01/0001%'
                 then to_timestamp(start_date_local_raw, 'MM/DD/YYYY HH24:MI:SS')::timestamp
+            when
+                start_date_local_raw ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}:[0-9]{2}'
+                and start_date_local_raw not like '0001-01-01%'
+                then start_date_local_raw::timestamp
         end as start_date_local,
         case
             when best_of_raw ~ '^[0-9]+$' then best_of_raw::integer
         end as best_of,
-        case
-            when max_points_per_game_raw ~ '^[0-9]+$' then max_points_per_game_raw::integer
-        end as max_points_per_game,
-        case
-            when advantage_per_game_raw ~ '^[0-9]+$' then advantage_per_game_raw::integer
-        end as advantage_per_game,
-        case
-            when sudden_death_point_raw ~ '^[0-9]+$' then sudden_death_point_raw::integer
-        end as sudden_death_point,
-        case
-            when max_challenges_raw ~ '^[0-9]+$' then max_challenges_raw::integer
-        end as max_challenges_per_competitor,
+        {{ jsonb_cast_int('match_config', 'maxPointsPerGame', 'MaxPointsPerGame') }}
+            as max_points_per_game,
+        {{ jsonb_cast_int('match_config', 'advantagePerGame', 'AdvantagePerGame') }}
+            as advantage_per_game,
+        {{ jsonb_cast_int('match_config', 'suddenDeathPoint', 'SuddenDeathPoint') }}
+            as sudden_death_point,
+        {{ jsonb_cast_int(
+            'match_config',
+            'maxChallengesPerCompetitor',
+            'MaxChallengesPerCompetitor'
+        ) }} as max_challenges_per_competitor,
         case
             when ttr_review_raw in ('true', 'false') then ttr_review_raw::boolean
         end as ttr_review,
@@ -281,188 +240,54 @@ parsed as (
             when btrim(current_game_number_raw) ~ '^[0-9]+$'
                 then btrim(current_game_number_raw)::integer
         end as current_game_number,
-        nullif(
-            btrim(coalesce(comp_1 ->> 'competitiorId', comp_1 ->> 'CompetitiorId')),
-            ''
-        ) as comp_1_id,
-        nullif(
-            btrim(coalesce(comp_1 ->> 'competitiorName', comp_1 ->> 'CompetitiorName')),
-            ''
-        ) as comp_1_name,
-        nullif(
-            btrim(coalesce(comp_1 ->> 'competitiorOrg', comp_1 ->> 'CompetitiorOrg')),
-            ''
-        ) as comp_1_org,
-        nullif(
-            btrim(coalesce(comp_1 ->> 'competitorType', comp_1 ->> 'CompetitorType')),
-            ''
-        ) as comp_1_type,
-        nullif(btrim(coalesce(comp_1 ->> 'scores', comp_1 ->> 'Scores')), '') as comp_1_scores,
-        nullif(btrim(coalesce(comp_1 ->> 'irm', comp_1 ->> 'Irm')), '') as comp_1_irm,
-        case
-            when btrim(coalesce(comp_1 ->> 'compTimeout', comp_1 ->> 'CompTimeout')) ~ '^[0-9]+$'
-                then btrim(coalesce(comp_1 ->> 'compTimeout', comp_1 ->> 'CompTimeout'))::integer
-        end as comp_1_timeout,
-        case
-            when
-                btrim(
-                    coalesce(
-                        comp_1 ->> 'compMedicalTimeout',
-                        comp_1 ->> 'CompMedicalTimeout'
-                    )
-                ) ~ '^[0-9]+$'
-                then btrim(
-                    coalesce(
-                        comp_1 ->> 'compMedicalTimeout',
-                        comp_1 ->> 'CompMedicalTimeout'
-                    )
-                )::integer
-        end as comp_1_medical_timeout,
-        case
-            when btrim(coalesce(comp_1 ->> 'compCardY', comp_1 ->> 'CompCardY')) ~ '^[0-9]+$'
-                then btrim(coalesce(comp_1 ->> 'compCardY', comp_1 ->> 'CompCardY'))::integer
-        end as comp_1_card_y,
-        case
-            when btrim(coalesce(comp_1 ->> 'compCardYR1', comp_1 ->> 'CompCardYR1')) ~ '^[0-9]+$'
-                then btrim(coalesce(comp_1 ->> 'compCardYR1', comp_1 ->> 'CompCardYR1'))::integer
-        end as comp_1_card_yr1,
-        case
-            when btrim(coalesce(comp_1 ->> 'compCardYR2', comp_1 ->> 'CompCardYR2')) ~ '^[0-9]+$'
-                then btrim(coalesce(comp_1 ->> 'compCardYR2', comp_1 ->> 'CompCardYR2'))::integer
-        end as comp_1_card_yr2,
-        case
-            when btrim(coalesce(comp_1_p1 ->> 'playerId', comp_1_p1 ->> 'PlayerId')) ~ '^[0-9]+$'
-                then btrim(coalesce(comp_1_p1 ->> 'playerId', comp_1_p1 ->> 'PlayerId'))::bigint
-        end as comp_1_player_1_id,
-        nullif(
-            btrim(coalesce(comp_1_p1 ->> 'playerName', comp_1_p1 ->> 'PlayerName')),
-            ''
-        ) as comp_1_player_1_name,
-        nullif(
-            btrim(coalesce(comp_1_p1 ->> 'playerOrgCode', comp_1_p1 ->> 'PlayerOrgCode')),
-            ''
-        ) as comp_1_player_1_org,
-        case
-            when
-                btrim(
-                    coalesce(comp_1_p1 ->> 'playerPosition', comp_1_p1 ->> 'PlayerPosition')
-                ) ~ '^[0-9]+$'
-                then btrim(
-                    coalesce(comp_1_p1 ->> 'playerPosition', comp_1_p1 ->> 'PlayerPosition')
-                )::integer
-        end as comp_1_player_1_position,
-        case
-            when btrim(coalesce(comp_1_p2 ->> 'playerId', comp_1_p2 ->> 'PlayerId')) ~ '^[0-9]+$'
-                then btrim(coalesce(comp_1_p2 ->> 'playerId', comp_1_p2 ->> 'PlayerId'))::bigint
-        end as comp_1_player_2_id,
-        nullif(
-            btrim(coalesce(comp_1_p2 ->> 'playerName', comp_1_p2 ->> 'PlayerName')),
-            ''
-        ) as comp_1_player_2_name,
-        nullif(
-            btrim(coalesce(comp_1_p2 ->> 'playerOrgCode', comp_1_p2 ->> 'PlayerOrgCode')),
-            ''
-        ) as comp_1_player_2_org,
-        case
-            when
-                btrim(
-                    coalesce(comp_1_p2 ->> 'playerPosition', comp_1_p2 ->> 'PlayerPosition')
-                ) ~ '^[0-9]+$'
-                then btrim(
-                    coalesce(comp_1_p2 ->> 'playerPosition', comp_1_p2 ->> 'PlayerPosition')
-                )::integer
-        end as comp_1_player_2_position,
-        nullif(
-            btrim(coalesce(comp_2 ->> 'competitiorId', comp_2 ->> 'CompetitiorId')),
-            ''
-        ) as comp_2_id,
-        nullif(
-            btrim(coalesce(comp_2 ->> 'competitiorName', comp_2 ->> 'CompetitiorName')),
-            ''
-        ) as comp_2_name,
-        nullif(
-            btrim(coalesce(comp_2 ->> 'competitiorOrg', comp_2 ->> 'CompetitiorOrg')),
-            ''
-        ) as comp_2_org,
-        nullif(
-            btrim(coalesce(comp_2 ->> 'competitorType', comp_2 ->> 'CompetitorType')),
-            ''
-        ) as comp_2_type,
-        nullif(btrim(coalesce(comp_2 ->> 'scores', comp_2 ->> 'Scores')), '') as comp_2_scores,
-        nullif(btrim(coalesce(comp_2 ->> 'irm', comp_2 ->> 'Irm')), '') as comp_2_irm,
-        case
-            when btrim(coalesce(comp_2 ->> 'compTimeout', comp_2 ->> 'CompTimeout')) ~ '^[0-9]+$'
-                then btrim(coalesce(comp_2 ->> 'compTimeout', comp_2 ->> 'CompTimeout'))::integer
-        end as comp_2_timeout,
-        case
-            when
-                btrim(
-                    coalesce(
-                        comp_2 ->> 'compMedicalTimeout',
-                        comp_2 ->> 'CompMedicalTimeout'
-                    )
-                ) ~ '^[0-9]+$'
-                then btrim(
-                    coalesce(
-                        comp_2 ->> 'compMedicalTimeout',
-                        comp_2 ->> 'CompMedicalTimeout'
-                    )
-                )::integer
-        end as comp_2_medical_timeout,
-        case
-            when btrim(coalesce(comp_2 ->> 'compCardY', comp_2 ->> 'CompCardY')) ~ '^[0-9]+$'
-                then btrim(coalesce(comp_2 ->> 'compCardY', comp_2 ->> 'CompCardY'))::integer
-        end as comp_2_card_y,
-        case
-            when btrim(coalesce(comp_2 ->> 'compCardYR1', comp_2 ->> 'CompCardYR1')) ~ '^[0-9]+$'
-                then btrim(coalesce(comp_2 ->> 'compCardYR1', comp_2 ->> 'CompCardYR1'))::integer
-        end as comp_2_card_yr1,
-        case
-            when btrim(coalesce(comp_2 ->> 'compCardYR2', comp_2 ->> 'CompCardYR2')) ~ '^[0-9]+$'
-                then btrim(coalesce(comp_2 ->> 'compCardYR2', comp_2 ->> 'CompCardYR2'))::integer
-        end as comp_2_card_yr2,
-        case
-            when btrim(coalesce(comp_2_p1 ->> 'playerId', comp_2_p1 ->> 'PlayerId')) ~ '^[0-9]+$'
-                then btrim(coalesce(comp_2_p1 ->> 'playerId', comp_2_p1 ->> 'PlayerId'))::bigint
-        end as comp_2_player_1_id,
-        nullif(
-            btrim(coalesce(comp_2_p1 ->> 'playerName', comp_2_p1 ->> 'PlayerName')),
-            ''
-        ) as comp_2_player_1_name,
-        nullif(
-            btrim(coalesce(comp_2_p1 ->> 'playerOrgCode', comp_2_p1 ->> 'PlayerOrgCode')),
-            ''
-        ) as comp_2_player_1_org,
-        case
-            when
-                btrim(
-                    coalesce(comp_2_p1 ->> 'playerPosition', comp_2_p1 ->> 'PlayerPosition')
-                ) ~ '^[0-9]+$'
-                then btrim(
-                    coalesce(comp_2_p1 ->> 'playerPosition', comp_2_p1 ->> 'PlayerPosition')
-                )::integer
-        end as comp_2_player_1_position,
-        case
-            when btrim(coalesce(comp_2_p2 ->> 'playerId', comp_2_p2 ->> 'PlayerId')) ~ '^[0-9]+$'
-                then btrim(coalesce(comp_2_p2 ->> 'playerId', comp_2_p2 ->> 'PlayerId'))::bigint
-        end as comp_2_player_2_id,
-        nullif(
-            btrim(coalesce(comp_2_p2 ->> 'playerName', comp_2_p2 ->> 'PlayerName')),
-            ''
-        ) as comp_2_player_2_name,
-        nullif(
-            btrim(coalesce(comp_2_p2 ->> 'playerOrgCode', comp_2_p2 ->> 'PlayerOrgCode')),
-            ''
-        ) as comp_2_player_2_org,
-        case
-            when
-                btrim(
-                    coalesce(comp_2_p2 ->> 'playerPosition', comp_2_p2 ->> 'PlayerPosition')
-                ) ~ '^[0-9]+$'
-                then btrim(
-                    coalesce(comp_2_p2 ->> 'playerPosition', comp_2_p2 ->> 'PlayerPosition')
-                )::integer
-        end as comp_2_player_2_position
+        {{ jsonb_text('comp_1', 'competitiorId', 'CompetitiorId') }} as comp_1_id,
+        {{ jsonb_text('comp_1', 'competitiorName', 'CompetitiorName') }} as comp_1_name,
+        {{ jsonb_text('comp_1', 'competitiorOrg', 'CompetitiorOrg') }} as comp_1_org,
+        {{ jsonb_text('comp_1', 'competitorType', 'CompetitorType') }} as comp_1_type,
+        {{ jsonb_text('comp_1', 'scores', 'Scores') }} as comp_1_scores,
+        {{ jsonb_text('comp_1', 'irm', 'Irm') }} as comp_1_irm,
+        {{ jsonb_cast_int('comp_1', 'compTimeout', 'CompTimeout') }} as comp_1_timeout,
+        {{ jsonb_cast_int('comp_1', 'compMedicalTimeout', 'CompMedicalTimeout') }}
+            as comp_1_medical_timeout,
+        {{ jsonb_cast_int('comp_1', 'compCardY', 'CompCardY') }} as comp_1_card_y,
+        {{ jsonb_cast_int('comp_1', 'compCardYR1', 'CompCardYR1') }} as comp_1_card_yr1,
+        {{ jsonb_cast_int('comp_1', 'compCardYR2', 'CompCardYR2') }} as comp_1_card_yr2,
+        {{ jsonb_cast_int('comp_1_p1', 'playerId', 'PlayerId', 'bigint') }}
+            as comp_1_player_1_id,
+        {{ jsonb_text('comp_1_p1', 'playerName', 'PlayerName') }} as comp_1_player_1_name,
+        {{ jsonb_text('comp_1_p1', 'playerOrgCode', 'PlayerOrgCode') }} as comp_1_player_1_org,
+        {{ jsonb_cast_int('comp_1_p1', 'playerPosition', 'PlayerPosition') }}
+            as comp_1_player_1_position,
+        {{ jsonb_cast_int('comp_1_p2', 'playerId', 'PlayerId', 'bigint') }}
+            as comp_1_player_2_id,
+        {{ jsonb_text('comp_1_p2', 'playerName', 'PlayerName') }} as comp_1_player_2_name,
+        {{ jsonb_text('comp_1_p2', 'playerOrgCode', 'PlayerOrgCode') }} as comp_1_player_2_org,
+        {{ jsonb_cast_int('comp_1_p2', 'playerPosition', 'PlayerPosition') }}
+            as comp_1_player_2_position,
+        {{ jsonb_text('comp_2', 'competitiorId', 'CompetitiorId') }} as comp_2_id,
+        {{ jsonb_text('comp_2', 'competitiorName', 'CompetitiorName') }} as comp_2_name,
+        {{ jsonb_text('comp_2', 'competitiorOrg', 'CompetitiorOrg') }} as comp_2_org,
+        {{ jsonb_text('comp_2', 'competitorType', 'CompetitorType') }} as comp_2_type,
+        {{ jsonb_text('comp_2', 'scores', 'Scores') }} as comp_2_scores,
+        {{ jsonb_text('comp_2', 'irm', 'Irm') }} as comp_2_irm,
+        {{ jsonb_cast_int('comp_2', 'compTimeout', 'CompTimeout') }} as comp_2_timeout,
+        {{ jsonb_cast_int('comp_2', 'compMedicalTimeout', 'CompMedicalTimeout') }}
+            as comp_2_medical_timeout,
+        {{ jsonb_cast_int('comp_2', 'compCardY', 'CompCardY') }} as comp_2_card_y,
+        {{ jsonb_cast_int('comp_2', 'compCardYR1', 'CompCardYR1') }} as comp_2_card_yr1,
+        {{ jsonb_cast_int('comp_2', 'compCardYR2', 'CompCardYR2') }} as comp_2_card_yr2,
+        {{ jsonb_cast_int('comp_2_p1', 'playerId', 'PlayerId', 'bigint') }}
+            as comp_2_player_1_id,
+        {{ jsonb_text('comp_2_p1', 'playerName', 'PlayerName') }} as comp_2_player_1_name,
+        {{ jsonb_text('comp_2_p1', 'playerOrgCode', 'PlayerOrgCode') }} as comp_2_player_1_org,
+        {{ jsonb_cast_int('comp_2_p1', 'playerPosition', 'PlayerPosition') }}
+            as comp_2_player_1_position,
+        {{ jsonb_cast_int('comp_2_p2', 'playerId', 'PlayerId', 'bigint') }}
+            as comp_2_player_2_id,
+        {{ jsonb_text('comp_2_p2', 'playerName', 'PlayerName') }} as comp_2_player_2_name,
+        {{ jsonb_text('comp_2_p2', 'playerOrgCode', 'PlayerOrgCode') }} as comp_2_player_2_org,
+        {{ jsonb_cast_int('comp_2_p2', 'playerPosition', 'PlayerPosition') }}
+            as comp_2_player_2_position
     from prepared
 )
 
@@ -473,6 +298,13 @@ select
     rubber_number,
     team_match_no,
     team_category,
+    case
+        when team_category = 'men' then 'men'
+        when team_category = 'women' then 'women'
+        when team_category = 'mixed' and rubber_number = 1 then 'mixed'
+        when team_category = 'mixed' and rubber_number = 2 then 'women'
+        when team_category = 'mixed' and rubber_number = 3 then 'men'
+    end as gender_category,
     case
         when comp_1_player_2_id is null and comp_2_player_2_id is null then 'singles'
         when team_category = 'mixed' and rubber_number = 1 then 'mixed_doubles'

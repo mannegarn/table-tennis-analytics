@@ -1,6 +1,6 @@
 # Database Data Summary
 
-- **Generated at**: 2026-11-23 23:09:19 UTC
+- **Generated at**: 2026-11-24 00:37:37 UTC
 - **Database**: `tt_stats` (5196 MB)
 - **Applied migrations**: 17
 
@@ -83,12 +83,12 @@
 | `ingest_wtt.events_unpacked` | 2,972 | 840 kB |
 | `ingest_wtt.events_by_year_raw` | 102 | 640 kB |
 | `intermediate.int_event_equipment_sponsors` | 420 | 40 kB |
-| `marts_wtt.fct_match_commentary` | 6,748,788 | 1979 MB |
+| `marts_wtt.fct_match_commentary` | 6,748,788 | 1978 MB |
 | `marts_wtt.dim_players` | 6,462 | 1064 kB |
 | `marts_wtt.dim_events` | 2,970 | 520 kB |
 | `seeds.event_sponsors_manual` | 243 | 56 kB |
 | `seeds.action_types` | 23 | 16 kB |
-| `seeds.match_format_overrides` | 12 | 16 kB |
+| `seeds.match_format_overrides` | 16 | 16 kB |
 | `seeds.result_types` | 8 | 16 kB |
 | `seeds.round_codes` | 34 | 16 kB |
 | `seeds.sponsor_domains` | 17 | 16 kB |
@@ -96,7 +96,7 @@
 | `staging_wtt.stg_match_commentary` | 6,748,788 | 1294 MB |
 | `staging_wtt.stg_match_entries` | 202,184 | 25 MB |
 | `staging_wtt.stg_match_details` | 51,790 | 24 MB |
-| `staging_wtt.stg_team_match_rubbers` | 3,212 | 1784 kB |
+| `staging_wtt.stg_team_match_rubbers` | 3,212 | 1800 kB |
 | `staging_wtt.stg_wtt_players` | 6,462 | 952 kB |
 | `staging_wtt.stg_events` | 2,972 | 552 kB |
 | `staging_wtt.stg_event_sponsors` | 1,640 | 312 kB |

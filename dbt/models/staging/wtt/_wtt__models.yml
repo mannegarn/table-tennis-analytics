@@ -166,6 +166,16 @@ models:
           - accepted_values:
               arguments:
                 values: ["men", "women", "mixed"]
+      - name: gender_category
+        description: >
+          Per-rubber gender category (men, women, mixed). For Mixed Team World
+          Cup rubbers, rubber 1 is mixed, rubber 2 is women's singles, rubber 3
+          is men's singles, and rubbers 4-5 (team-choice doubles) are NULL until
+          resolved via dim_players.gender in downstream marts.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["men", "women", "mixed"]
       - name: discipline
         description: Rubber discipline (singles, doubles, mixed_doubles).
         data_tests:
