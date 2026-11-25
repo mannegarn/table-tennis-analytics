@@ -62,6 +62,20 @@ class PlotSummaryMetrics:
     logistic_rmse: float | None
 
 
+@dataclass(frozen=True)
+class MatchPointShareMetrics:
+    """Summary statistics for the per-match point share histogram & curves."""
+
+    n_matches: int
+    n_bins: int
+    won_below_50: int
+    won_below_50_pct: float | None
+    won_at_50: int
+    binomial_rmse: float | None
+    logistic_rmse: float | None
+    logistic_slope_b: float | None
+
+
 def win_set_probability(
     point_prob: NDArray[np.float64] | float,
     *,
@@ -797,3 +811,325 @@ def build_delta_extremes(
     above = scored.sort(["Delta (pp)", "Matches"], descending=[True, True]).head(top_n)
     below = scored.sort(["Delta (pp)", "Matches"], descending=[False, True]).head(top_n)
     return above, below
+
+
+def _weighted_quantile(
+    values: NDArray[np.float64],
+    weights: NDArray[np.float64],
+    quantile: float,
+) -> float:
+    """Compute a weighted empirical quantile on pre-sorted values."""
+    order = np.argsort(values)
+    sorted_vals = values[order]
+    sorted_w = weights[order]
+    cum_w = np.cumsum(sorted_w)
+    total_w = float(cum_w[-1])
+    if total_w <= 0.0:
+        return float(sorted_vals[0])
+    idx = int(np.searchsorted(cum_w, quantile * total_w, side="left"))
+    idx = min(idx, len(sorted_vals) - 1)
+    return float(sorted_vals[idx])
+
+
+def build_match_point_share_bins(
+    matches: pl.DataFrame,
+    *,
+    best_of: int,
+    gender: str = "All",
+) -> tuple[pl.DataFrame, int, int, int]:
+    """Aggregate per-match point shares into centered 1% bins across both sides.
+
+    Each completed, played match contributes two symmetric observations:
+    ``(winner_pt_pct, won=1)`` and ``(loser_pt_pct, won=0)``. Bins use
+    ``round(0)`` so bin ``50`` covers ``[49.5%, 50.5%)`` and preserves exact
+    symmetry around ``(50%, 50%)``.
+    """
+    if best_of not in (5, 7):
+        msg = f"best_of must be 5 or 7, got {best_of}"
+        raise ValueError(msg)
+
+    empty = pl.DataFrame(
+        schema={
+            "Point % Bin": pl.Int32,
+            "Sides": pl.Int64,
+            "Wins": pl.Int64,
+            "Win %": pl.Float64,
+            "Binomial %": pl.Float64,
+            "Delta (pp)": pl.Float64,
+        }
+    )
+
+    filtered = _filter_played_matches(matches).filter(pl.col("best_of") == best_of)
+    if gender == "Men":
+        filtered = filtered.filter(pl.col("gender_category") == "men")
+    elif gender == "Women":
+        filtered = filtered.filter(pl.col("gender_category") == "women")
+
+    filtered = filtered.filter(
+        pl.col("points_won_p1").is_not_null()
+        & pl.col("points_won_p2").is_not_null()
+        & ((pl.col("points_won_p1") + pl.col("points_won_p2")) > 0)
+    )
+    if filtered.is_empty():
+        return empty, 0, 0, 0
+
+    total_pts = (pl.col("points_won_p1") + pl.col("points_won_p2")).cast(pl.Float64)
+    p1 = filtered.select(
+        (pl.col("winner_side") == 1).cast(pl.UInt32).alias("won"),
+        (100.0 * pl.col("points_won_p1").cast(pl.Float64) / total_pts).alias("pt_pct"),
+    )
+    p2 = filtered.select(
+        (pl.col("winner_side") == 2).cast(pl.UInt32).alias("won"),
+        (100.0 * pl.col("points_won_p2").cast(pl.Float64) / total_pts).alias("pt_pct"),
+    )
+    both = pl.concat([p1, p2]).filter(pl.col("pt_pct").is_finite())
+
+    n_matches = filtered.height
+    won_below_50 = both.filter((pl.col("won") == 1) & (pl.col("pt_pct") < 50.0)).height
+    won_at_50 = both.filter((pl.col("won") == 1) & (pl.col("pt_pct") == 50.0)).height
+
+    bins = (
+        both.with_columns(pl.col("pt_pct").round(0).cast(pl.Int32).alias("Point % Bin"))
+        .group_by("Point % Bin")
+        .agg(
+            pl.len().cast(pl.Int64).alias("Sides"),
+            pl.col("won").sum().cast(pl.Int64).alias("Wins"),
+            (100.0 * pl.col("won").mean()).round(2).alias("Win %"),
+        )
+        .sort("Point % Bin")
+    )
+
+    xs = bins["Point % Bin"].to_numpy().astype(np.float64)
+    expected = np.round(
+        compute_binomial_expected(xs, mode="point_to_match", best_of=best_of),
+        2,
+    )
+    bins = bins.with_columns(pl.Series("Binomial %", expected)).with_columns(
+        (pl.col("Win %") - pl.col("Binomial %")).round(2).alias("Delta (pp)")
+    )
+    return bins, n_matches, won_below_50, won_at_50
+
+
+def build_match_point_share_chart(
+    bins_df: pl.DataFrame,
+    *,
+    best_of: int,
+    n_matches: int,
+    won_below_50: int,
+    won_at_50: int,
+    gender_label: str = "All",
+    show_logistic_fit: bool = True,
+    height: int = 470,
+) -> tuple[go.Figure, MatchPointShareMetrics]:
+    """Build a 1%-binned match point-share histogram with Binomial & Logistic curves."""
+    if bins_df.is_empty():
+        empty_fig = go.Figure()
+        empty_fig.add_annotation(
+            text="No matches match the current filter selection.",
+            xref="paper",
+            yref="paper",
+            x=0.5,
+            y=0.5,
+            showarrow=False,
+            font={"size": 14},
+        )
+        empty_fig = style_figure(empty_fig, height=320)
+        return empty_fig, MatchPointShareMetrics(
+            n_matches=0,
+            n_bins=0,
+            won_below_50=0,
+            won_below_50_pct=None,
+            won_at_50=0,
+            binomial_rmse=None,
+            logistic_rmse=None,
+            logistic_slope_b=None,
+        )
+
+    xs_all = bins_df["Point % Bin"].to_numpy().astype(np.float64)
+    ys_all = bins_df["Win %"].to_numpy().astype(np.float64)
+    weights_all = bins_df["Sides"].to_numpy().astype(np.float64)
+    exp_all = bins_df["Binomial %"].to_numpy().astype(np.float64)
+
+    # Focus the x-axis on the active observed span (symmetric around 50%)
+    # rather than plotting empty 0%-25% / 75%-100% tails.
+    p025 = _weighted_quantile(xs_all, weights_all, 0.025)
+    p975 = _weighted_quantile(xs_all, weights_all, 0.975)
+    raw_half_span = max(50.0 - p025, p975 - 50.0)
+    snapped_half_span = float(np.ceil((raw_half_span + 1.0) / 5.0) * 5.0)
+    half_span = float(np.clip(snapped_half_span, 15.0, 25.0))
+    x_range = [50.0 - half_span, 50.0 + half_span]
+
+    visible = bins_df.filter(
+        (pl.col("Point % Bin") >= x_range[0]) & (pl.col("Point % Bin") <= x_range[1])
+    )
+    vis_xs = visible["Point % Bin"].to_list()
+    vis_ys = visible["Win %"].to_list()
+    customdata = np.column_stack(
+        [
+            [x - 0.5 for x in vis_xs],
+            [x + 0.5 for x in vis_xs],
+            visible["Wins"].to_list(),
+            visible["Sides"].to_list(),
+            visible["Binomial %"].to_list(),
+            visible["Delta (pp)"].to_list(),
+        ]
+    )
+
+    fig = go.Figure()
+
+    # 1. 1%-binned empirical histogram bars
+    fig.add_trace(
+        go.Bar(
+            x=vis_xs,
+            y=vis_ys,
+            width=0.86,
+            name="1% bin empirical Win %",
+            marker={
+                "color": "rgba(56, 189, 248, 0.32)",
+                "line": {"color": "#38BDF8", "width": 1.0},
+            },
+            customdata=customdata,
+            hovertemplate=(
+                "<b>Match Point Share: %{customdata[0]:.1f}%&ndash;"
+                "%{customdata[1]:.1f}%</b><br>"
+                "Empirical Win %: %{y:.1f}% "
+                "(%{customdata[2]:,} / %{customdata[3]:,} sides)<br>"
+                "Binomial expected: %{customdata[4]:.1f}% "
+                "(%{customdata[5]:+.1f} pp)<extra></extra>"
+            ),
+        )
+    )
+
+    # 2. Connected empirical trend line across 1% bins
+    fig.add_trace(
+        go.Scatter(
+            x=vis_xs,
+            y=vis_ys,
+            mode="lines+markers",
+            name="Empirical trend line",
+            line={"color": "#F59E0B", "width": 2.2},
+            marker={"color": "#F59E0B", "size": 5},
+            hoverinfo="skip",
+        )
+    )
+
+    # 3. Exact theoretical Binomial curve (Point -> Match)
+    curve_x = np.linspace(x_range[0], x_range[1], 180, dtype=np.float64)
+    binom_y = compute_binomial_expected(curve_x, mode="point_to_match", best_of=best_of)
+    binom_label = f"Binomial model (11-pt → Bo{best_of})"
+    fig.add_trace(
+        go.Scatter(
+            x=curve_x.tolist(),
+            y=binom_y.tolist(),
+            mode="lines",
+            name=binom_label,
+            line={"color": BINOMIAL_CURVE_COLOR, "width": 2.6},
+            hovertemplate=(
+                f"<b>{binom_label}</b><br>"
+                "Point Share: %{x:.1f}%<br>"
+                "Expected Match Win %: %{y:.1f}%<extra></extra>"
+            ),
+        )
+    )
+
+    # 4. Optional 2-parameter Logistic S-curve empirical fit
+    dense_bins = bins_df.filter(pl.col("Sides") >= 5)
+    fit_source = dense_bins if dense_bins.height >= 4 else bins_df
+    fit = fit_logistic_curve(
+        fit_source["Point % Bin"].to_numpy().astype(np.float64),
+        fit_source["Win %"].to_numpy().astype(np.float64),
+    )
+
+    logistic_rmse: float | None = None
+    logistic_slope_b: float | None = None
+    if fit is not None:
+        z_all = (xs_all - 50.0) / 100.0
+        eta_all = np.clip(fit.intercept_a + fit.slope_b * z_all, -25.0, 25.0)
+        pred_all = 100.0 / (1.0 + np.exp(-eta_all))
+        logistic_rmse = float(
+            np.sqrt(np.average((ys_all - pred_all) ** 2, weights=weights_all))
+        )
+        logistic_slope_b = fit.slope_b
+
+        if show_logistic_fit:
+            z_curve = (curve_x - 50.0) / 100.0
+            eta_curve = np.clip(fit.intercept_a + fit.slope_b * z_curve, -25.0, 25.0)
+            log_curve_y = 100.0 / (1.0 + np.exp(-eta_curve))
+            fig.add_trace(
+                go.Scatter(
+                    x=curve_x.tolist(),
+                    y=log_curve_y.tolist(),
+                    mode="lines",
+                    name="Empirical logistic S-curve",
+                    line={
+                        "color": LOGISTIC_CURVE_COLOR,
+                        "width": 2.4,
+                        "dash": "dash",
+                    },
+                    hovertemplate=(
+                        "<b>Empirical logistic S-curve</b><br>"
+                        "Point Share: %{x:.1f}%<br>"
+                        "Fitted Match Win %: %{y:.1f}%<extra></extra>"
+                    ),
+                )
+            )
+
+    scope_parts = [f"n = {n_matches:,} matches", f"Best of {best_of}"]
+    if gender_label != "All":
+        scope_parts.append(gender_label)
+    subtitle = " · ".join(scope_parts)
+
+    fig = style_figure(fig, height=height, legend_bottom=True)
+    fig.update_layout(
+        barmode="overlay",
+        title={
+            "text": (
+                "<b>Match Win Probability vs Match Point Share</b>"
+                f"<br><sup>{subtitle}</sup>"
+            ),
+            "x": 0.01,
+            "xanchor": "left",
+            "font": {"size": 16},
+        },
+        margin={"l": 52, "r": 18, "t": 68, "b": 108},
+    )
+
+    fig.add_vline(
+        x=50.0,
+        line_width=1,
+        line_dash="dot",
+        line_color="rgba(128, 128, 128, 0.35)",
+    )
+    fig.add_hline(
+        y=50.0,
+        line_width=1,
+        line_dash="dot",
+        line_color="rgba(128, 128, 128, 0.35)",
+    )
+
+    fig.update_xaxes(
+        title_text="Match Point Share (%)",
+        range=x_range,
+        ticksuffix="%",
+    )
+    fig.update_yaxes(
+        title_text="Match Win Probability (%)",
+        range=[0.0, 103.0],
+        ticksuffix="%",
+    )
+
+    binomial_rmse = float(
+        np.sqrt(np.average((ys_all - exp_all) ** 2, weights=weights_all))
+    )
+    won_below_50_pct = (100.0 * won_below_50 / n_matches) if n_matches > 0 else None
+
+    return fig, MatchPointShareMetrics(
+        n_matches=n_matches,
+        n_bins=bins_df.height,
+        won_below_50=won_below_50,
+        won_below_50_pct=won_below_50_pct,
+        won_at_50=won_at_50,
+        binomial_rmse=binomial_rmse,
+        logistic_rmse=logistic_rmse,
+        logistic_slope_b=logistic_slope_b,
+    )

@@ -11,6 +11,8 @@ from app.lib.win_rates import (
     build_combined_point_set_stats,
     build_delta_extremes,
     build_format_win_rates,
+    build_match_point_share_bins,
+    build_match_point_share_chart,
     build_win_rate_scatter,
     compute_binomial_expected,
     filter_win_rate_rows,
@@ -150,8 +152,85 @@ def test_aggregations_exclude_walkovers_and_separate_formats() -> None:
     assert above["Delta (pp)"][0] >= below["Delta (pp)"][0]
 
 
-def test_win_rates_page_renders_and_filters_work() -> None:
+def test_match_point_share_bins_symmetry_and_chart() -> None:
+    matches = pl.DataFrame(
+        {
+            "match_sk": [1, 2, 3, 4, 5],
+            "p1_player_sk": [10, 10, 10, 10, 10],
+            "p2_player_sk": [20, 20, 20, 20, 20],
+            "winner_side": [1, 1, 2, 1, 1],
+            "gender_category": ["men", "men", "women", "men", "men"],
+            "best_of": [5, 5, 5, 7, 5],
+            "result_type": ["played", "played", "played", "played", "walkover"],
+            "is_default_result": [False, False, False, False, True],
+            "has_result": [True, True, True, True, True],
+            # Match 1: winner p1 won <50% points (45 vs 55 -> 45%)
+            # Match 2: exact 50% tie (50 vs 50 -> 50%)
+            # Match 3: women's Bo5 (40 vs 60 -> winner p2 has 60%)
+            # Match 4: Bo7 (60 vs 40 -> winner p1 has 60%)
+            # Match 5: walkover -> must be excluded
+            "points_won_p1": [45, 50, 40, 60, 11],
+            "points_won_p2": [55, 50, 60, 40, 0],
+        }
+    )
+
+    with pytest.raises(ValueError, match="best_of must be 5 or 7"):
+        build_match_point_share_bins(matches, best_of=3)
+
+    bins_bo5, n_matches, won_lt50, won_at50 = build_match_point_share_bins(
+        matches, best_of=5, gender="All"
+    )
+    assert n_matches == 3
+    assert won_lt50 == 1
+    assert won_at50 == 1
+
+    # Symmetry: 50% bin has 50.0% win rate; bin 45% + bin 55% == 100.0%
+    by_bin = {r["Point % Bin"]: r for r in bins_bo5.iter_rows(named=True)}
+    assert by_bin[50]["Win %"] == 50.0
+    assert by_bin[45]["Win %"] + by_bin[55]["Win %"] == pytest.approx(100.0)
+    assert by_bin[40]["Win %"] + by_bin[60]["Win %"] == pytest.approx(100.0)
+
+    # Gender filter isolates Women's Bo5 (1 match)
+    bins_w, n_w, w_lt50, _ = build_match_point_share_bins(
+        matches, best_of=5, gender="Women"
+    )
+    assert n_w == 1
+    assert w_lt50 == 0
+    assert bins_w["Point % Bin"].to_list() == [40, 60]
+
+    # Chart builder: 4 traces (Bar + Trend + Binomial + Logistic) and focused x-span
+    fig, metrics = build_match_point_share_chart(
+        bins_bo5,
+        best_of=5,
+        n_matches=n_matches,
+        won_below_50=won_lt50,
+        won_at_50=won_at50,
+        show_logistic_fit=True,
+    )
+    assert metrics.n_matches == 3
+    assert metrics.binomial_rmse is not None
+    assert len(fig.data) == 4
+    x_range = list(fig.layout.xaxis.range)
+    assert x_range[0] > 0.0
+    assert x_range[1] < 100.0
+
+    # Empty bins handled cleanly
+    empty_fig, empty_metrics = build_match_point_share_chart(
+        bins_bo5.head(0),
+        best_of=5,
+        n_matches=0,
+        won_below_50=0,
+        won_at_50=0,
+    )
+    assert empty_metrics.n_matches == 0
+    assert len(empty_fig.data) == 0
+
+
+def test_win_rates_page_renders_and_filters_work(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     app_dir = project_root() / "app"
+    monkeypatch.syspath_prepend(str(app_dir))
     page = AppTest.from_file(app_dir / "pages" / "3_Win_Rates.py").run(timeout=30)
     assert not page.exception
 
@@ -160,16 +239,20 @@ def test_win_rates_page_renders_and_filters_work() -> None:
     for slider in page.slider:
         assert slider.value == 10
 
-    # Verify section ordering: Match vs Point -> Match vs Set -> Set vs Point
+    # Verify section ordering: 1..3 player plots + 4 per-match histogram
     subheaders = [s.value for s in page.subheader]
-    assert subheaders[:3] == [
+    assert subheaders[:4] == [
         "1. Match Win Rate vs Point Win Rate",
         "2. Match Win Rate vs Set Win Rate",
         "3. Set Win Rate vs Point Win Rate",
+        "4. Match Point Share vs Match Win Probability (Per-Match)",
     ]
 
-    # Toggle logistic S-curve on Plot 1 and adjust Plot 2 Min Matches
+    # Toggle logistic S-curve on Plot 1, adjust Plot 2, and test Plot 4 controls
     page.toggle(key="pt_vs_match_logistic").set_value(True)
     page.slider(key="set_vs_match_min_matches").set_value(5)
+    page.segmented_control(key="match_pt_share_gender").set_value("Women")
+    page.segmented_control(key="match_pt_share_format").set_value("Best of 7")
+    page.toggle(key="match_pt_share_logistic").set_value(False)
     page.run(timeout=30)
     assert not page.exception

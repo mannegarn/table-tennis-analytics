@@ -106,11 +106,21 @@ div[data-testid="stMetricValue"] {
 }
 
 .tt-insight-card li {
-    margin-bottom: 0.4rem;
+    margin-bottom: 0.65rem;
 }
 
 .tt-insight-card li:last-child {
     margin-bottom: 0;
+}
+
+.tt-insight-card ul ul {
+    margin-top: 0.35rem;
+    margin-bottom: 0.15rem;
+    padding-left: 1.2rem;
+}
+
+.tt-insight-card ul ul li {
+    margin-bottom: 0.3rem;
 }
 
 /* Highlighted summary box (e.g. binomial & S-curve overview) */
@@ -126,6 +136,14 @@ div[data-testid="stMetricValue"] {
     font-size: 0.93rem;
     line-height: 1.55;
     color: var(--text-color);
+}
+
+.tt-summary-box li {
+    margin-bottom: 0.45rem;
+}
+
+.tt-summary-box li:last-child {
+    margin-bottom: 0;
 }
 
 .tt-summary-box a {
