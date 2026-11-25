@@ -368,8 +368,25 @@ dbt output, so a broken or unrun dbt model cannot stop data collection.
 `dbt/dbt_project.yml` defines the project and per-layer schema routing, while
 `dbt/profiles.yml` points at the same PostgreSQL instance. Ingestion tables in
 `ingest_wtt` and `ingest_ittf` are declared as dbt sources, not models.
-All `dbt/seeds/*.csv` files stay local-only and gitignored (CI creates header
-stubs for `dbt parse`).
+All `dbt/seeds/*.csv` files stay local-only and gitignored (CI creates
+header-only stubs so `dbt build` can run).
+
+## Data availability
+
+The code is public; the data is not. This is deliberate:
+
+- **Raw payloads** (`ingest_wtt`, `ingest_ittf`) live only in the local
+  PostgreSQL warehouse and are never committed.
+- **Curated reference data** (`dbt/seeds/*.csv`: result types, round codes,
+  score, format, sponsor and player-profile overrides) is hand-maintained,
+  kept out of Git, and backed up privately outside this repository.
+- **Consequence:** a fresh clone can run the pipeline and collect its own
+  data, but cannot reproduce the marts exactly without the private seeds.
+- **CI** builds every dbt model and runs every test against empty ingest
+  tables and header-only seeds. That proves the SQL compiles and executes;
+  data-level checks run locally with `make dbt-run`.
+- **Dashboard snapshots** (`app/data/*.parquet`) are currently tracked so
+  Streamlit Community Cloud can serve them (see below and ADR 0014).
 
 ## Dashboard (Streamlit)
 
