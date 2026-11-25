@@ -9,8 +9,9 @@ that already exists.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterator
-from typing import Any
+from typing import Any, NoReturn
 
 import psycopg
 import pytest
@@ -20,6 +21,18 @@ from pydantic import ValidationError
 
 from tt_stats.core.config import Settings, get_settings
 from tt_stats.core.db import get_connection
+
+
+def is_ci() -> bool:
+    """Return True when running inside a CI environment (e.g. GitHub Actions)."""
+    return os.environ.get("CI", "").strip().lower() in {"1", "true", "yes"}
+
+
+def skip_or_fail_db(message: str) -> NoReturn:
+    """Fail loudly in CI when the database is unavailable, skip locally."""
+    if is_ci():
+        pytest.fail(message)
+    pytest.skip(message)
 
 
 def _database_name(dsn: str) -> str | None:
@@ -47,7 +60,7 @@ def test_settings() -> Iterator[Settings]:
     try:
         settings = Settings()  # pyright: ignore[reportCallIssue]
     except ValidationError as error:
-        pytest.skip(f"Database settings are incomplete: {error}")
+        skip_or_fail_db(f"Database settings are incomplete: {error}")
 
     application_db = _database_name(settings.dsn)
     test_db = _database_name(settings.test_dsn)

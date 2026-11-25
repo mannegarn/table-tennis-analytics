@@ -2,7 +2,7 @@
 # clean machine so they cannot be skipped with --no-verify.
 #
 #   quality  ruff, mypy, sqlfluff          (make check)
-#   test     pytest against a real Postgres, then dbt parse
+#   test     pytest against a real Postgres, then dbt build
 #   secrets  gitleaks over the full git history
 
 name: CI
@@ -34,7 +34,7 @@ jobs:
         run: uv export --no-hashes --no-emit-project | uvx pip-audit -r /dev/stdin
 
   test:
-    name: Tests and dbt parse
+    name: Tests and dbt build
     runs-on: ubuntu-latest
     # Throwaway credentials for the service container below; nothing real.
     env:
@@ -74,8 +74,8 @@ jobs:
       # because TT_LIVE_API_TESTS is not set.
       - run: uv run pytest
       # dbt/seeds/*.csv are local-only (gitignored); create header-only stubs so
-      # dbt parse can resolve every ref(...) on a clean CI checkout.
-      - name: Stub gitignored dbt seeds for dbt parse
+      # dbt build can seed empty tables and run every model and test on CI.
+      - name: Stub gitignored dbt seeds for dbt build
         run: |
           stub_seed() {
             local path="$1"
@@ -91,8 +91,10 @@ jobs:
           stub_seed dbt/seeds/result_types.csv "result_code,result_type,is_default_result,is_rating_eligible,description"
           stub_seed dbt/seeds/round_codes.csv "raw_round_token,round_code,round_name,round_stage,round_order"
           stub_seed dbt/seeds/sponsor_domains.csv "domain,sponsor_name"
-      # Compiles every model and resolves every ref/source without a build.
-      - run: uv run dbt parse --project-dir dbt --profiles-dir dbt
+      - name: Migrate warehouse database for dbt
+        run: uv run tt-db-migrate
+      - name: Build and test dbt models
+        run: uv run dbt build --project-dir dbt --profiles-dir dbt
 
   secrets:
     name: Secret scan

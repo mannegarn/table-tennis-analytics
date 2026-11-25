@@ -11,6 +11,7 @@ from collections.abc import Iterator
 import psycopg
 import pytest
 
+from tests.conftest import skip_or_fail_db
 from tt_stats.core.config import Settings
 from tt_stats.core.db import get_connection
 from tt_stats.core.migrations import apply_migrations
@@ -45,7 +46,7 @@ def _test_database(test_settings: Settings) -> None:
         with psycopg.connect(test_settings.test_dsn):
             pass
     except psycopg.OperationalError as error:
-        pytest.skip(f"PostgreSQL not available: {error}")
+        skip_or_fail_db(f"PostgreSQL not available: {error}")
 
     apply_migrations()
 

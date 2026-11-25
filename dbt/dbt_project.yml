@@ -47,6 +47,11 @@ models:
 seeds:
   tt_stats:
     +schema: seeds
+    action_types:
+      +column_types:
+        action_type: varchar
+        action_name: varchar
+        action_category: varchar
     event_sponsors_manual:
       +column_types:
         event_id: integer
@@ -92,6 +97,14 @@ seeds:
         document_code: varchar
         overall_scores: varchar
         results_game_scores: varchar
+        notes: varchar
+    player_identity_overrides:
+      +column_types:
+        source_system: varchar
+        source_player_id: varchar
+        target_ittf_id: varchar
+        target_source_system: varchar
+        target_source_player_id: varchar
         notes: varchar
     player_profile_overrides:
       +column_types:
