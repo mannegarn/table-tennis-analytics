@@ -1,17 +1,15 @@
-# Custom Light and Dark palettes while keeping Streamlit's Light / Dark / System
-# toggle active under the top-right menu (⋮ -> Settings -> Theme).
-#
-# Soft off-white in Light mode, soft slate-charcoal in Dark mode,
-# unified with a purple primary accent.
+# Custom Light and Dark purple palettes while keeping Streamlit's Light / Dark /
+# System toggle active under the top-right menu (⋮ -> Settings -> Theme).
+# Paired with the warm orange (#F59E0B) card borders in app/lib/theme.py.
 
 [theme.light]
 primaryColor = "#7C3AED"
-backgroundColor = "#F2F1F6"
-secondaryBackgroundColor = "#E6E4EE"
-textColor = "#1F202B"
+backgroundColor = "#EAE5FA"
+secondaryBackgroundColor = "#DDD5F7"
+textColor = "#1E1B4B"
 
 [theme.dark]
 primaryColor = "#A78BFA"
-backgroundColor = "#1E202B"
-secondaryBackgroundColor = "#282B3A"
-textColor = "#ECEEF4"
+backgroundColor = "#1B162C"
+secondaryBackgroundColor = "#27203F"
+textColor = "#F3F0FF"
