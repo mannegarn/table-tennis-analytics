@@ -21,7 +21,8 @@ The project warehouse runs in a local PostgreSQL instance managed via Docker Com
      - `fct_senior_singles_matches.parquet`
      - `fct_senior_singles_games.parquet`
      - `catalog_matches_by_event_gender.parquet` (pre-aggregated from `marts.dim_matches`)
-   - It also writes `app/data/snapshot_metadata.json` containing `last_collected_at_utc` (derived from `max(finished_at)` where `status = 'succeeded'` in `ingest_wtt.ingest_runs`) and `exported_at_utc` so the dashboard can surface data freshness accurately.
+   - It also writes `app/data/snapshot_metadata.json` containing `marts_built_at_utc` (from `marts.mart_metadata`), `last_collected_at_utc` (from `ingest_wtt.ingest_runs`), and `exported_at_utc` so the dashboard can surface data freshness accurately.
+   - Exports are staged in a sibling temporary directory and fail if any query returns zero rows, ensuring partial or empty snapshots never overwrite existing files.
 2. **Never export raw point logs or player birth dates:**
    - `marts.fct_match_commentary` is never exported raw to `app/data/`. Any point-level metrics exposed in the dashboard must be pre-aggregated in `src/tt_stats/analytics/` (or a compact summary query) rather than shipping raw commentary rows.
    - Exact dates of birth (`dob`) stay in the private PostgreSQL warehouse; `dim_players.parquet` exports only senior-singles players and integer `age`.

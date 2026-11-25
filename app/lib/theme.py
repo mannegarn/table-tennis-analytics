@@ -114,7 +114,7 @@ def render_sidebar_footer(snapshot_timestamp: str | None) -> None:
     with st.sidebar:
         st.caption("**Built by Marcus Annegarn**")
         if snapshot_timestamp:
-            st.caption(f"Data collected: `{snapshot_timestamp}`")
+            st.caption(f"Marts built: `{snapshot_timestamp}`")
         st.caption(
             "Disclaimer: Independent, non-commercial analytics project using "
             "publicly available WTT and ITTF match records. Not affiliated with "

@@ -94,7 +94,11 @@ def _load_snapshot_timestamp_cached(
     if meta_path.exists():
         try:
             payload = json.loads(meta_path.read_text(encoding="utf-8"))
-            ts = payload.get("last_collected_at_utc") or payload.get("exported_at_utc")
+            ts = (
+                payload.get("marts_built_at_utc")
+                or payload.get("last_collected_at_utc")
+                or payload.get("exported_at_utc")
+            )
             if isinstance(ts, str) and ts:
                 return ts
         except (OSError, json.JSONDecodeError):

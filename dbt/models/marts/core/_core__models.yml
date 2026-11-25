@@ -13,3 +13,10 @@ models:
     description: Unified senior able-bodied singles per-game fact view (currently backed by wtt__fct_senior_singles_games).
   - name: fct_match_commentary
     description: Unified match commentary fact view (currently backed by wtt__fct_match_commentary).
+  - name: mart_metadata
+    description: Single-row build metadata table stamped whenever dbt builds the marts layer.
+    columns:
+      - name: built_at_utc
+        description: UTC timestamp when dbt last built the marts.
+        data_tests:
+          - not_null

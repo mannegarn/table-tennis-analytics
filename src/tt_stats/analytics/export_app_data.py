@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import tempfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -172,6 +173,31 @@ from ingest_wtt.ingest_runs
 where status = 'succeeded'
 """
 
+MARTS_BUILT_SQL = """
+select built_at_utc
+from marts.mart_metadata
+limit 1
+"""
+
+
+def _format_utc(ts: datetime | None) -> str | None:
+    if ts is None:
+        return None
+    return ts.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
+
+
+def _fetch_marts_built_at(
+    conn: psycopg.Connection[dict[str, object]],
+) -> datetime | None:
+    has_table_row = conn.execute(
+        "select to_regclass('marts.mart_metadata') is not null as exists"
+    ).fetchone()
+    if not has_table_row or not has_table_row["exists"]:
+        return None
+    row = conn.execute(MARTS_BUILT_SQL).fetchone()
+    value = row["built_at_utc"] if row else None
+    return value if isinstance(value, datetime) else None
+
 
 def default_output_dir() -> Path:
     """Return the default ``app/data`` directory at the repository root."""
@@ -179,7 +205,12 @@ def default_output_dir() -> Path:
 
 
 def export_all(settings: Settings, output_dir: Path | None = None) -> dict[str, int]:
-    """Run every export query against Postgres and write Parquet files.
+    """Run every export query against Postgres and write Parquet files atomically.
+
+    All Parquet files and ``snapshot_metadata.json`` are written into a sibling
+    temporary directory first and moved into ``output_dir`` only after every
+    query produces a non-empty DataFrame. Any failure or empty result leaves
+    pre-existing files in ``output_dir`` untouched.
 
     Returns a mapping of ``filename -> row_count`` for logging and tests.
     """
@@ -187,39 +218,62 @@ def export_all(settings: Settings, output_dir: Path | None = None) -> dict[str, 
     target_dir.mkdir(parents=True, exist_ok=True)
 
     counts: dict[str, int] = {}
-    with psycopg.connect(settings.dsn, row_factory=dict_row) as conn:
-        for item in EXPORT_QUERIES:
-            rows = conn.execute(item.sql).fetchall()
-            df = pl.DataFrame(rows, infer_schema_length=None)
-            out_path = target_dir / item.filename
-            df.write_parquet(out_path, compression="zstd")
-            counts[item.filename] = df.height
-            size_kb = out_path.stat().st_size / 1024
-            logger.info(
-                "Exported %s (%d rows, %.1f KB)",
-                item.filename,
-                df.height,
-                size_kb,
-            )
+    with tempfile.TemporaryDirectory(
+        prefix=f".{target_dir.name}.tmp-",
+        dir=target_dir.parent,
+    ) as tmp_dir_name:
+        staging_dir = Path(tmp_dir_name)
+        staged_files: list[Path] = []
 
-        # Record the last successful ingestion timestamp (and export time)
-        last_collected_row = conn.execute(LAST_COLLECTED_SQL).fetchone()
-    last_collected_at = (
-        last_collected_row["last_collected_at"] if last_collected_row else None
-    )
-    last_collected_str = (
-        last_collected_at.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
-        if last_collected_at is not None
-        else None
-    )
-    metadata = {
-        "last_collected_at_utc": last_collected_str,
-        "exported_at_utc": datetime.now(tz=UTC).strftime("%Y-%m-%d %H:%M UTC"),
-    }
-    (target_dir / "snapshot_metadata.json").write_text(
-        json.dumps(metadata, indent=2) + "\n",
-        encoding="utf-8",
-    )
+        with psycopg.connect(settings.dsn, row_factory=dict_row) as conn:
+            for item in EXPORT_QUERIES:
+                rows = conn.execute(item.sql).fetchall()
+                if not rows:
+                    raise RuntimeError(
+                        f"Export query for {item.filename} returned 0 rows; "
+                        "aborting export"
+                    )
+                df = pl.DataFrame(rows, infer_schema_length=None)
+                if df.is_empty() or df.width == 0:
+                    raise RuntimeError(
+                        f"Export query for {item.filename} produced an empty frame; "
+                        "aborting export"
+                    )
+                staged_path = staging_dir / item.filename
+                df.write_parquet(staged_path, compression="zstd")
+                staged_files.append(staged_path)
+                counts[item.filename] = df.height
+                size_kb = staged_path.stat().st_size / 1024
+                logger.info(
+                    "Exported %s (%d rows, %.1f KB)",
+                    item.filename,
+                    df.height,
+                    size_kb,
+                )
+
+            marts_built_at = _fetch_marts_built_at(conn)
+            last_collected_row = conn.execute(LAST_COLLECTED_SQL).fetchone()
+
+        last_collected_raw = (
+            last_collected_row["last_collected_at"] if last_collected_row else None
+        )
+        last_collected_at = (
+            last_collected_raw if isinstance(last_collected_raw, datetime) else None
+        )
+        metadata = {
+            "marts_built_at_utc": _format_utc(marts_built_at),
+            "last_collected_at_utc": _format_utc(last_collected_at),
+            "exported_at_utc": _format_utc(datetime.now(tz=UTC)),
+        }
+        staged_meta = staging_dir / "snapshot_metadata.json"
+        staged_meta.write_text(
+            json.dumps(metadata, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        staged_files.append(staged_meta)
+
+        for staged_path in staged_files:
+            staged_path.replace(target_dir / staged_path.name)
 
     return counts
 
