@@ -16,11 +16,11 @@ dbt/logs/
 dbt/.user.yml
 
 # Data
-data/
-app/data/
+/data/
 *.csv
 !dbt/seeds/*.csv
 *.parquet
+!app/data/*.parquet
 
 # Local scratch scripts and their captured payloads. API probes are throwaway
 # tooling, so the whole directory stays out of the repository.
