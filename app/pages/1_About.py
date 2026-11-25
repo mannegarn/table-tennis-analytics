@@ -58,7 +58,10 @@ st.markdown(
     "score, format, sponsor, and player-profile corrections.\n"
     "- **Analysis & Front End:** Downstream statistics and ratings are "
     "computed with **Polars**, exported to compact **Parquet** snapshots, and "
-    "visualised in this **Streamlit** app."
+    "visualised in this **Streamlit** app.\n\n"
+    "The current launch version was developed with AI assistance using "
+    "**DeepSeek** and **Google Antigravity**, building upon an earlier "
+    "prototype built by hand in Jupyter notebooks."
 )
 
 # ---------------------------------------------------------------------------

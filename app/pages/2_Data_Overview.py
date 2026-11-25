@@ -126,10 +126,17 @@ st.subheader("Players and Matches by Gender")
 
 gender_summary_df = pl.DataFrame(
     {
-        "Metric": ["Players", "Matches (Senior Singles)"],
-        "Men": [f"{stats.mens_players:,}", f"{stats.senior_mens_matches:,}"],
-        "Women": [f"{stats.womens_players:,}", f"{stats.senior_womens_matches:,}"],
-        "Total": [f"{stats.total_players:,}", f"{stats.senior_total_matches:,}"],
+        "Category": ["Men", "Women", "Total"],
+        "Players": [
+            f"{stats.mens_players:,}",
+            f"{stats.womens_players:,}",
+            f"{stats.total_players:,}",
+        ],
+        "Matches (Senior Singles)": [
+            f"{stats.senior_mens_matches:,}",
+            f"{stats.senior_womens_matches:,}",
+            f"{stats.senior_total_matches:,}",
+        ],
     }
 )
 st.dataframe(gender_summary_df.to_pandas(), hide_index=True, width="stretch")
