@@ -73,9 +73,9 @@ def _render_chart_caption(summary: ServeReceiveChartSummary) -> None:
 def _table_column_config() -> dict[str, Any]:
     """Return clean Streamlit column formatting for the leaderboard table."""
     return {
-        "Player": st.column_config.TextColumn("Player", width="medium"),
-        "Org": st.column_config.TextColumn("Org", width="small"),
-        "Style": st.column_config.TextColumn("Style", width="small"),
+        "Player": st.column_config.TextColumn("Player"),
+        "Org": st.column_config.TextColumn("Org"),
+        "Style": st.column_config.TextColumn("Style"),
         "Matches": st.column_config.NumberColumn(
             "Matches",
             format="%d",
@@ -87,10 +87,26 @@ def _table_column_config() -> dict[str, Any]:
         "Serve Won": st.column_config.NumberColumn("Serve Won", format="%d"),
         "Serve Lost": st.column_config.NumberColumn("Serve Lost", format="%d"),
         "Serve Win %": st.column_config.NumberColumn("Serve Win %", format="%.2f%%"),
+        "Serve Delta": st.column_config.NumberColumn(
+            "Serve Delta (pp)",
+            format="%+.2f pp",
+            help=(
+                "Serve Win % minus the player's Total Point Win % "
+                "(positive = stronger on serve than overall average)."
+            ),
+        ),
         "Receive Won": st.column_config.NumberColumn("Receive Won", format="%d"),
         "Receive Lost": st.column_config.NumberColumn("Receive Lost", format="%d"),
         "Receive Win %": st.column_config.NumberColumn(
             "Receive Win %", format="%.2f%%"
+        ),
+        "Receive Delta": st.column_config.NumberColumn(
+            "Receive Delta (pp)",
+            format="%+.2f pp",
+            help=(
+                "Receive Win % minus the player's Total Point Win % "
+                "(shows relative receive advantage or disadvantage)."
+            ),
         ),
     }
 
@@ -167,11 +183,16 @@ st.markdown(
         <strong>How to read this page:</strong>
         <ul>
             <li>
-                <strong>Total / Serve / Receive Win %:</strong> Each player's
-                points won, lost, and win percentage overall, when serving, and
-                when receiving. Use <strong>Metric View</strong> below to switch
-                between <em>All</em>, <em>Total</em>, <em>Serve</em>, or
-                <em>Receive</em> columns (ideal on narrower screens).
+                <strong>Total / Serve / Receive Win % &amp; Delta:</strong> Each
+                player's points won, lost, and win percentage overall, when
+                serving, and when receiving. <strong>Serve Delta</strong>
+                (<code>Serve Win % &minus; Total Win %</code>) and
+                <strong>Receive Delta</strong>
+                (<code>Receive Win % &minus; Total Win %</code>) highlight who
+                gains or loses the most on serve vs receive. Use
+                <strong>Metric View</strong> below to switch between
+                <em>All</em>, <em>Total</em>, <em>Serve</em>, or <em>Receive</em>
+                columns (ideal on narrower screens).
             </li>
             <li>
                 <strong>Server advantage:</strong> Because every point has one
@@ -292,7 +313,8 @@ st.caption(
     f"Showing **{table_view_df.height:,}** players with at least "
     f"**{table_min_matches}** commentary-covered matches "
     f"(sorted by **{'Total' if metric_view == 'Total' else metric_view} Win %**; "
-    "click any column header to re-sort)."
+    "click any column header—including **Serve Delta** / **Receive Delta**—to "
+    "re-sort)."
 )
 
 if table_view_df.is_empty():
@@ -300,6 +322,7 @@ if table_view_df.is_empty():
 else:
     st.dataframe(
         table_view_df.to_pandas(),
+        key=f"sr_leaderboard_{metric_view}",
         width="stretch",
         hide_index=True,
         height=520,

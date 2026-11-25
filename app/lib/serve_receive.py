@@ -220,12 +220,6 @@ def build_player_table_view(
     metric_view: MetricView = "All",
 ) -> pl.DataFrame:
     """Select and sort table columns according to the active Metric View."""
-    base = [
-        pl.col("Player"),
-        pl.col("Organization").alias("Org"),
-        pl.col("Style"),
-        pl.col("Matches"),
-    ]
     total_cols = [
         pl.col("Points Won").alias("Total Won"),
         pl.col("Points Lost").alias("Total Lost"),
@@ -235,24 +229,62 @@ def build_player_table_view(
         pl.col("Serve Won"),
         pl.col("Serve Lost"),
         pl.col("Serve Win %"),
+        pl.col("Serve - Total (pp)").alias("Serve Delta"),
     ]
     receive_cols = [
         pl.col("Receive Won"),
         pl.col("Receive Lost"),
         pl.col("Receive Win %"),
+        pl.col("Receive - Total (pp)").alias("Receive Delta"),
     ]
 
+    # For single-metric views, place Win % and Delta directly beside Player
+    # so key stats stay immediately visible on narrow mobile screens.
     if metric_view == "Total":
-        selected = base + total_cols
+        selected = [
+            pl.col("Player"),
+            pl.col("Point %").alias("Total Win %"),
+            pl.col("Points Won").alias("Total Won"),
+            pl.col("Points Lost").alias("Total Lost"),
+            pl.col("Matches"),
+            pl.col("Organization").alias("Org"),
+            pl.col("Style"),
+        ]
         sort_cols = ["Total Win %", "Matches"]
     elif metric_view == "Serve":
-        selected = base + serve_cols
+        selected = [
+            pl.col("Player"),
+            pl.col("Serve Win %"),
+            pl.col("Serve - Total (pp)").alias("Serve Delta"),
+            pl.col("Serve Won"),
+            pl.col("Serve Lost"),
+            pl.col("Matches"),
+            pl.col("Organization").alias("Org"),
+            pl.col("Style"),
+        ]
         sort_cols = ["Serve Win %", "Matches"]
     elif metric_view == "Receive":
-        selected = base + receive_cols
+        selected = [
+            pl.col("Player"),
+            pl.col("Receive Win %"),
+            pl.col("Receive - Total (pp)").alias("Receive Delta"),
+            pl.col("Receive Won"),
+            pl.col("Receive Lost"),
+            pl.col("Matches"),
+            pl.col("Organization").alias("Org"),
+            pl.col("Style"),
+        ]
         sort_cols = ["Receive Win %", "Matches"]
     else:
-        selected = base + total_cols + serve_cols + receive_cols
+        selected = [
+            pl.col("Player"),
+            pl.col("Organization").alias("Org"),
+            pl.col("Style"),
+            pl.col("Matches"),
+            *total_cols,
+            *serve_cols,
+            *receive_cols,
+        ]
         sort_cols = ["Serve Win %", "Matches"]
 
     return df.select(selected).sort(sort_cols, descending=[True, True])

@@ -94,43 +94,51 @@ def test_filters_and_metric_view_table_columns() -> None:
         "Serve Won",
         "Serve Lost",
         "Serve Win %",
+        "Serve Delta",
         "Receive Won",
         "Receive Lost",
         "Receive Win %",
+        "Receive Delta",
     ]
     assert all_view["Player"][0] in {"Alice CHEN", "Cara TAN"}
 
     serve_view = build_player_table_view(enriched, metric_view="Serve")
     assert serve_view.columns == [
         "Player",
-        "Org",
-        "Style",
-        "Matches",
+        "Serve Win %",
+        "Serve Delta",
         "Serve Won",
         "Serve Lost",
-        "Serve Win %",
+        "Matches",
+        "Org",
+        "Style",
     ]
+    alice_srv = serve_view.filter(pl.col("Player") == "Alice CHEN").row(0, named=True)
+    assert alice_srv["Serve Delta"] == 5.0
 
     receive_view = build_player_table_view(enriched, metric_view="Receive")
     assert receive_view.columns == [
         "Player",
-        "Org",
-        "Style",
-        "Matches",
+        "Receive Win %",
+        "Receive Delta",
         "Receive Won",
         "Receive Lost",
-        "Receive Win %",
+        "Matches",
+        "Org",
+        "Style",
     ]
+    alice_rcv = receive_view.filter(pl.col("Player") == "Alice CHEN").row(0, named=True)
+    assert alice_rcv["Receive Delta"] == -5.0
 
     total_view = build_player_table_view(enriched, metric_view="Total")
     assert total_view.columns == [
         "Player",
-        "Org",
-        "Style",
-        "Matches",
+        "Total Win %",
         "Total Won",
         "Total Lost",
-        "Total Win %",
+        "Matches",
+        "Org",
+        "Style",
     ]
 
 
@@ -167,8 +175,11 @@ def test_scatter_builder_handles_comparisons_and_empty() -> None:
     assert empty_summary.n_players == 0
 
 
-def test_service_win_rate_page_renders_and_controls_work() -> None:
+def test_service_win_rate_page_renders_and_controls_work(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     app_dir = project_root() / "app"
+    monkeypatch.syspath_prepend(str(app_dir))
     page = AppTest.from_file(app_dir / "pages" / "4_Service_Win_Rate.py").run(
         timeout=30
     )
@@ -185,9 +196,40 @@ def test_service_win_rate_page_renders_and_controls_work() -> None:
         assert slider.value == 10
 
     assert len(page.dataframe) == 1
+    assert "Serve Delta" in list(page.dataframe[0].value.columns)
+    assert "Receive Delta" in list(page.dataframe[0].value.columns)
 
-    # Switch Metric View to Serve, search for a player, and switch chart comparison
+    # Switch Metric View to Serve, verify Serve stats + Delta appear
     page.segmented_control(key="sr_table_view").set_value("Serve")
+    page.run(timeout=30)
+    assert not page.exception
+    assert list(page.dataframe[0].value.columns) == [
+        "Player",
+        "Serve Win %",
+        "Serve Delta",
+        "Serve Won",
+        "Serve Lost",
+        "Matches",
+        "Org",
+        "Style",
+    ]
+
+    # Switch Metric View to Receive, verify Receive stats + Delta appear
+    page.segmented_control(key="sr_table_view").set_value("Receive")
+    page.run(timeout=30)
+    assert not page.exception
+    assert list(page.dataframe[0].value.columns) == [
+        "Player",
+        "Receive Win %",
+        "Receive Delta",
+        "Receive Won",
+        "Receive Lost",
+        "Matches",
+        "Org",
+        "Style",
+    ]
+
+    # Search for a player and switch chart comparison
     page.text_input(key="sr_table_search").set_value("HARIMOTO")
     page.segmented_control(key="sr_chart_comparison").set_value("Receive % vs Total %")
     page.slider(key="sr_chart_min_matches").set_value(5)
