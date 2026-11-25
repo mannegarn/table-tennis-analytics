@@ -233,6 +233,7 @@ substantial from 2021.
 | `make events-unpack-preview` | Run the unpack for one year, print counts, roll back |
 | `make event-sponsors-sync` | Sync new senior match-detail events into `dbt/seeds/event_sponsors_manual.csv` |
 | `make event-sponsors-identify` | Identify missing `table_sponsor` values via YouTube (`yt-dlp` + `ffmpeg`) and Gemini Vision |
+| `make notebook` | Start JupyterLab in the browser against `notebooks/` |
 | `make test` | Run the test suite |
 | `make test-integration` | Run only integration tests |
 | `make dbt-debug` | Verify dbt can reach the warehouse |

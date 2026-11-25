@@ -1,0 +1,17 @@
+# Custom Light and Dark palettes while keeping Streamlit's Light / Dark / System
+# toggle active under the top-right menu (⋮ -> Settings -> Theme).
+#
+# Soft off-white in Light mode, soft slate-charcoal in Dark mode,
+# unified with a purple primary accent.
+
+[theme.light]
+primaryColor = "#7C3AED"
+backgroundColor = "#F2F1F6"
+secondaryBackgroundColor = "#E6E4EE"
+textColor = "#1F202B"
+
+[theme.dark]
+primaryColor = "#A78BFA"
+backgroundColor = "#1E202B"
+secondaryBackgroundColor = "#282B3A"
+textColor = "#ECEEF4"

@@ -78,6 +78,42 @@ seeds:
       - name: notes
         description: Free-text rationale or verification notes for the override.
 
+  - name: player_profile_overrides
+    description: >
+      User-maintained manual overrides for players missing hand, grip, or style
+      in marts_wtt.dim_players. Synced from the warehouse via
+      tt-player-profile-overrides-sync without overwriting manual edits.
+    columns:
+      - name: ittf_id
+        description: Natural ITTF/WTT player identifier stored as text.
+        data_tests:
+          - not_null
+          - unique
+      - name: player_name
+        description: Full player display name from marts_wtt.dim_players for reference while editing.
+      - name: dob
+        description: Player date of birth from marts_wtt.dim_players for reference while editing (nullable).
+      - name: hand
+        description: Manual playing hand override (Left, Right, or NULL).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Left", "Right"]
+      - name: grip
+        description: Manual playing grip override (Shakehand, Penhold, or NULL).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Shakehand", "Penhold"]
+      - name: style
+        description: Manual playing style override (Attacker, Defender, or NULL).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Attacker", "Defender"]
+      - name: notes
+        description: Free-text rationale or verification notes for the override (nullable).
+
   - name: round_codes
     description: >
       Lookup table mapping raw 4-character WTT document_code round tokens (with

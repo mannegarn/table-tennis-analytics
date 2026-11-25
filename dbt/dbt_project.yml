@@ -93,3 +93,12 @@ seeds:
         overall_scores: varchar
         results_game_scores: varchar
         notes: varchar
+    player_profile_overrides:
+      +column_types:
+        ittf_id: varchar
+        player_name: varchar
+        dob: date
+        hand: varchar
+        grip: varchar
+        style: varchar
+        notes: varchar

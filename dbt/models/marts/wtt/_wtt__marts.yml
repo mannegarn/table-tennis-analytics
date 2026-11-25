@@ -150,19 +150,19 @@ models:
               arguments:
                 values: ["M", "F"]
       - name: hand
-        description: Playing hand (Left, Right, or NULL), preferring normalized WTT over ITTF.
+        description: Playing hand (Left, Right, or NULL), preferring player_profile_overrides, then normalized WTT, then ITTF.
         data_tests:
           - accepted_values:
               arguments:
                 values: ["Left", "Right"]
       - name: grip
-        description: Playing grip (Shakehand, Penhold, or NULL), preferring normalized WTT over ITTF.
+        description: Playing grip (Shakehand, Penhold, or NULL), preferring player_profile_overrides, then normalized WTT, then ITTF.
         data_tests:
           - accepted_values:
               arguments:
                 values: ["Shakehand", "Penhold"]
       - name: style
-        description: Playing style from ITTF profile (Attacker, Defender, or NULL).
+        description: Playing style (Attacker, Defender, or NULL), preferring player_profile_overrides over ITTF profile.
         data_tests:
           - accepted_values:
               arguments:

@@ -17,6 +17,7 @@ dbt/.user.yml
 
 # Data
 data/
+app/data/
 *.csv
 !dbt/seeds/*.csv
 *.parquet
@@ -41,7 +42,10 @@ logs/
 .DS_Store
 .idea/
 
-#Personal Notes
+# Notebooks
+notebooks/
+
+# Personal Notes
 Guidance_files
 
 #Lock files for csv etc

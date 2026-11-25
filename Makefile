@@ -41,7 +41,7 @@ endef
 # Collectors share one pending queue and one API; never run them side by side.
 .NOTPARALLEL:
 
-.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-collect events-unpack events-unpack-preview matches-collect matches-unpack matches-unpack-preview match-details-collect match-details-seed match-commentary-collect event-sponsors-collect event-sponsors-identify event-sponsors-sync event-sponsors-refresh player-details-collect collect-all ittf-players-seed update-summary test test-integration dbt-debug dbt-run dbt-test dbt-clean lint lint-sql format typecheck check hooks-install hooks-run
+.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-collect events-unpack events-unpack-preview matches-collect matches-unpack matches-unpack-preview match-details-collect match-details-seed match-commentary-collect event-sponsors-collect event-sponsors-identify event-sponsors-sync event-sponsors-refresh player-details-collect collect-all ittf-players-seed player-profile-overrides-sync update-summary app-refresh app-run notebook test test-integration dbt-debug dbt-run dbt-test dbt-clean lint lint-sql format typecheck check hooks-install hooks-run
 
 help: ## Show available commands
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -173,8 +173,14 @@ collect-all: ## Run every collector (details + commentary in parallel); report f
 ittf-players-seed: ## Seed ingest_ittf.ittf_player_profiles from data/20260615_master_players.csv
 	uv run tt-ittf-players-seed
 
+player-profile-overrides-sync: ## Sync players missing hand/grip/style into dbt/seeds/player_profile_overrides.csv
+	uv run tt-player-profile-overrides-sync
+
 update-summary: ## Generate docs/data-summary.md from the PostgreSQL database
 	uv run tt-update-summary
+
+notebook: ## Start JupyterLab in the browser (workspace venv as the kernel)
+	uv run jupyter lab --notebook-dir notebooks
 
 test: ## Run the test suite
 	uv run pytest
@@ -196,9 +202,10 @@ event-sponsors-refresh: ## Refresh event models, sync new senior events into eve
 	uv run tt-event-sponsors-sync
 	uv run tt-event-sponsors-identify $(strip $(ARGS_events) $(ARGS_limit))
 
-dbt-run: ## Seed, build and test dbt models in dependency order (optional: SELECT=model+; full run also syncs event_sponsors_manual.csv)
+dbt-run: ## Seed, build and test dbt models in dependency order (optional: SELECT=model+; full run also syncs manual override seeds)
 	uv run dbt build --project-dir dbt --profiles-dir dbt $(ARGS_select)
 	$(if $(SELECT),,uv run tt-event-sponsors-sync)
+	$(if $(SELECT),,uv run tt-player-profile-overrides-sync)
 
 dbt-test: ## Run dbt data tests (optional: SELECT=model+)
 	uv run dbt test --project-dir dbt --profiles-dir dbt $(ARGS_select)
@@ -231,3 +238,9 @@ hooks-install: ## Install git hooks, then run them once (requires git init)
 
 hooks-run: ## Run all pre-commit hooks against every file
 	uv run pre-commit run --all-files
+
+app-refresh: ## Refresh Parquet snapshots in app/data/ from the warehouse
+	uv run tt-app-export
+
+app-run: ## Run the Streamlit dashboard locally
+	uv run streamlit run app/Home.py

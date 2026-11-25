@@ -148,11 +148,13 @@ select
     p.organization_name,
     p.dob,
     p.gender,
-    coalesce(p.normalized_hand, i.hand) as hand,
-    coalesce(p.normalized_grip, i.grip) as grip,
-    i.style,
+    coalesce(nullif(btrim(o.hand), ''), p.normalized_hand, i.hand) as hand,
+    coalesce(nullif(btrim(o.grip), ''), p.normalized_grip, i.grip) as grip,
+    coalesce(nullif(btrim(o.style), ''), i.style) as style,
     p.head_shot,
     p.has_wtt_profile
 from all_players as p
 left join {{ ref('ittf__dim_player_profiles') }} as i
     on p.player_id = i.player_id
+left join {{ ref('player_profile_overrides') }} as o
+    on p.player_id::text = o.ittf_id
