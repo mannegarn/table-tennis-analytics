@@ -123,3 +123,8 @@ def test_streamlit_pages_render_without_error() -> None:
 
     win_rates = AppTest.from_file(app_dir / "pages" / "3_Win_Rates.py").run(timeout=30)
     assert not win_rates.exception
+
+    serve_receive = AppTest.from_file(app_dir / "pages" / "4_Service_Win_Rate.py").run(
+        timeout=30
+    )
+    assert not serve_receive.exception

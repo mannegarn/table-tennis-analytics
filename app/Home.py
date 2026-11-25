@@ -28,6 +28,7 @@ def _render_home(
     overview_page: Any,
     about_page: Any,
     win_rates_page: Any,
+    service_win_rate_page: Any,
 ) -> None:
     """Render the landing page content."""
     st.title("🏓 Table Tennis Analytics")
@@ -43,7 +44,7 @@ def _render_home(
     # -----------------------------------------------------------------------
     st.markdown("### Explore")
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     with col1:
         st.markdown(
             """
@@ -64,6 +65,23 @@ def _render_home(
         st.markdown(
             """
             <div class="tt-card">
+                <div class="tt-card-label">Analytics · Available Now</div>
+                <div class="tt-card-title">🎯 Service Win Rate</div>
+                <div class="tt-card-meta">
+                    Point-by-point Total, Serve, and Receive win rates across
+                    commentary-covered matches, plus global server advantage.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.page_link(service_win_rate_page, label="Open Service Win Rate", icon="🎯")
+
+    col3, col4 = st.columns(2)
+    with col3:
+        st.markdown(
+            """
+            <div class="tt-card">
                 <div class="tt-card-label">Overview · Available Now</div>
                 <div class="tt-card-title">📊 Data Overview</div>
                 <div class="tt-card-meta">
@@ -76,7 +94,7 @@ def _render_home(
         )
         st.page_link(overview_page, label="Open Data Overview", icon="📊")
 
-    with col3:
+    with col4:
         st.markdown(
             """
             <div class="tt-card">
@@ -93,34 +111,19 @@ def _render_home(
         st.page_link(about_page, label="Open About", icon="📖")
 
     st.markdown("#### Coming Soon")
-    c_sr, c_glicko = st.columns(2)
-    with c_sr:
-        st.markdown(
-            """
-            <div class="tt-card">
-                <div class="tt-card-label">Planned</div>
-                <div class="tt-card-title">🎯 Serve &amp; Receive</div>
-                <div class="tt-card-meta">
-                    Server vs receiver point win rates and top/bottom player deltas.
-                </div>
+    st.markdown(
+        """
+        <div class="tt-card">
+            <div class="tt-card-label">Planned</div>
+            <div class="tt-card-title">🏆 Glicko Ratings &amp; Upsets</div>
+            <div class="tt-card-meta">
+                Historical Glicko ratings by date or tournament, peak ratings,
+                and biggest upsets.
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    with c_glicko:
-        st.markdown(
-            """
-            <div class="tt-card">
-                <div class="tt-card-label">Planned</div>
-                <div class="tt-card-title">🏆 Glicko Ratings &amp; Upsets</div>
-                <div class="tt-card-meta">
-                    Historical Glicko ratings by date or tournament, peak ratings,
-                    and biggest upsets.
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     st.divider()
 
@@ -168,6 +171,12 @@ win_rates_page = st.Page(
     icon="📈",
     url_path="win-rates",
 )
+service_win_rate_page = st.Page(
+    "pages/4_Service_Win_Rate.py",
+    title="Service Win Rate",
+    icon="🎯",
+    url_path="service-win-rate",
+)
 
 
 def _home_entry() -> None:
@@ -175,6 +184,7 @@ def _home_entry() -> None:
         overview_page=overview_page,
         about_page=about_page,
         win_rates_page=win_rates_page,
+        service_win_rate_page=service_win_rate_page,
     )
 
 
@@ -186,7 +196,7 @@ home_page = st.Page(
 )
 
 overview_pages = [home_page, about_page, overview_page]
-analytics_pages = [win_rates_page]
+analytics_pages = [win_rates_page, service_win_rate_page]
 
 # Register routes with st.navigation first so deep links (/win-rates, etc.)
 # resolve cleanly before rendering sidebar page links.
