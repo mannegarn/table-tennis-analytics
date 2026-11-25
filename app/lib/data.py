@@ -75,9 +75,21 @@ def data_files_exist() -> bool:
     return all((DATA_DIR / name).exists() for name in required)
 
 
+def _file_version(path: Path) -> tuple[int, int] | None:
+    """Return ``(mtime_ns, size)`` to bust ``st.cache_data`` when a file changes."""
+    try:
+        stat = path.stat()
+    except OSError:
+        return None
+    return (stat.st_mtime_ns, stat.st_size)
+
+
 @st.cache_data(show_spinner=False)
-def load_snapshot_timestamp() -> str | None:
-    """Return the UTC timestamp of the last successful data collection."""
+def _load_snapshot_timestamp_cached(
+    meta_version: tuple[int, int] | None,
+    events_version: tuple[int, int] | None,
+) -> str | None:
+    _ = (meta_version, events_version)
     meta_path = DATA_DIR / "snapshot_metadata.json"
     if meta_path.exists():
         try:
@@ -95,28 +107,45 @@ def load_snapshot_timestamp() -> str | None:
     return None
 
 
+def load_snapshot_timestamp() -> str | None:
+    """Return the UTC timestamp of the last successful data collection."""
+    return _load_snapshot_timestamp_cached(
+        _file_version(DATA_DIR / "snapshot_metadata.json"),
+        _file_version(DATA_DIR / "dim_events.parquet"),
+    )
+
+
 @st.cache_data(show_spinner=False)
+def _read_parquet_cached(
+    filename: str,
+    version: tuple[int, int] | None,
+) -> pl.DataFrame:
+    _ = version
+    return pl.read_parquet(DATA_DIR / filename)
+
+
 def load_events() -> pl.DataFrame:
     """Load the events dimension from Parquet."""
-    return pl.read_parquet(DATA_DIR / "dim_events.parquet")
+    filename = "dim_events.parquet"
+    return _read_parquet_cached(filename, _file_version(DATA_DIR / filename))
 
 
-@st.cache_data(show_spinner=False)
 def load_players() -> pl.DataFrame:
     """Load the players dimension from Parquet."""
-    return pl.read_parquet(DATA_DIR / "dim_players.parquet")
+    filename = "dim_players.parquet"
+    return _read_parquet_cached(filename, _file_version(DATA_DIR / filename))
 
 
-@st.cache_data(show_spinner=False)
 def load_senior_matches() -> pl.DataFrame:
     """Load senior singles matches from Parquet."""
-    return pl.read_parquet(DATA_DIR / "fct_senior_singles_matches.parquet")
+    filename = "fct_senior_singles_matches.parquet"
+    return _read_parquet_cached(filename, _file_version(DATA_DIR / filename))
 
 
-@st.cache_data(show_spinner=False)
 def load_catalog_rollup() -> pl.DataFrame:
     """Load pre-aggregated catalog match counts per event and gender."""
-    return pl.read_parquet(DATA_DIR / "catalog_matches_by_event_gender.parquet")
+    filename = "catalog_matches_by_event_gender.parquet"
+    return _read_parquet_cached(filename, _file_version(DATA_DIR / filename))
 
 
 def _pick_boundary_event(
