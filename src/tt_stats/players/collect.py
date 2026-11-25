@@ -29,7 +29,7 @@ from tt_stats.players.land import land_player_details_chunk
 _PENDING_PLAYERS_SQL = """
 SELECT p.player_id, p.reason
 FROM ingest_wtt.player_details_pending AS p
-ORDER BY p.player_id;
+ORDER BY (p.reason = 'new') DESC, p.player_id;
 """
 
 
