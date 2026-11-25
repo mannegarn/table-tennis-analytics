@@ -120,3 +120,6 @@ def test_streamlit_pages_render_without_error() -> None:
 
     about = AppTest.from_file(app_dir / "pages" / "1_About.py").run(timeout=30)
     assert not about.exception
+
+    win_rates = AppTest.from_file(app_dir / "pages" / "3_Win_Rates.py").run(timeout=30)
+    assert not win_rates.exception

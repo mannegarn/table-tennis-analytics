@@ -4,15 +4,9 @@ from __future__ import annotations
 
 import streamlit as st
 from lib.data import load_snapshot_timestamp
-from lib.theme import apply_page_theme, render_sidebar_footer
+from lib.theme import ensure_standalone_shell
 
-st.set_page_config(
-    page_title="About | Table Tennis Analytics",
-    page_icon="📖",
-    layout="wide",
-)
-
-apply_page_theme()
+ensure_standalone_shell(load_snapshot_timestamp())
 
 st.title("📖 About")
 
@@ -81,5 +75,3 @@ st.markdown(
     "connect on "
     "[LinkedIn](https://www.linkedin.com/in/marcus-annegarn-5009a4195/)."
 )
-
-render_sidebar_footer(load_snapshot_timestamp())

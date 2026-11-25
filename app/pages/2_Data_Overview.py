@@ -15,7 +15,7 @@ from html import escape
 import plotly.express as px
 import polars as pl
 import streamlit as st
-from lib.charts import FORMAT_COLORS, GENDER_COLORS, style_figure
+from lib.charts import FORMAT_COLORS, GENDER_COLORS, render_chart, style_figure
 from lib.data import (
     EventBoundary,
     build_yearly_matches_table,
@@ -27,15 +27,9 @@ from lib.data import (
     load_senior_matches,
     load_snapshot_timestamp,
 )
-from lib.theme import apply_page_theme, render_sidebar_footer
+from lib.theme import ensure_standalone_shell
 
-st.set_page_config(
-    page_title="Data Overview | Table Tennis Analytics",
-    page_icon="📊",
-    layout="wide",
-)
-
-apply_page_theme()
+ensure_standalone_shell(load_snapshot_timestamp())
 
 st.title("📊 Data Overview")
 
@@ -235,7 +229,7 @@ with col_gender:
     fig_gender.update_traces(texttemplate="%{text:,}", textposition="outside")
     fig_gender.update_layout(showlegend=False)
     fig_gender = style_figure(fig_gender, height=340)
-    st.plotly_chart(fig_gender)
+    render_chart(fig_gender, key="overview_gender_chart")
 
 with col_format:
     format_df = pl.DataFrame(
@@ -260,7 +254,7 @@ with col_format:
     fig_format.update_traces(texttemplate="%{text:,}", textposition="outside")
     fig_format.update_layout(showlegend=False)
     fig_format = style_figure(fig_format, height=340)
-    st.plotly_chart(fig_format)
+    render_chart(fig_format, key="overview_format_chart")
 
 st.divider()
 
@@ -284,6 +278,4 @@ else:
         labels={"event_year": "Year"},
     )
     fig_yearly = style_figure(fig_yearly, height=380)
-    st.plotly_chart(fig_yearly)
-
-render_sidebar_footer(load_snapshot_timestamp())
+    render_chart(fig_yearly, key="overview_yearly_chart")

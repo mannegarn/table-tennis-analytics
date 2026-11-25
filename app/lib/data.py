@@ -70,6 +70,7 @@ def data_files_exist() -> bool:
         "dim_events.parquet",
         "dim_players.parquet",
         "fct_senior_singles_matches.parquet",
+        "fct_senior_singles_games.parquet",
         "catalog_matches_by_event_gender.parquet",
     )
     return all((DATA_DIR / name).exists() for name in required)
@@ -143,6 +144,12 @@ def load_players() -> pl.DataFrame:
 def load_senior_matches() -> pl.DataFrame:
     """Load senior singles matches from Parquet."""
     filename = "fct_senior_singles_matches.parquet"
+    return _read_parquet_cached(filename, _file_version(DATA_DIR / filename))
+
+
+def load_senior_games() -> pl.DataFrame:
+    """Load senior singles games (individual 11-point sets) from Parquet."""
+    filename = "fct_senior_singles_games.parquet"
     return _read_parquet_cached(filename, _file_version(DATA_DIR / filename))
 
 
