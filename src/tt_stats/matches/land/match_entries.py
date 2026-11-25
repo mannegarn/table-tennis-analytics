@@ -59,8 +59,10 @@ def land_match_entries(
     # constraint violation, a failed cast, or the post-unpack assertion - rolls
     # back the raw upsert and every unpacked row together, so nothing is
     # half-landed and the connection stays reusable for the next event.
+    blocked = False
+    unpacked = 0
     with connection.transaction():
-        connection.execute(
+        written = connection.execute(
             """
             INSERT INTO ingest_wtt.match_entries_payloads_raw (
                 event_id,
@@ -77,7 +79,10 @@ def land_match_entries(
                 received_count = EXCLUDED.received_count,
                 payload_sha256 = EXCLUDED.payload_sha256,
                 fetched_at = EXCLUDED.fetched_at,
-                ingested_at = now();
+                ingested_at = now()
+            WHERE ingest_wtt.match_entries_payloads_raw.received_count = 0
+               OR EXCLUDED.received_count > 0
+            RETURNING 1;
             """,
             (
                 summary.key,
@@ -87,13 +92,27 @@ def land_match_entries(
                 summary.payload_sha256,
                 summary.fetched_at,
             ),
-        )
+        ).fetchone()
 
-        unpacked = unpack_event(
-            connection,
-            summary.key,
-            received_count=summary.received_count,
+        if written is None:
+            blocked = True
+        else:
+            unpacked = unpack_event(
+                connection,
+                summary.key,
+                received_count=summary.received_count,
+            )
+
+    if blocked:
+        logger.warning(
+            "match_entries_empty_overwrite_blocked",
+            extra={
+                "event_id": summary.key,
+                "http_status": summary.status_code,
+                "reason": summary.reason,
+            },
         )
+        return
 
     logger.info(
         "match_entries_landed",

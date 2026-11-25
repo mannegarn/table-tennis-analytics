@@ -63,8 +63,10 @@ def land_events_by_year(
     # constraint violation, a failed cast, or the post-unpack assertion - rolls
     # back the raw upsert and every unpacked row together, so nothing is
     # half-landed and the connection stays reusable for the next year.
+    blocked = False
+    unpacked = 0
     with connection.transaction():
-        connection.execute(
+        written = connection.execute(
             """
             INSERT INTO ingest_wtt.events_by_year_raw (
                 year,
@@ -85,7 +87,10 @@ def land_events_by_year(
                 received_count = EXCLUDED.received_count,
                 payload_sha256 = EXCLUDED.payload_sha256,
                 fetched_at = EXCLUDED.fetched_at,
-                ingested_at = now();
+                ingested_at = now()
+            WHERE ingest_wtt.events_by_year_raw.received_count = 0
+               OR EXCLUDED.received_count > 0
+            RETURNING 1;
             """,
             (
                 summary.key,
@@ -97,12 +102,26 @@ def land_events_by_year(
                 summary.payload_sha256,
                 summary.fetched_at,
             ),
+        ).fetchone()
+        if written is None:
+            blocked = True
+        else:
+            unpacked = unpack_events_year(
+                connection,
+                summary.key,
+                received_count=summary.received_count,
+            )
+
+    if blocked:
+        logger.warning(
+            "events_year_empty_overwrite_blocked",
+            extra={
+                "year": summary.key,
+                "http_status": summary.status_code,
+                "reason": summary.reason,
+            },
         )
-        unpacked = unpack_events_year(
-            connection,
-            summary.key,
-            received_count=summary.received_count,
-        )
+        return
 
     logger.info(
         "events_year_landed",

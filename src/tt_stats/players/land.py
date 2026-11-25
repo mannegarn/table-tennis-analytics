@@ -53,6 +53,7 @@ def land_player_details_chunk(
             )
         )
 
+    blocked: list[FetchSummary[int]] = []
     with connection.transaction(), connection.cursor() as cursor:
         cursor.executemany(
             """
@@ -71,9 +72,32 @@ def land_player_details_chunk(
                 received_count = EXCLUDED.received_count,
                 payload_sha256 = EXCLUDED.payload_sha256,
                 fetched_at = EXCLUDED.fetched_at,
-                ingested_at = now();
+                ingested_at = now()
+            WHERE ingest_wtt.player_details_raw.received_count = 0
+               OR EXCLUDED.received_count > 0
+            RETURNING 1;
             """,
             raw_params,
+            returning=True,
         )
 
-    logger.debug("player_details_chunk_landed", extra={"players": len(items)})
+        for index, (summary, _payload) in enumerate(items):
+            if index > 0 and not cursor.nextset():
+                break
+            if cursor.fetchone() is None:
+                blocked.append(summary)
+
+    for summary in blocked:
+        logger.warning(
+            "player_details_empty_overwrite_blocked",
+            extra={
+                "player_id": summary.key,
+                "http_status": summary.status_code,
+                "reason": summary.reason,
+            },
+        )
+
+    logger.debug(
+        "player_details_chunk_landed",
+        extra={"players": len(items) - len(blocked), "blocked": len(blocked)},
+    )

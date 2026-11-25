@@ -6,7 +6,8 @@ test, so no cleanup is needed here.
 
 import hashlib
 import json
-from datetime import UTC, datetime
+import logging
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -168,3 +169,77 @@ def test_landing_rolls_back_when_summary_count_disagrees_with_payload(
     ).fetchone()
     assert raw == {"n": 0}
     assert unpacked == {"n": 0}
+
+
+def test_empty_response_never_overwrites_non_empty_match_list(
+    db_connection: Connection[Any],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Transient [] must preserve raw + unpacked rows without raising."""
+    t1 = datetime(2026, 11, 1, 12, 0, tzinfo=UTC)
+    t2 = t1 + timedelta(days=1)
+
+    payload = [_match(1), _match(2)]
+    s1 = FetchSummary(
+        key=EVENT_ID,
+        status_code=200,
+        received_count=len(payload),
+        payload_sha256=hashlib.sha256(json.dumps(payload).encode()).hexdigest(),
+        fetched_at=t1,
+        error=None,
+        reason="live",
+    )
+    land_match_entries(db_connection, s1, payload)
+
+    empty_payload: list[dict[str, Any]] = []
+    s2 = FetchSummary(
+        key=EVENT_ID,
+        status_code=200,
+        received_count=0,
+        payload_sha256=hashlib.sha256(b"[]").hexdigest(),
+        fetched_at=t2,
+        error=None,
+        reason="stale",
+    )
+    with caplog.at_level(logging.WARNING):
+        land_match_entries(db_connection, s2, empty_payload)
+
+    row = db_connection.execute(
+        "SELECT payload, received_count, fetched_at "
+        "FROM ingest_wtt.match_entries_payloads_raw WHERE event_id = %s;",
+        (EVENT_ID,),
+    ).fetchone()
+    assert row == {"payload": payload, "received_count": 2, "fetched_at": t1}
+
+    unpacked = db_connection.execute(
+        "SELECT count(*) AS n FROM ingest_wtt.match_entries_unpacked "
+        "WHERE event_id = %s;",
+        (EVENT_ID,),
+    ).fetchone()
+    assert unpacked == {"n": 2}
+    assert any(
+        r.getMessage() == "match_entries_empty_overwrite_blocked"
+        for r in caplog.records
+    )
+
+
+def test_empty_match_list_is_replaced_when_matches_appear(
+    db_connection: Connection[Any],
+) -> None:
+    """An initial [] must be overwritten once real matches arrive."""
+    land_match_entries(db_connection, _summary([]), [])
+    payload = [_match(1)]
+    land_match_entries(db_connection, _summary(payload), payload)
+
+    row = db_connection.execute(
+        "SELECT received_count FROM ingest_wtt.match_entries_payloads_raw "
+        "WHERE event_id = %s;",
+        (EVENT_ID,),
+    ).fetchone()
+    unpacked = db_connection.execute(
+        "SELECT count(*) AS n FROM ingest_wtt.match_entries_unpacked "
+        "WHERE event_id = %s;",
+        (EVENT_ID,),
+    ).fetchone()
+    assert row == {"received_count": 1}
+    assert unpacked == {"n": 1}

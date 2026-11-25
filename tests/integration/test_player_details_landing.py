@@ -2,13 +2,14 @@
 
 import hashlib
 import json
-from datetime import UTC, datetime
+import logging
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
 from psycopg import Connection
 
-from tt_stats.core.collector import FetchSummary
+from tt_stats.core.collector import EMPTY_SHA256, FetchSummary
 from tt_stats.players.land import land_player_details_chunk
 
 pytestmark = pytest.mark.integration
@@ -173,3 +174,82 @@ def test_player_details_pending_surfaces_unseen_match_players(
         """
     ).fetchall()
     assert remaining == [{"player_id": PLAYER_2, "reason": "new"}]
+
+
+def test_not_found_never_overwrites_non_empty_player_profile(
+    db_connection: Connection[Any],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """404 placeholder lands on new/empty rows, never overwrites a 200 profile."""
+    t1 = datetime(2026, 11, 1, 12, 0, tzinfo=UTC)
+    t2 = t1 + timedelta(days=1)
+
+    empty_payload: dict[str, Any] = {"Result": []}
+    s_empty_new = FetchSummary(
+        key=PLAYER_2,
+        status_code=404,
+        received_count=0,
+        payload_sha256=EMPTY_SHA256,
+        fetched_at=t1,
+        error=None,
+        reason="new",
+    )
+    land_player_details_chunk(db_connection, [(s_empty_new, empty_payload)])
+
+    # empty -> non-empty updates PLAYER_2; seed PLAYER_1 at t1
+    p1 = _full_payload(PLAYER_1)
+    p2 = _full_payload(PLAYER_2)
+    s1 = FetchSummary(
+        key=PLAYER_1,
+        status_code=200,
+        received_count=1,
+        payload_sha256=hashlib.sha256(json.dumps(p1).encode()).hexdigest(),
+        fetched_at=t1,
+        error=None,
+        reason="new",
+    )
+    s2 = FetchSummary(
+        key=PLAYER_2,
+        status_code=200,
+        received_count=1,
+        payload_sha256=hashlib.sha256(json.dumps(p2).encode()).hexdigest(),
+        fetched_at=t2,
+        error=None,
+        reason="new",
+    )
+    land_player_details_chunk(db_connection, [(s1, p1), (s2, p2)])
+
+    # non-empty -> 404 on PLAYER_1 is blocked while preserving t1 and 200 payload
+    s1_404 = FetchSummary(
+        key=PLAYER_1,
+        status_code=404,
+        received_count=0,
+        payload_sha256=EMPTY_SHA256,
+        fetched_at=t2,
+        error=None,
+        reason="stale",
+    )
+    with caplog.at_level(logging.WARNING):
+        land_player_details_chunk(db_connection, [(s1_404, empty_payload)])
+
+    row1 = db_connection.execute(
+        "SELECT payload, received_count, http_status, fetched_at "
+        "FROM ingest_wtt.player_details_raw WHERE player_id = %s;",
+        (PLAYER_1,),
+    ).fetchone()
+    row2 = db_connection.execute(
+        "SELECT received_count, http_status FROM ingest_wtt.player_details_raw "
+        "WHERE player_id = %s;",
+        (PLAYER_2,),
+    ).fetchone()
+    assert row1 == {
+        "payload": p1,
+        "received_count": 1,
+        "http_status": 200,
+        "fetched_at": t1,
+    }
+    assert row2 == {"received_count": 1, "http_status": 200}
+    assert any(
+        r.getMessage() == "player_details_empty_overwrite_blocked"
+        for r in caplog.records
+    )

@@ -70,10 +70,10 @@ st.markdown(
 st.subheader("About Me / Inspiration Behind This Project")
 st.markdown(
     "I picked up table tennis in London in my mid-20s and enjoy both the "
-    "sport and working with data. In major sports such as tennis and football, "
-    "there is a huge amount of public data and analysis available. Those same "
-    "metrics and insights are not widely available for table tennis, and I "
-    "wanted to change that.\n\n"
+    "sport and working with data.\n In major sports such as tennis and football, "
+    "there is endless public data and analysis available.\n Those same "
+    "metrics and insights are not widely available for table tennis. "
+    "I want to change that.\n\n"
     "If you have any questions or would like to collaborate, reach out via "
     "email at [marcusannegarn@gmail.com](mailto:marcusannegarn@gmail.com) or "
     "connect on "

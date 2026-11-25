@@ -6,7 +6,8 @@ test, so no cleanup is needed here.
 
 import hashlib
 import json
-from datetime import UTC, datetime
+import logging
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -126,3 +127,48 @@ def test_landing_refuses_a_failed_summary(
         (EVENT_ID,),
     ).fetchone()
     assert row == {"received_count": 1}
+
+
+def test_empty_response_never_overwrites_non_empty_sponsors(
+    db_connection: Connection[Any],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Transient [] preserves non-empty sponsors, while [] -> non-empty updates."""
+    t1 = datetime(2026, 11, 1, 12, 0, tzinfo=UTC)
+    t2 = t1 + timedelta(days=1)
+
+    land_event_sponsors(db_connection, _summary([]), [])
+    payload = [_sponsor(5845)]
+    s1 = FetchSummary(
+        key=EVENT_ID,
+        status_code=200,
+        received_count=1,
+        payload_sha256=hashlib.sha256(json.dumps(payload).encode()).hexdigest(),
+        fetched_at=t1,
+        error=None,
+        reason="live",
+    )
+    land_event_sponsors(db_connection, s1, payload)
+
+    s2 = FetchSummary(
+        key=EVENT_ID,
+        status_code=200,
+        received_count=0,
+        payload_sha256=hashlib.sha256(b"[]").hexdigest(),
+        fetched_at=t2,
+        error=None,
+        reason="stale",
+    )
+    with caplog.at_level(logging.WARNING):
+        land_event_sponsors(db_connection, s2, [])
+
+    row = db_connection.execute(
+        "SELECT payload, received_count, fetched_at "
+        "FROM ingest_wtt.event_sponsors_raw WHERE event_id = %s;",
+        (EVENT_ID,),
+    ).fetchone()
+    assert row == {"payload": payload, "received_count": 1, "fetched_at": t1}
+    assert any(
+        r.getMessage() == "event_sponsors_empty_overwrite_blocked"
+        for r in caplog.records
+    )

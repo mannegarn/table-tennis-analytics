@@ -73,6 +73,7 @@ def land_match_details_chunk(
 
     unpack_sql = load_sql(UNPACK_PLAYERS_SQL_PATH) if unpack else None
 
+    blocked: list[FetchSummary[tuple[int, str]]] = []
     with connection.transaction(), connection.cursor() as cursor:
         cursor.executemany(
             """
@@ -90,12 +91,42 @@ def land_match_details_chunk(
                 http_status = EXCLUDED.http_status,
                 payload_sha256 = EXCLUDED.payload_sha256,
                 fetched_at = EXCLUDED.fetched_at,
-                ingested_at = now();
+                ingested_at = now()
+            WHERE ingest_wtt.match_details_raw.payload = '{}'::jsonb
+               OR EXCLUDED.payload <> '{}'::jsonb
+            RETURNING 1;
             """,
             raw_params,
+            returning=True,
         )
 
-        if unpack_sql is not None:
-            cursor.executemany(unpack_sql.encode("utf-8"), unpack_params)
+        landed_unpack_params: list[dict[str, Any]] = []
+        for index, ((summary, _payload), unpack_param) in enumerate(
+            zip(items, unpack_params, strict=True)
+        ):
+            if index > 0 and not cursor.nextset():
+                break
+            if cursor.fetchone() is not None:
+                landed_unpack_params.append(unpack_param)
+            else:
+                blocked.append(summary)
 
-    logger.debug("match_details_chunk_landed", extra={"matches": len(items)})
+        if unpack_sql is not None and landed_unpack_params:
+            cursor.executemany(unpack_sql.encode("utf-8"), landed_unpack_params)
+
+    for summary in blocked:
+        event_id, document_code = summary.key
+        logger.warning(
+            "match_details_empty_overwrite_blocked",
+            extra={
+                "event_id": event_id,
+                "document_code": document_code,
+                "http_status": summary.status_code,
+                "reason": summary.reason,
+            },
+        )
+
+    logger.debug(
+        "match_details_chunk_landed",
+        extra={"matches": len(items) - len(blocked), "blocked": len(blocked)},
+    )

@@ -55,6 +55,7 @@ def land_match_commentary_chunk(
             )
         )
 
+    blocked: list[FetchSummary[tuple[int, str]]] = []
     with connection.transaction(), connection.cursor() as cursor:
         cursor.executemany(
             """
@@ -74,9 +75,34 @@ def land_match_commentary_chunk(
                 received_count = EXCLUDED.received_count,
                 payload_sha256 = EXCLUDED.payload_sha256,
                 fetched_at = EXCLUDED.fetched_at,
-                ingested_at = now();
+                ingested_at = now()
+            WHERE ingest_wtt.match_commentary_raw.received_count = 0
+               OR EXCLUDED.received_count > 0
+            RETURNING 1;
             """,
             raw_params,
+            returning=True,
         )
 
-    logger.debug("match_commentary_chunk_landed", extra={"matches": len(items)})
+        for index, (summary, _payload) in enumerate(items):
+            if index > 0 and not cursor.nextset():
+                break
+            if cursor.fetchone() is None:
+                blocked.append(summary)
+
+    for summary in blocked:
+        event_id, document_code = summary.key
+        logger.warning(
+            "match_commentary_empty_overwrite_blocked",
+            extra={
+                "event_id": event_id,
+                "document_code": document_code,
+                "http_status": summary.status_code,
+                "reason": summary.reason,
+            },
+        )
+
+    logger.debug(
+        "match_commentary_chunk_landed",
+        extra={"matches": len(items) - len(blocked), "blocked": len(blocked)},
+    )

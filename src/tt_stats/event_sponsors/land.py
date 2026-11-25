@@ -47,7 +47,7 @@ def land_event_sponsors(
         raise ValueError("summary is missing status or payload hash")
 
     with connection.transaction():
-        connection.execute(
+        written = connection.execute(
             """
             INSERT INTO ingest_wtt.event_sponsors_raw (
                 event_id,
@@ -64,7 +64,10 @@ def land_event_sponsors(
                 received_count = EXCLUDED.received_count,
                 payload_sha256 = EXCLUDED.payload_sha256,
                 fetched_at = EXCLUDED.fetched_at,
-                ingested_at = now();
+                ingested_at = now()
+            WHERE ingest_wtt.event_sponsors_raw.received_count = 0
+               OR EXCLUDED.received_count > 0
+            RETURNING 1;
             """,
             (
                 summary.key,
@@ -74,7 +77,18 @@ def land_event_sponsors(
                 summary.payload_sha256,
                 summary.fetched_at,
             ),
+        ).fetchone()
+
+    if written is None:
+        logger.warning(
+            "event_sponsors_empty_overwrite_blocked",
+            extra={
+                "event_id": summary.key,
+                "http_status": summary.status_code,
+                "reason": summary.reason,
+            },
         )
+        return
 
     logger.info(
         "event_sponsors_landed",

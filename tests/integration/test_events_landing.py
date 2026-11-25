@@ -13,7 +13,8 @@ Besides the happy path, this module pins the two failure-mode invariants:
 
 import hashlib
 import json
-from datetime import UTC, datetime
+import logging
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -218,3 +219,68 @@ async def test_landing_failure_rolls_back_cleanly_and_records_failed_run(
     assert run["status"] == STATUS_FAILED
     assert run["error"]
     assert NAME_CHECK in run["error"]
+
+
+def test_empty_year_never_overwrites_non_empty_year_and_can_grow(
+    db_connection: Connection[Any],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Empty calendar response must not wipe an already-populated year."""
+    t1 = datetime(2026, 11, 1, 12, 0, tzinfo=UTC)
+    t2 = t1 + timedelta(days=1)
+
+    empty_payload: Any = [{"rows": [], "Count": 0, "Original_Count": "0"}]
+    empty_digest = hashlib.sha256(json.dumps(empty_payload).encode("utf-8")).hexdigest()
+    empty_s1 = FetchSummary(
+        key=TEST_YEAR,
+        status_code=200,
+        received_count=0,
+        payload_sha256=empty_digest,
+        fetched_at=t1,
+        error=None,
+        facts={"source_final_count": 0, "source_original_count": 0},
+    )
+    # empty -> non-empty succeeds
+    land_events_by_year(db_connection, empty_s1, empty_payload)
+
+    full_payload = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    full_digest = hashlib.sha256(FIXTURE.read_bytes()).hexdigest()
+    full_s = FetchSummary(
+        key=TEST_YEAR,
+        status_code=200,
+        received_count=len(full_payload[0]["rows"]),
+        payload_sha256=full_digest,
+        fetched_at=t1,
+        error=None,
+        facts={
+            "source_final_count": full_payload[0]["Count"],
+            "source_original_count": int(full_payload[0]["Original_Count"]),
+        },
+    )
+    land_events_by_year(db_connection, full_s, full_payload)
+    before_unpacked = _unpacked_count(db_connection)
+    assert before_unpacked > 0
+
+    # non-empty -> empty is blocked without raising RuntimeError
+    empty_s2 = FetchSummary(
+        key=TEST_YEAR,
+        status_code=200,
+        received_count=0,
+        payload_sha256=empty_digest,
+        fetched_at=t2,
+        error=None,
+        facts={"source_final_count": 0, "source_original_count": 0},
+    )
+    with caplog.at_level(logging.WARNING):
+        land_events_by_year(db_connection, empty_s2, empty_payload)
+
+    raw = db_connection.execute(
+        "SELECT received_count, fetched_at FROM ingest_wtt.events_by_year_raw "
+        "WHERE year = %s;",
+        (TEST_YEAR,),
+    ).fetchone()
+    assert raw == {"received_count": len(full_payload[0]["rows"]), "fetched_at": t1}
+    assert _unpacked_count(db_connection) == before_unpacked
+    assert any(
+        r.getMessage() == "events_year_empty_overwrite_blocked" for r in caplog.records
+    )
