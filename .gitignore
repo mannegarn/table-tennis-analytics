@@ -47,5 +47,9 @@ notebooks/
 # Personal Notes
 Guidance_files
 
+# AI agent & Claude local configs/skills
+.agents/
+.claude/
+
 #Lock files for csv etc
 .~lock.*#
