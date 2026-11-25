@@ -110,9 +110,9 @@ k5.metric(
     "Player Age Range",
     age_label,
     help=(
-        f"Based on {stats.players_with_dob:,} players with a valid DOB "
-        f"({stats.min_dob} to {stats.max_dob})."
-        if stats.min_dob is not None
+        f"Age at snapshot export, based on {stats.players_with_age:,} players "
+        "with known age."
+        if stats.players_with_age > 0
         else None
     ),
 )

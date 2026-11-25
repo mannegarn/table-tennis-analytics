@@ -73,6 +73,24 @@ jobs:
       # Integration tests run against tt_stats_test; live-API tests stay skipped
       # because TT_LIVE_API_TESTS is not set.
       - run: uv run pytest
+      # dbt/seeds/*.csv are local-only (gitignored); create header-only stubs so
+      # dbt parse can resolve every ref(...) on a clean CI checkout.
+      - name: Stub gitignored dbt seeds for dbt parse
+        run: |
+          stub_seed() {
+            local path="$1"
+            local header="$2"
+            test -f "$path" || printf '%s\n' "$header" > "$path"
+          }
+          stub_seed dbt/seeds/action_types.csv "action_type,action_name,action_category"
+          stub_seed dbt/seeds/event_sponsors_manual.csv "event_id,ball_sponsor,table_sponsor,start_date,event_name,table_sponsor_source"
+          stub_seed dbt/seeds/match_format_overrides.csv "override_id,event_id,discipline,is_team_rubber,round_code,document_code,match_format,best_of,scheduled_games,scoring_rule,notes"
+          stub_seed dbt/seeds/match_score_overrides.csv "event_id,document_code,overall_scores,results_game_scores,notes"
+          stub_seed dbt/seeds/player_identity_overrides.csv "source_system,source_player_id,target_ittf_id,target_source_system,target_source_player_id,notes"
+          stub_seed dbt/seeds/player_profile_overrides.csv "ittf_id,player_name,dob,hand,grip,style,notes"
+          stub_seed dbt/seeds/result_types.csv "result_code,result_type,is_default_result,is_rating_eligible,description"
+          stub_seed dbt/seeds/round_codes.csv "raw_round_token,round_code,round_name,round_stage,round_order"
+          stub_seed dbt/seeds/sponsor_domains.csv "domain,sponsor_name"
       # Compiles every model and resolves every ref/source without a build.
       - run: uv run dbt parse --project-dir dbt --profiles-dir dbt
 

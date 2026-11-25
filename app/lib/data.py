@@ -53,11 +53,9 @@ class SummaryStats:
     mens_players: int
     womens_players: int
     distinct_countries: int
-    players_with_dob: int
+    players_with_age: int
     min_age: int | None
     max_age: int | None
-    min_dob: date | None
-    max_dob: date | None
 
     # First & last events with matches (joined to dim_events)
     first_senior_event: EventBoundary | None
@@ -151,25 +149,13 @@ def _pick_boundary_event(
     )
 
 
-def _compute_age_years(dob: date, ref_date: date) -> int:
-    """Return completed years of age on ``ref_date``."""
-    years = ref_date.year - dob.year
-    if (ref_date.month, ref_date.day) < (dob.month, dob.day):
-        years -= 1
-    return years
-
-
 def compute_summary_stats(
     events: pl.DataFrame,
     players: pl.DataFrame,
     senior_matches: pl.DataFrame,
     catalog_rollup: pl.DataFrame,
-    *,
-    today: date | None = None,
 ) -> SummaryStats:
     """Compute all warehouse summary metrics from the loaded DataFrames."""
-    ref_date = today or date.today()
-
     # --- Events ---
     valid_event_dates = events.filter(pl.col("start_date").is_not_null())
     catalog_first_date: date | None = (
@@ -223,18 +209,15 @@ def compute_summary_stats(
     ).filter(pl.col("country").is_not_null() & (pl.col("country") != ""))
     distinct_countries = int(country_series["country"].n_unique())
 
-    # Guard against placeholder/future DOBs when computing age range
-    valid_dobs = senior_players.filter(
-        pl.col("dob").is_not_null()
-        & (pl.col("dob") >= date(1900, 1, 1))
-        & (pl.col("dob") <= ref_date)
+    # Guard against implausible ages when computing age range
+    valid_ages = senior_players.filter(
+        pl.col("age").is_not_null() & (pl.col("age") >= 0) & (pl.col("age") <= 120)
     )
-    players_with_dob = valid_dobs.height
-    min_dob: date | None = valid_dobs["dob"].min() if players_with_dob > 0 else None  # type: ignore[assignment]
-    max_dob: date | None = valid_dobs["dob"].max() if players_with_dob > 0 else None  # type: ignore[assignment]
-
-    min_age = _compute_age_years(max_dob, ref_date) if max_dob is not None else None
-    max_age = _compute_age_years(min_dob, ref_date) if min_dob is not None else None
+    players_with_age = valid_ages.height
+    min_age_raw = valid_ages["age"].min() if players_with_age > 0 else None
+    max_age_raw = valid_ages["age"].max() if players_with_age > 0 else None
+    min_age = int(min_age_raw) if isinstance(min_age_raw, int) else None
+    max_age = int(max_age_raw) if isinstance(max_age_raw, int) else None
 
     return SummaryStats(
         total_events=events.height,
@@ -253,11 +236,9 @@ def compute_summary_stats(
         mens_players=mens_players,
         womens_players=womens_players,
         distinct_countries=distinct_countries,
-        players_with_dob=players_with_dob,
+        players_with_age=players_with_age,
         min_age=min_age,
         max_age=max_age,
-        min_dob=min_dob,
-        max_dob=max_dob,
         first_senior_event=_pick_boundary_event(
             events, senior_per_event, descending=False
         ),

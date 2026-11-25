@@ -65,22 +65,39 @@ EXPORT_QUERIES: tuple[ExportQuery, ...] = (
     ExportQuery(
         filename="dim_players.parquet",
         sql="""
+        with senior_players as (
+            select p1_player_sk as player_sk
+            from marts.fct_senior_singles_matches
+            where p1_player_sk is not null
+            union
+            select p2_player_sk as player_sk
+            from marts.fct_senior_singles_matches
+            where p2_player_sk is not null
+        )
         select
-            player_sk,
-            ittf_id,
-            player_name,
-            country_code,
-            country_name,
-            organization_code,
-            organization_name,
-            dob,
-            gender,
-            hand,
-            grip,
-            style,
-            head_shot,
-            has_wtt_profile
-        from marts.dim_players
+            p.player_sk,
+            p.ittf_id,
+            p.player_name,
+            p.country_code,
+            p.country_name,
+            p.organization_code,
+            p.organization_name,
+            case
+                when
+                    p.dob is not null
+                    and p.dob >= (current_date - interval '120 years')::date
+                    and p.dob <= current_date
+                    then extract(year from age(current_date, p.dob))::integer
+            end as age,
+            p.gender,
+            p.hand,
+            p.grip,
+            p.style,
+            p.head_shot,
+            p.has_wtt_profile
+        from marts.dim_players as p
+        inner join senior_players as sp
+            on p.player_sk = sp.player_sk
         """,
     ),
     ExportQuery(

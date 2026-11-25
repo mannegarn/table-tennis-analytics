@@ -94,7 +94,7 @@ National leagues (e.g. France Pro A) include players without an `ittf_id` and al
 **Identity edge cases (observed or expected)**
 - **Name collisions & duplicate ITTF IDs (`assert_wtt_dim_players_name_collisions`)**: 11 exact `(player_name, country_code)` collisions are surfaced as a dbt warning in `marts_wtt.dim_players`:
   - **7 distinct-player groups (different DOBs)**: `LEE Yubin`, `LEE Daeun` (3 rows), `LEE Junho` (KOR); `Juan GONZALEZ`, `Boris VILLAVICENCIO` (ECU); `Francisco LOPEZ` (VEN); `Sara STOJANOVSKA` (MKD).
-  - **4 likely duplicate ITTF IDs (left unmerged for now; ITTF site heavily rate-limits manual ID lookups)**: `Anja HANDEN` (SWE: `202486`, `218792`, DOB `2003-12-28`), `Luca KUMAHARA` (BRA: `113418` F / `206781` M, DOB `1995-07-27`), `Natalia PARTYKA` (POL: `107177`, `214830`, DOB `1989-07-27`), and `Merve DEMIR` (TUR: `131677` `2001-09-06` vs `217412` `2001-06-09`, possible DD/MM swap).
+  - **4 likely duplicate ITTF IDs (left unmerged for now; ITTF site heavily rate-limits manual ID lookups)**: `Anja HANDEN` (SWE: `202486`, `218792`, matching DOB), `Luca KUMAHARA` (BRA: `113418` F / `206781` M, matching DOB), `Natalia PARTYKA` (POL: `107177`, `214830`, matching DOB), and `Merve DEMIR` (TUR: `131677` vs `217412`, possible DD/MM swap in DOB).
 - League data often has no date of birth, so `exact_name_country_dob` will rarely match league players. Expect many `source_only` rows and rely on overrides.
 - Expect romanisation variants (`Yun-Ju` / `Yunju`), family-name-first ordering, accents, players changing association, and married-name changes.
 - Use `pg_trgm` (already installed) to **suggest** candidate pairs for the overrides CSV, never to merge automatically.

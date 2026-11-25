@@ -28,7 +28,7 @@ def test_compute_summary_stats() -> None:
             "gender": ["M", "F", "M", "F"],
             "country_code": ["CHN", None, "GER", "BRA"],
             "organization_code": ["CHN", "JPN", "GER", "BRA"],
-            "dob": [date(1990, 5, 1), date(2006, 12, 1), None, date(1975, 1, 1)],
+            "age": [36, 19, None, 51],
         }
     )
     senior_matches = pl.DataFrame(
@@ -57,7 +57,6 @@ def test_compute_summary_stats() -> None:
         players,
         senior_matches,
         catalog_rollup,
-        today=date(2026, 11, 25),
     )
 
     assert stats.total_events == 3
@@ -78,7 +77,7 @@ def test_compute_summary_stats() -> None:
     assert stats.mens_players == 2
     assert stats.womens_players == 1
     assert stats.distinct_countries == 3
-    assert stats.players_with_dob == 2
+    assert stats.players_with_age == 2
     assert stats.min_age == 19
     assert stats.max_age == 36
 

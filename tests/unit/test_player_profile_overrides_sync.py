@@ -39,8 +39,8 @@ def test_merge_preserves_manual_edits_and_backfills_name_and_dob() -> None:
     warehouse = [
         PlayerProfileMetadata(
             ittf_id="100001",
-            player_name="Amalraj ANTHONY",
-            dob=date(1986, 1, 24),
+            player_name="Alex MORGAN",
+            dob=date(1990, 1, 15),
             hand="Right",
             grip="Shakehand",
             style="Attacker",
@@ -92,8 +92,8 @@ def test_merge_preserves_manual_edits_and_backfills_name_and_dob() -> None:
     }
     assert rows[1] == {
         "ittf_id": "100001",
-        "player_name": "Amalraj ANTHONY",
-        "dob": "1986-01-24",
+        "player_name": "Alex MORGAN",
+        "dob": "1990-01-15",
         "hand": "Right",
         "grip": "Shakehand",
         "style": "Attacker",
@@ -123,8 +123,8 @@ def test_render_and_read_roundtrip(tmp_path: Path) -> None:
     rows = [
         {
             "ittf_id": "100001",
-            "player_name": "Amalraj ANTHONY",
-            "dob": "1986-01-24",
+            "player_name": "Alex MORGAN",
+            "dob": "1990-01-15",
             "hand": "Right",
             "grip": "Shakehand",
             "style": "Attacker",

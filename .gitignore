@@ -18,7 +18,6 @@ dbt/.user.yml
 # Data
 /data/
 *.csv
-!dbt/seeds/*.csv
 *.parquet
 !app/data/*.parquet
 
