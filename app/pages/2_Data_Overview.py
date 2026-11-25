@@ -51,7 +51,7 @@ st.info(
 if not data_files_exist():
     st.error(
         "Parquet snapshots were not found in `app/data/`. "
-        "Run `make app-export` (or `uv run tt-app-export`) with PostgreSQL running, "
+        "Run `make app-refresh` (or `uv run tt-app-export`) with PostgreSQL running, "
         "then refresh this page."
     )
     st.stop()

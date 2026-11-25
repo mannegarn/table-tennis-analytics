@@ -116,7 +116,7 @@ To support best-of-5/7 (WTT/leagues) alongside fixed-set/point formats (MLTT) in
 
 ## 5. User-Editable Reference Seeds
 
-Small, human-curated tables live in `dbt/seeds/` and are **automatically reloaded** on every `make dbt-run`:
+Small, human-curated tables live locally in `dbt/seeds/` (gitignored; CI uses header-only stubs for `dbt parse`) and are **automatically reloaded** on every `make dbt-run`:
 - `dbt/seeds/action_types.csv` - commentary action code labels and categories
 - `dbt/seeds/sponsor_domains.csv` - bare website domain -> canonical brand name
 - `dbt/seeds/event_sponsors_manual.csv` - verified table and ball sponsors per event (`make event-sponsors-sync` and `make event-sponsors-identify` via `yt-dlp`, `ffmpeg`, and Gemini Vision)

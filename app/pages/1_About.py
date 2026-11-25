@@ -24,10 +24,10 @@ st.divider()
 st.subheader("What This Project Is")
 st.markdown(
     "This project brings together match outcomes, player profiles, and "
-    "point-by-point logs from professional table tennis matches. It is used to "
-    "calculate skill ratings, explore why top players win more matches, and "
-    "investigate questions such as whether table brand or equipment makes a "
-    "measurable difference to match outcomes."
+    "point-by-point logs from professional table tennis matches. The goal is "
+    "to explore why top players win more matches, investigate whether factors "
+    "like table brand or equipment make a measurable difference, and build "
+    "historical player skill ratings (planned)."
 )
 
 # ---------------------------------------------------------------------------
@@ -54,11 +54,13 @@ st.markdown(
     "tournament footage.\n"
     "- **Warehouse & Modelling:** Raw payloads are landed in **PostgreSQL** "
     "and transformed through **dbt** (`staging`, `intermediate`, and `marts` "
-    "layers), alongside **manual CSV overrides** (dbt seeds) for edge-case "
-    "score, format, sponsor, and player-profile corrections.\n"
-    "- **Analysis & Front End:** Downstream statistics and ratings are "
-    "computed with **Polars**, exported to compact **Parquet** snapshots, and "
-    "visualised in this **Streamlit** app.\n\n"
+    "layers), alongside **manual CSV overrides** (local dbt seeds) for "
+    "edge-case score, format, sponsor, and player-profile corrections.\n"
+    "- **Analysis & Front End:** Curated warehouse marts are exported to "
+    "compact **Parquet** snapshots (with senior-singles players and "
+    "export-time age instead of dates of birth) and read with **Polars** in "
+    "this **Streamlit** app. Skill ratings (Glicko-2) and point-level "
+    "analytics pages are planned next.\n\n"
     "The current launch version was developed with AI assistance using "
     "**DeepSeek** and **Google Antigravity**, building upon an earlier "
     "prototype built by hand in Jupyter notebooks."

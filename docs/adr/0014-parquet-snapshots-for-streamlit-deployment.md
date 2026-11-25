@@ -15,17 +15,18 @@ The project warehouse runs in a local PostgreSQL instance managed via Docker Com
 ## Decision
 
 1. **Export compact Zstandard-compressed Parquet snapshots (`make app-refresh`):**
-   - `src/tt_stats/analytics/export_app_data.py` (`uv run tt-app-export`, invoked by `make app-refresh`) queries `marts.*` directly and writes Zstandard-compressed Parquet files (~1.9 MB total) into `app/data/`:
+   - `src/tt_stats/analytics/export_app_data.py` (`uv run tt-app-export`, invoked by `make app-refresh`) queries `marts.*` directly and writes Zstandard-compressed Parquet files (~1.7 MB total) into `app/data/`:
      - `dim_events.parquet`
-     - `dim_players.parquet`
+     - `dim_players.parquet` (filtered to senior-singles players, exporting integer `age` at export time rather than `dob`)
      - `fct_senior_singles_matches.parquet`
      - `fct_senior_singles_games.parquet`
      - `catalog_matches_by_event_gender.parquet` (pre-aggregated from `marts.dim_matches`)
    - It also writes `app/data/snapshot_metadata.json` containing `last_collected_at_utc` (derived from `max(finished_at)` where `status = 'succeeded'` in `ingest_wtt.ingest_runs`) and `exported_at_utc` so the dashboard can surface data freshness accurately.
-2. **Never export raw point logs:**
+2. **Never export raw point logs or player birth dates:**
    - `marts.fct_match_commentary` is never exported raw to `app/data/`. Any point-level metrics exposed in the dashboard must be pre-aggregated in `src/tt_stats/analytics/` (or a compact summary query) rather than shipping raw commentary rows.
+   - Exact dates of birth (`dob`) stay in the private PostgreSQL warehouse; `dim_players.parquet` exports only senior-singles players and integer `age`.
 3. **`.gitignore` split for repository hygiene:**
-   - Local raw/intermediate data (`/data/`), exploratory `notebooks/`, and generic `*.parquet` files stay gitignored, while `!app/data/*.parquet` explicitly tracks the exported dashboard snapshots alongside `app/data/snapshot_metadata.json`.
+   - Local raw/intermediate data (`/data/`), all `*.csv` files (including `dbt/seeds/*.csv`), exploratory `notebooks/`, and generic `*.parquet` files stay gitignored, while `!app/data/*.parquet` explicitly tracks the exported dashboard snapshots alongside `app/data/snapshot_metadata.json`.
 
 ## Consequences
 

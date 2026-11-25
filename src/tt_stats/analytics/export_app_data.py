@@ -1,12 +1,15 @@
 """Export warehouse marts to compact Parquet snapshots for the Streamlit app.
 
 Run via:
-    make app-export
+    make app-refresh
 or:
     uv run tt-app-export
 
-The exported Parquet files are written to ``app/data/`` (gitignored via ``*.parquet``)
-so the Streamlit app can load everything instantaneously without hitting Postgres.
+The exported Parquet files are written to ``app/data/`` (explicitly tracked in
+git via ``!app/data/*.parquet`` while other ``*.parquet`` files stay ignored)
+so Streamlit Community Cloud can load everything without hitting Postgres.
+``dim_players.parquet`` includes only senior-singles players and exports
+integer ``age`` at export time rather than ``dob``.
 """
 
 from __future__ import annotations

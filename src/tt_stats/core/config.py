@@ -57,14 +57,15 @@ class Settings(BaseSettings):
     test_database_name: str = "tt_stats_test"
     test_database_url: str | None = None
 
-    # Ingestion knobs shared by the collectors. Concurrency stays low so the
-    # pipeline remains a polite client rather than a load test.
+    # Ingestion knobs shared by the collectors. The WTT JSON API handles 50
+    # concurrent requests reliably with no rate-limiting issues, while still
+    # bounding requests in flight via the client's asyncio semaphore.
     #
-    # ``chunk_size`` is how many units of work (years, or events) are fetched in
-    # one batch. It is a scheduling and commit-granularity knob, not a
-    # concurrency limit: ``max_concurrent_requests`` bounds the requests in
-    # flight, while the chunk bounds how much unlanded work one crash can lose
-    # and how often the run reports progress.
+    # ``chunk_size`` is how many units of work (years, events, or matches) are
+    # fetched in one batch. It controls commit granularity and progress
+    # reporting, not concurrency: ``max_concurrent_requests`` bounds in-flight
+    # requests, while the chunk bounds how much unlanded work one crash can
+    # lose and how often the run reports progress.
     max_concurrent_requests: int = 50
     request_timeout_seconds: float = 40.0
     chunk_size: int = 50

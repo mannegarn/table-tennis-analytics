@@ -142,7 +142,7 @@ routine records cannot push the bar down a line; every record still goes to
 draw no bar and keep the per-item log records.
 
 ```text
-Collecting match entries (50/chunk, 20 workers): 1200/2838 [##########] [02:14<03:03, 8.94event/s] live event=3257 | matches=35 | ok
+Collecting match entries (50/chunk, 50 workers): 1200/2838 [##########] [02:14<03:03, 8.94event/s] live event=3257 | matches=35 | ok
 ```
 
 The title states the chunk size and the worker count, so a plateau in the rate is
@@ -199,9 +199,12 @@ stored:
 | finished, fetched after its final day | no | - |
 
 Events are fetched in chunks of `CHUNK_SIZE` (default 50), concurrently within a
-chunk, and landed one transaction at a time. An empty answer is `[]` and is
-stored with `received_count = 0`, so "WTT has no matches for this event" is a
-recorded fact rather than a question asked every run.
+chunk (default `MAX_CONCURRENT_REQUESTS=50`), and landed one transaction at a
+time. An empty answer is `[]` and is stored with `received_count = 0` when the
+row is new or already empty, so "WTT has no matches for this event" is a
+recorded fact rather than a question asked every run. Existing non-empty
+payloads across all collectors are protected against being overwritten by a
+transient 404 or empty response.
 
 Two payload quirks are handled explicitly: the body is a bare JSON array rather
 than a `rows` envelope, and the match id arrives as `id` for some events and
@@ -365,6 +368,8 @@ dbt output, so a broken or unrun dbt model cannot stop data collection.
 `dbt/dbt_project.yml` defines the project and per-layer schema routing, while
 `dbt/profiles.yml` points at the same PostgreSQL instance. Ingestion tables in
 `ingest_wtt` and `ingest_ittf` are declared as dbt sources, not models.
+All `dbt/seeds/*.csv` files stay local-only and gitignored (CI creates header
+stubs for `dbt parse`).
 
 ## Dashboard (Streamlit)
 
@@ -372,13 +377,14 @@ dbt output, so a broken or unrun dbt model cannot stop data collection.
 `ingest_wtt.ingest_runs` to write Zstandard-compressed Parquet snapshots
 (`dim_events`, `dim_players`, `fct_senior_singles_matches`,
 `fct_senior_singles_games`, `catalog_matches_by_event_gender`) plus
-`snapshot_metadata.json` into `app/data/`.
+`snapshot_metadata.json` into `app/data/`. `dim_players.parquet` exports only
+senior-singles players and integer `age` at export time (no `dob`).
 
 Run `make app-run` (`uv run streamlit run app/Home.py`) for a local preview.
 `.streamlit/config.toml` configures the Light and Dark purple palettes.
-`app/data/*.parquet` is tracked in Git (while `/data/` and `notebooks/` stay
-git-ignored), allowing Streamlit Community Cloud to deploy `app/Home.py` with
-zero live database dependency (see ADR 0014).
+`app/data/*.parquet` is tracked in Git (while `/data/`, `*.csv`, `notebooks/`,
+and other `*.parquet` files stay gitignored), allowing Streamlit Community
+Cloud to deploy `app/Home.py` with zero live database dependency (see ADR 0014).
 
 ## Troubleshooting
 
