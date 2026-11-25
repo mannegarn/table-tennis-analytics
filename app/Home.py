@@ -188,6 +188,13 @@ home_page = st.Page(
 overview_pages = [home_page, about_page, overview_page]
 analytics_pages = [win_rates_page]
 
+# Register routes with st.navigation first so deep links (/win-rates, etc.)
+# resolve cleanly before rendering sidebar page links.
+active_page = st.navigation(
+    overview_pages + analytics_pages,
+    position="hidden",
+)
+
 apply_page_theme()
 st.session_state["_tt_router_active"] = True
 render_sidebar_nav(
@@ -196,8 +203,4 @@ render_sidebar_nav(
     snapshot_timestamp=load_snapshot_timestamp(),
 )
 
-active_page = st.navigation(
-    overview_pages + analytics_pages,
-    position="hidden",
-)
 active_page.run()

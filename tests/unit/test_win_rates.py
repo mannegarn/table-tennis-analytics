@@ -9,6 +9,7 @@ from app.lib.win_rates import (
     binomial_match_probability,
     binomial_point_to_match_probability,
     build_combined_point_set_stats,
+    build_delta_extremes,
     build_format_win_rates,
     build_win_rate_scatter,
     compute_binomial_expected,
@@ -141,6 +142,13 @@ def test_aggregations_exclude_walkovers_and_separate_formats() -> None:
     assert metrics.n_defenders == 1
     assert len(fig.data) >= 3
 
+    above, below = build_delta_extremes(
+        filtered, mode="set_to_match", best_of=5, top_n=1
+    )
+    assert above.height == 1
+    assert below.height == 1
+    assert above["Delta (pp)"][0] >= below["Delta (pp)"][0]
+
 
 def test_win_rates_page_renders_and_filters_work() -> None:
     app_dir = project_root() / "app"
@@ -152,8 +160,16 @@ def test_win_rates_page_renders_and_filters_work() -> None:
     for slider in page.slider:
         assert slider.value == 10
 
-    # Toggle logistic S-curve on Plot 1 and switch Plot 2 to Best of 7
-    page.toggle(key="pt_vs_set_logistic").set_value(True)
+    # Verify section ordering: Match vs Point -> Match vs Set -> Set vs Point
+    subheaders = [s.value for s in page.subheader]
+    assert subheaders[:3] == [
+        "1. Match Win Rate vs Point Win Rate",
+        "2. Match Win Rate vs Set Win Rate",
+        "3. Set Win Rate vs Point Win Rate",
+    ]
+
+    # Toggle logistic S-curve on Plot 1 and adjust Plot 2 Min Matches
+    page.toggle(key="pt_vs_match_logistic").set_value(True)
     page.slider(key="set_vs_match_min_matches").set_value(5)
     page.run(timeout=30)
     assert not page.exception

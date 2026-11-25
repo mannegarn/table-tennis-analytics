@@ -97,12 +97,12 @@ def style_figure(
             "bgcolor": "rgba(0,0,0,0)",
             "orientation": "h",
             "yanchor": "top",
-            "y": -0.18,
+            "y": -0.22,
             "xanchor": "center",
             "x": 0.5,
             "font": {"size": 12},
         }
-        bottom_margin = 75
+        bottom_margin = 90
     else:
         legend_cfg = {
             "bgcolor": "rgba(0,0,0,0)",

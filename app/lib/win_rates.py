@@ -704,10 +704,28 @@ def build_win_rate_scatter(
             "xanchor": "left",
             "font": {"size": 16},
         },
-        margin={"l": 52, "r": 18, "t": 68, "b": 92},
+        margin={"l": 52, "r": 18, "t": 68, "b": 108},
     )
 
     y_all = np.concatenate([ys, curve_y])
+    y_range = _axis_range(y_all, pad=3.5)
+
+    # Subtle 50% break-even crosshairs anchor the S-curve center visually
+    if x_range[0] < 50.0 < x_range[1]:
+        fig.add_vline(
+            x=50.0,
+            line_width=1,
+            line_dash="dot",
+            line_color="rgba(128, 128, 128, 0.35)",
+        )
+    if y_range[0] < 50.0 < y_range[1]:
+        fig.add_hline(
+            y=50.0,
+            line_width=1,
+            line_dash="dot",
+            line_color="rgba(128, 128, 128, 0.35)",
+        )
+
     fig.update_xaxes(
         title_text=x_label,
         range=x_range,
@@ -715,7 +733,7 @@ def build_win_rate_scatter(
     )
     fig.update_yaxes(
         title_text=y_label,
-        range=_axis_range(y_all, pad=3.5),
+        range=y_range,
         ticksuffix="%",
     )
 
@@ -736,3 +754,46 @@ def build_win_rate_scatter(
         logistic_rmse=logistic_rmse,
     )
     return fig, metrics
+
+
+def build_delta_extremes(
+    df: pl.DataFrame,
+    *,
+    mode: PlotMode,
+    best_of: int | None = None,
+    top_n: int = 5,
+) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """Return top-N players furthest above and below the theoretical binomial curve."""
+    x_col, y_col, _, _ = AXIS_METADATA[mode]
+    clean_df = df.filter(
+        pl.col(x_col).is_not_null()
+        & pl.col(y_col).is_not_null()
+        & pl.col(x_col).is_finite()
+        & pl.col(y_col).is_finite()
+    )
+    if clean_df.is_empty():
+        empty = pl.DataFrame()
+        return empty, empty
+
+    xs = clean_df[x_col].to_numpy().astype(np.float64)
+    ys = clean_df[y_col].to_numpy().astype(np.float64)
+    expected = compute_binomial_expected(xs, mode=mode, best_of=best_of)
+    deltas = ys - expected
+
+    scored = clean_df.with_columns(
+        pl.Series("Binomial %", np.round(expected, 1)),
+        pl.Series("Delta (pp)", np.round(deltas, 1)),
+    ).select(
+        "Player",
+        pl.col("Organization").alias("Org"),
+        "Style",
+        "Matches",
+        pl.col(x_col).round(1),
+        pl.col(y_col).round(1),
+        "Binomial %",
+        "Delta (pp)",
+    )
+
+    above = scored.sort(["Delta (pp)", "Matches"], descending=[True, True]).head(top_n)
+    below = scored.sort(["Delta (pp)", "Matches"], descending=[False, True]).head(top_n)
+    return above, below

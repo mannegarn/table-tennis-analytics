@@ -88,6 +88,31 @@ div[data-testid="stMetricValue"] {
     margin-bottom: 0.25rem;
 }
 
+/* Polished editorial insight card for analytics sections */
+.tt-insight-card {
+    background-color: var(--secondary-background-color);
+    border: 1px solid rgba(245, 158, 11, 0.45);
+    border-radius: 10px;
+    padding: 0.9rem 1.15rem;
+    margin-bottom: 0.95rem;
+    font-size: 0.93rem;
+    line-height: 1.55;
+    color: var(--text-color);
+}
+
+.tt-insight-card ul {
+    margin: 0;
+    padding-left: 1.2rem;
+}
+
+.tt-insight-card li {
+    margin-bottom: 0.4rem;
+}
+
+.tt-insight-card li:last-child {
+    margin-bottom: 0;
+}
+
 /* Highlighted summary box (e.g. binomial & S-curve overview) */
 .tt-summary-box {
     background-color: var(--secondary-background-color);
