@@ -4,7 +4,7 @@ End-to-end data platform for international table tennis: collect from the
 source, land raw payloads in PostgreSQL, transform with dbt, and analyse with
 Polars.
 
-> Status: ongoing. Nothing is deployed yet.
+> Status: ongoing. Initial Streamlit dashboard live at [pingpongstats.streamlit.app](https://pingpongstats.streamlit.app/).
 
 ## Stack
 
@@ -14,7 +14,7 @@ Polars.
 | Transforms | dbt (dbt-postgres) |
 | Ingestion | Python 3.13, httpx, psycopg 3, uv |
 | Analytics | Polars, Jupyter |
-| Dashboard | Streamlit |
+| Dashboard | Streamlit (Polars + Parquet snapshots) |
 | Orchestration | Plain Python now, Apache Airflow later |
 | Quality | ruff, mypy, pytest, pre-commit |
 
@@ -233,10 +233,17 @@ substantial from 2021.
 | `make events-unpack-preview` | Run the unpack for one year, print counts, roll back |
 | `make event-sponsors-sync` | Sync new senior match-detail events into `dbt/seeds/event_sponsors_manual.csv` |
 | `make event-sponsors-identify` | Identify missing `table_sponsor` values via YouTube (`yt-dlp` + `ffmpeg`) and Gemini Vision |
+| `make collect-all` | Run every collector, unpacker, seed, and sponsor sync in dependency order |
+| `make player-profile-overrides-sync` | Sync senior players missing hand/grip/style into `dbt/seeds/player_profile_overrides.csv` |
+| `make update-summary` | Regenerate `docs/data-summary.md` from live warehouse counts |
+| `make app-refresh` | Export warehouse marts and collection metadata to `app/data/*.parquet` |
+| `make app-run` | Launch the Streamlit dashboard locally (`app/Home.py`) |
 | `make notebook` | Start JupyterLab in the browser against `notebooks/` |
 | `make test` | Run the test suite |
 | `make test-integration` | Run only integration tests |
 | `make dbt-debug` | Verify dbt can reach the warehouse |
+| `make dbt-run` | Seed, build, and test dbt models (and sync manual override seeds) |
+| `make dbt-test` | Run dbt data tests |
 | `make lint` | Lint with ruff |
 | `make format` | Format with ruff |
 | `make typecheck` | Type check with mypy |
@@ -308,19 +315,20 @@ the pending queue, the payload check, and the landing SQL. The fetch, land and
 record loop every collector runs is `src/tt_stats/core/collector.py`.
 
 ```
+src/tt_stats/analytics/       export_app_data.py: Parquet snapshot exporter for Streamlit
 src/tt_stats/core/            shared config, database, logging, run history,
                               clients, and the collector loop
 src/tt_stats/events/          collect.py, land.py, unpack.py, sql/
 src/tt_stats/event_sponsors/  collect.py, land.py, manual_sync.py, video_identify.py
 src/tt_stats/matches/         collect/ and land/: entries, details, commentary
-src/tt_stats/players/         collect.py, land.py, ittf_seed.py
+src/tt_stats/players/         collect.py, land.py, ittf_seed.py, profile_overrides_sync.py
 db/init/                  one-time SQL on first database start
 db/migrations/            versioned tables, unpack SQL, views, control tables
-dbt/models/<domain>/      marts models per domain, reading _unpacked tables
+dbt/models/               staging/, intermediate/, and marts/ models
 docs/adr/                 architecture decision records
 logs/                     rotating run log, git-ignored
-notebooks/                Polars analytics
-app/                      Streamlit dashboard
+notebooks/                local Polars scratchpads, git-ignored
+app/                      Streamlit dashboard: Home.py, pages/, lib/, and app/data/*.parquet snapshots
 airflow/dags/             orchestration (later)
 ```
 
@@ -339,9 +347,10 @@ dbt reads `ingest_*` tables as sources and writes models into per-layer schemas.
 | Control | `ingest_wtt`, `public` | `ingest_runs`, `schema_version` | `ingest_wtt.ingest_runs`, `public.schema_version` | ingestion |
 | Seeds | `seeds` | `<reference>` | `seeds.action_types` | dbt |
 | Staging | `staging_wtt`, `staging_ittf` | `stg_<entity>` | `staging_wtt.stg_events` | dbt |
-| Intermediate | `intermediate` | `int_<entity>` | `intermediate.int_event_equipment_sponsors` | dbt |
-| Source Marts | `marts_wtt`, `marts_ittf` | `dim_*` / `fct_*` | `marts_wtt.fct_singles` | dbt |
-| Unified Marts | `marts` | `dim_*` / `fct_*` | `marts.fct_singles` | dbt |
+| Intermediate | `intermediate_wtt` | `int_<entity>` | `intermediate_wtt.int_event_equipment_sponsors` | dbt |
+| Source Marts | `marts_wtt`, `marts_ittf` | `dim_*` / `fct_*` | `marts_wtt.fct_senior_singles_matches` | dbt |
+| Unified Marts | `marts` | `dim_*` / `fct_*` | `marts.fct_senior_singles_matches` | dbt |
+| App Snapshots | `app/data/` (files) | `*.parquet` | `app/data/fct_senior_singles_matches.parquet` | `tt-app-export` |
 
 Container tables describe the request grain, for example
 `match_entries_payloads_raw` is one row per event. From unpacking onward, names
@@ -356,6 +365,20 @@ dbt output, so a broken or unrun dbt model cannot stop data collection.
 `dbt/dbt_project.yml` defines the project and per-layer schema routing, while
 `dbt/profiles.yml` points at the same PostgreSQL instance. Ingestion tables in
 `ingest_wtt` and `ingest_ittf` are declared as dbt sources, not models.
+
+## Dashboard (Streamlit)
+
+`make app-refresh` (`uv run tt-app-export`) queries `marts.*` and
+`ingest_wtt.ingest_runs` to write Zstandard-compressed Parquet snapshots
+(`dim_events`, `dim_players`, `fct_senior_singles_matches`,
+`fct_senior_singles_games`, `catalog_matches_by_event_gender`) plus
+`snapshot_metadata.json` into `app/data/`.
+
+Run `make app-run` (`uv run streamlit run app/Home.py`) for a local preview.
+`.streamlit/config.toml` configures the Light and Dark purple palettes.
+`app/data/*.parquet` is tracked in Git (while `/data/` and `notebooks/` stay
+git-ignored), allowing Streamlit Community Cloud to deploy `app/Home.py` with
+zero live database dependency (see ADR 0014).
 
 ## Troubleshooting
 

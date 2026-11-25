@@ -21,3 +21,4 @@ Format: Status, Context, Decision, Consequences. Kept deliberately brief.
 | [0011](0011-ci-quality-gates-and-dependency-security.md) | Layered CI quality gates and dependency security | Accepted |
 | [0012](0012-level-source-schemas.md) | Layer-and-source (`level_source`) schemas, local run history, and `public` migration ledger | Accepted |
 | [0013](0013-match-cleaning-and-senior-singles-marts.md) | Match cleaning, team-tie rubber unification, and senior singles marts | Accepted |
+| [0014](0014-parquet-snapshots-for-streamlit-deployment.md) | Pre-computed Parquet snapshots for the Streamlit dashboard | Accepted |

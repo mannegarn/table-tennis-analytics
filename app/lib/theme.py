@@ -71,6 +71,13 @@ a[data-testid="stPageLink-NavLink"]:hover {
     border-color: var(--tt-orange);
 }
 
+/* Match st.metric and .tt-card orange outline on st.dataframe tables */
+div[data-testid="stDataFrame"] {
+    border: 1px solid rgba(245, 158, 11, 0.55);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
 .tt-card-label {
     color: var(--primary-color);
     font-size: 0.78rem;

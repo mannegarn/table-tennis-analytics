@@ -34,6 +34,8 @@ Both **Postgres schemas** and **dbt model folders** strictly follow **`level_sou
 - **`ingest_wtt.ingest_runs`** — append-only record of every WTT fetch attempt (success or failure). It is local to the source: each source owns its own history. The `endpoint` column names the API endpoint (e.g. `wtt_eventcalendar`). ITTF profiles come from a CSV seed and have no run history; a future league adds `ingest_<league>.ingest_runs`.
 - **`public.schema_version`** — the migration ledger (version, checksum, applied_at). Migrations are one numbered sequence for the whole database, so there is one ledger, and it belongs to no source. Migrations create `ingest_wtt` and `ingest_ittf` themselves, so a freshly created test database needs no bootstrap script.
 
+> **Presentation layer:** The Streamlit presentation layer reads Zstandard-compressed Parquet snapshots in `app/data/` exported from `marts.*` via `make app-refresh` (see [ADR 0014](adr/0014-parquet-snapshots-for-streamlit-deployment.md)), never querying `ingest_*` or `staging_*` directly.
+
 ---
 
 ## 2. Deterministic Surrogate Keys (`_sk` — Your Own IDs)
@@ -115,10 +117,15 @@ To support best-of-5/7 (WTT/leagues) alongside fixed-set/point formats (MLTT) in
 ## 5. User-Editable Reference Seeds
 
 Small, human-curated tables live in `dbt/seeds/` and are **automatically reloaded** on every `make dbt-run`:
-- `dbt/seeds/action_types.csv` — commentary action code labels & categories
-- `dbt/seeds/sponsor_domains.csv` — bare website domain -> canonical brand name
-- `dbt/seeds/event_sponsors_manual.csv` — YouTube-verified table & ball sponsors per event (includes `table_sponsor_source`; new senior events are synced via `make event-sponsors-sync` and missing `table_sponsor` values can be auto-identified via `make event-sponsors-identify` using `yt-dlp`, `ffmpeg`, and Gemini Vision)
-- *(Future)* `dbt/seeds/player_identity_overrides.csv` — manual cross-source player links
+- `dbt/seeds/action_types.csv` - commentary action code labels and categories
+- `dbt/seeds/sponsor_domains.csv` - bare website domain -> canonical brand name
+- `dbt/seeds/event_sponsors_manual.csv` - verified table and ball sponsors per event (`make event-sponsors-sync` and `make event-sponsors-identify` via `yt-dlp`, `ffmpeg`, and Gemini Vision)
+- `dbt/seeds/round_codes.csv` - raw round token -> normalized `round_code`, `round_stage`, and `round_order`
+- `dbt/seeds/result_types.csv` - result status / score suffix -> `result_type`, `is_default_result`, and `is_rating_eligible`
+- `dbt/seeds/match_format_overrides.csv` - tournament/discipline/round format overrides (e.g. Tokyo 2020, Paris 2024, Mixed Team World Cup)
+- `dbt/seeds/match_score_overrides.csv` - verified per-match score fixes for frozen or corrupted upstream scores
+- `dbt/seeds/player_profile_overrides.csv` - manual `hand`, `grip`, and `style` overrides synced via `make player-profile-overrides-sync`
+- `dbt/seeds/player_identity_overrides.csv` - manual cross-source player links (currently empty until additional leagues land)
 
 ---
 
