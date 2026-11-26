@@ -310,7 +310,7 @@ def build_serve_receive_scatter(
     title: str,
     gender_label: str = "All",
     highlight_player: str | None = None,
-    height: int = 460,
+    height: int = 480,
 ) -> tuple[go.Figure, ServeReceiveChartSummary]:
     """Build a theme-aware Serve/Receive vs Total Point % scatter plot."""
     x_col, y_col, x_label, y_label = COMPARISON_METADATA[comparison]
@@ -471,7 +471,7 @@ def build_serve_receive_scatter(
             "xanchor": "left",
             "font": {"size": 16},
         },
-        margin={"l": 52, "r": 18, "t": 68, "b": 108},
+        margin={"l": 52, "r": 18, "t": 68, "b": 122},
     )
 
     if x_range[0] < 50.0 < x_range[1]:

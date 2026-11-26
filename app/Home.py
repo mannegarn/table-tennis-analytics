@@ -11,8 +11,24 @@ from __future__ import annotations
 from typing import Any
 
 import streamlit as st
-from lib.data import load_snapshot_timestamp
-from lib.theme import apply_page_theme, render_sidebar_nav
+from lib.data import (
+    HomeInsights,
+    compute_home_insights,
+    data_files_exist,
+    load_catalog_rollup,
+    load_events,
+    load_players,
+    load_senior_games,
+    load_senior_matches,
+    load_serve_receive_stats,
+    load_snapshot_timestamp,
+)
+from lib.theme import (
+    GITHUB_REPO_URL,
+    LINKEDIN_URL,
+    apply_page_theme,
+    render_sidebar_nav,
+)
 
 # Page configuration must be the first Streamlit call in the router entrypoint.
 st.set_page_config(
@@ -21,6 +37,25 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="auto",
 )
+
+
+@st.cache_data(show_spinner=False)
+def _load_cached_home_insights(
+    matches_height: int,
+    games_height: int,
+    players_height: int,
+    sr_height: int,
+) -> HomeInsights:
+    """Compute and cache Home page warehouse scale & headline findings."""
+    _ = (matches_height, games_height, players_height, sr_height)
+    return compute_home_insights(
+        events=load_events(),
+        players=load_players(),
+        senior_matches=load_senior_matches(),
+        senior_games=load_senior_games(),
+        catalog_rollup=load_catalog_rollup(),
+        serve_receive_raw=load_serve_receive_stats(),
+    )
 
 
 def _render_home(
@@ -33,14 +68,203 @@ def _render_home(
     """Render the landing page content."""
     st.title("🏓 Table Tennis Analytics")
     st.subheader(
-        "Match outcomes, player stats, and rating models "
-        "from professional table tennis."
+        "Match outcomes, point-by-point server analytics, and exact probability "
+        "models across international professional table tennis."
     )
+
+    st.markdown(
+        """
+        <div class="tt-pill-row">
+            <span class="tt-pill">Python 3.13</span>
+            <span class="tt-pill">PostgreSQL 16</span>
+            <span class="tt-pill">dbt</span>
+            <span class="tt-pill">Polars &amp; Parquet</span>
+            <span class="tt-pill">Plotly</span>
+            <span class="tt-pill">Gemini Vision</span>
+            <span class="tt-pill">Streamlit</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    cta1, cta2, cta3, _ = st.columns(
+        [1.15, 1.15, 1.25, 1.45],
+        vertical_alignment="center",
+    )
+    with cta1:
+        st.link_button(
+            "View Code on GitHub",
+            GITHUB_REPO_URL,
+            icon="💻",
+            width="stretch",
+        )
+    with cta2:
+        st.link_button(
+            "LinkedIn Profile",
+            LINKEDIN_URL,
+            icon="🔗",
+            width="stretch",
+        )
+    with cta3:
+        st.page_link(
+            about_page,
+            label="Architecture & About",
+            icon="📖",
+            width="stretch",
+        )
+
+    insights: HomeInsights | None = None
+    if data_files_exist():
+        insights = _load_cached_home_insights(
+            load_senior_matches().height,
+            load_senior_games().height,
+            load_players().height,
+            load_serve_receive_stats().height,
+        )
+
+    if insights is not None:
+        st.divider()
+        year_span = (
+            f"{insights.senior_year_min}-{insights.senior_year_max}"
+            if insights.senior_year_min and insights.senior_year_max
+            else "WTT & ITTF"
+        )
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric(
+            "Senior Singles Matches",
+            f"{insights.senior_total_matches:,}",
+            help=f"Active senior singles span: {year_span}.",
+        )
+        m2.metric(
+            "Commentary Points",
+            f"{insights.commentary_points:,}",
+            help=(
+                f"Parsed across {insights.commentary_matches:,} "
+                "full-commentary matches."
+            ),
+        )
+        m3.metric(
+            "Senior Players",
+            f"{insights.total_players:,}",
+            help=(
+                f"Representing {insights.distinct_countries:,} "
+                "countries & associations."
+            ),
+        )
+        m4.metric(
+            "Events Covered",
+            f"{insights.events_with_senior_singles:,}",
+            help=f"Tournaments with senior singles records ({year_span}).",
+        )
+
+        st.markdown("### What the Data Reveals")
+        d1, d2, d3 = st.columns(3)
+
+        with d1:
+            edge_str = (
+                f"+{insights.server_edge_pp:.2f} pp"
+                if insights.server_edge_pp is not None
+                else "N/A"
+            )
+            srv_str = (
+                f"{insights.global_serve_win_pct:.2f}%"
+                if insights.global_serve_win_pct is not None
+                else "N/A"
+            )
+            rcv_str = (
+                f"{insights.global_receive_win_pct:.2f}%"
+                if insights.global_receive_win_pct is not None
+                else "N/A"
+            )
+            st.markdown(
+                f"""
+                <div class="tt-discovery-card">
+                    <div class="tt-discovery-stat">{edge_str}</div>
+                    <div class="tt-discovery-title">Tour-Wide Server Advantage</div>
+                    <div class="tt-discovery-body">
+                        Across {insights.commentary_points:,} points, servers win
+                        <strong>{srv_str}</strong> vs <strong>{rcv_str}</strong> on
+                        receive &mdash; driven by third-ball attack control.
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.page_link(
+                service_win_rate_page,
+                label="Explore Serve & Receive",
+                icon="🎯",
+                width="stretch",
+            )
+
+        with d2:
+            pct_str = (
+                f"{insights.bo5_won_below_50_pct:.2f}%"
+                if insights.bo5_won_below_50_pct is not None
+                else "N/A"
+            )
+            st.markdown(
+                f"""
+                <div class="tt-discovery-card">
+                    <div class="tt-discovery-stat">{pct_str}</div>
+                    <div class="tt-discovery-title">Won With &lt;50% of Points</div>
+                    <div class="tt-discovery-body">
+                        <strong>{insights.bo5_won_below_50:,}</strong> of
+                        {insights.bo5_matches:,} Best-of-5 winners lost the total
+                        point count yet won the match by clustering points into sets.
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.page_link(
+                win_rates_page,
+                label="Explore Win Rates",
+                icon="📈",
+                width="stretch",
+            )
+
+        with d3:
+            bo5_def = (
+                f"{insights.defender_bo5_delta_pp:+.1f} pp"
+                if insights.defender_bo5_delta_pp is not None
+                else "N/A"
+            )
+            bo7_def = (
+                f"{insights.defender_bo7_delta_pp:+.1f} pp"
+                if insights.defender_bo7_delta_pp is not None
+                else "N/A"
+            )
+            set_def = (
+                f"{insights.defender_set_delta_pp:+.2f} pp"
+                if insights.defender_set_delta_pp is not None
+                else "N/A"
+            )
+            st.markdown(
+                f"""
+                <div class="tt-discovery-card">
+                    <div class="tt-discovery-stat">{bo5_def} / {bo7_def}</div>
+                    <div class="tt-discovery-title">The Defender Match Gap</div>
+                    <div class="tt-discovery-body">
+                        Choppers match binomial theory in 11-pt sets
+                        (<code>{set_def}</code>), yet trail in Bo5 and Bo7 as
+                        attackers adapt.
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.page_link(
+                win_rates_page,
+                label="Compare Styles vs Theory",
+                icon="📉",
+                width="stretch",
+            )
 
     st.divider()
 
     # -----------------------------------------------------------------------
-    # 1. Explore Pages (Navigation Cards)
+    # Explore Pages (Navigation Cards)
     # -----------------------------------------------------------------------
     st.markdown("### Explore")
 
@@ -49,7 +273,7 @@ def _render_home(
         st.markdown(
             """
             <div class="tt-card">
-                <div class="tt-card-label">Analytics · Available Now</div>
+                <div class="tt-card-label">Analytics</div>
                 <div class="tt-card-title">📈 Win Rates</div>
                 <div class="tt-card-meta">
                     Point, Set, and Match win rates vs exact binomial models,
@@ -59,13 +283,13 @@ def _render_home(
             """,
             unsafe_allow_html=True,
         )
-        st.page_link(win_rates_page, label="Open Win Rates", icon="📈")
+        st.page_link(win_rates_page, label="Open Win Rates", icon="📈", width="stretch")
 
     with col2:
         st.markdown(
             """
             <div class="tt-card">
-                <div class="tt-card-label">Analytics · Available Now</div>
+                <div class="tt-card-label">Analytics</div>
                 <div class="tt-card-title">🎯 Service Win Rate</div>
                 <div class="tt-card-meta">
                     Point-by-point Total, Serve, and Receive win rates across
@@ -75,14 +299,19 @@ def _render_home(
             """,
             unsafe_allow_html=True,
         )
-        st.page_link(service_win_rate_page, label="Open Service Win Rate", icon="🎯")
+        st.page_link(
+            service_win_rate_page,
+            label="Open Service Win Rate",
+            icon="🎯",
+            width="stretch",
+        )
 
     col3, col4 = st.columns(2)
     with col3:
         st.markdown(
             """
             <div class="tt-card">
-                <div class="tt-card-label">Overview · Available Now</div>
+                <div class="tt-card-label">Overview</div>
                 <div class="tt-card-title">📊 Data Overview</div>
                 <div class="tt-card-meta">
                     Warehouse coverage: events, Men vs Women players &amp; matches,
@@ -92,23 +321,25 @@ def _render_home(
             """,
             unsafe_allow_html=True,
         )
-        st.page_link(overview_page, label="Open Data Overview", icon="📊")
+        st.page_link(
+            overview_page, label="Open Data Overview", icon="📊", width="stretch"
+        )
 
     with col4:
         st.markdown(
             """
             <div class="tt-card">
-                <div class="tt-card-label">Overview · Available Now</div>
-                <div class="tt-card-title">📖 About</div>
+                <div class="tt-card-label">Overview</div>
+                <div class="tt-card-title">📖 About &amp; Architecture</div>
                 <div class="tt-card-meta">
-                    Where the data comes from, how the pipeline is built,
-                    the inspiration behind this project, and a bit about me.
+                    End-to-end data pipeline, data sources, Gemini Vision
+                    enrichment, project engineering practices, and author bio.
                 </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
-        st.page_link(about_page, label="Open About", icon="📖")
+        st.page_link(about_page, label="Open About", icon="📖", width="stretch")
 
     st.markdown("#### Coming Soon")
     st.markdown(
@@ -117,8 +348,8 @@ def _render_home(
             <div class="tt-card-label">Planned</div>
             <div class="tt-card-title">🏆 Glicko Ratings &amp; Upsets</div>
             <div class="tt-card-meta">
-                Historical Glicko ratings by date or tournament, peak ratings,
-                and biggest upsets.
+                Historical Glicko-2 ratings by date or tournament, peak ratings,
+                rating volatility, and biggest upsets.
             </div>
         </div>
         """,
@@ -128,26 +359,26 @@ def _render_home(
     st.divider()
 
     # -----------------------------------------------------------------------
-    # 2. Inspired By / Credits
+    # Inspired By / Credits
     # -----------------------------------------------------------------------
     st.markdown("### Inspired By & Credits")
     st.markdown(
         "- **[JeffSackmann/tennis_MatchChartingProject & tennis_atp]"
-        "(https://github.com/JeffSackmann)** - Racquet-sport reference separating "
+        "(https://github.com/JeffSackmann)** — Racquet-sport reference separating "
         "match-level outcomes from granular point-by-point logs, inspiring the "
         "point-vs-match leverage analysis.\n"
-        "- **[dbt-labs/jaffle-shop](https://github.com/dbt-labs/jaffle-shop)** - "
-        "Canonical dbt reference for layered `staging/`, `intermediate/`, and "
-        "`marts/` (`dim_*` and `fct_*`) modeling and schema tests.\n"
+        "- **[dbt-labs/jaffle-shop](https://github.com/dbt-labs/jaffle-shop)** — "
+        "Canonical dbt reference for layered staged, intermediate, and mart "
+        "modeling and schema tests.\n"
         "- **[alan-turing-institute/AIrsenal]"
-        "(https://github.com/alan-turing-institute/AIrsenal)** - Python + SQL "
+        "(https://github.com/alan-turing-institute/AIrsenal)** — Python + SQL "
         "sports analytics architecture separating ingestion, relational storage, "
         "strength estimation, and backtesting.\n"
         "- **[sublee/glicko2](https://github.com/sublee/glicko2) & "
-        "ryankirkman/pyglicko2** - Lightweight Python reference implementations "
+        "ryankirkman/pyglicko2** — Lightweight Python reference implementations "
         "of the Glicko-2 update equations.\n"
         '- **Mark Glickman: ["Example of the Glicko-2 System"]'
-        "(https://www.glicko.net/glicko/glicko2.pdf)** - Primary paper defining "
+        "(https://www.glicko.net/glicko/glicko2.pdf)** — Primary paper defining "
         "the Glicko-2 equations, scaling factor (`173.7178`), and iterative "
         "Illinois volatility algorithm."
     )

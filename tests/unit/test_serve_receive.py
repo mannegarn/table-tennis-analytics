@@ -229,9 +229,12 @@ def test_service_win_rate_page_renders_and_controls_work(
         "Style",
     ]
 
-    # Search for a player and switch chart comparison
+    # Search for a player, switch chart comparison, and highlight a player
     page.text_input(key="sr_table_search").set_value("HARIMOTO")
     page.segmented_control(key="sr_chart_comparison").set_value("Receive % vs Total %")
     page.slider(key="sr_chart_min_matches").set_value(5)
+    highlight_options = page.selectbox(key="sr_chart_highlight_player").options
+    if len(highlight_options) > 1:
+        page.selectbox(key="sr_chart_highlight_player").set_value(highlight_options[1])
     page.run(timeout=30)
     assert not page.exception

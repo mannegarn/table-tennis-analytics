@@ -524,7 +524,7 @@ def build_win_rate_scatter(
     gender_label: str = "All",
     show_logistic_fit: bool = False,
     highlight_player: str | None = None,
-    height: int = 470,
+    height: int = 490,
 ) -> tuple[go.Figure, PlotSummaryMetrics]:
     """Build a polished, theme-aware Win Rates scatter plot with binomial baseline."""
     x_col, y_col, x_label, y_label = AXIS_METADATA[mode]
@@ -718,7 +718,7 @@ def build_win_rate_scatter(
             "xanchor": "left",
             "font": {"size": 16},
         },
-        margin={"l": 52, "r": 18, "t": 68, "b": 108},
+        margin={"l": 52, "r": 18, "t": 68, "b": 122},
     )
 
     y_all = np.concatenate([ys, curve_y])
@@ -919,7 +919,7 @@ def build_match_point_share_chart(
     won_at_50: int,
     gender_label: str = "All",
     show_logistic_fit: bool = True,
-    height: int = 470,
+    height: int = 490,
 ) -> tuple[go.Figure, MatchPointShareMetrics]:
     """Build a 1%-binned match point-share histogram with Binomial & Logistic curves."""
     if bins_df.is_empty():
@@ -1091,7 +1091,7 @@ def build_match_point_share_chart(
             "xanchor": "left",
             "font": {"size": 16},
         },
-        margin={"l": 52, "r": 18, "t": 68, "b": 108},
+        margin={"l": 52, "r": 18, "t": 68, "b": 122},
     )
 
     fig.add_vline(

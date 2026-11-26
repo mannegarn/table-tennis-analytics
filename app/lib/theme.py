@@ -12,6 +12,10 @@ from typing import Any
 
 import streamlit as st
 
+GITHUB_REPO_URL = "https://github.com/mannegarn/table-tennis-analytics"
+LINKEDIN_URL = "https://www.linkedin.com/in/marcus-annegarn-5009a4195/"
+CONTACT_EMAIL = "marcusannegarn@gmail.com"
+
 APP_CSS = """
 <style>
 :root {
@@ -29,10 +33,10 @@ html {
     background-color: var(--background-color) !important;
 }
 
-/* Tighten top padding while leaving room for Streamlit's top toolbar */
+/* Leave safe clearance for Streamlit Cloud's top-right toolbar and bottom badge */
 .block-container {
-    padding-top: 2.75rem;
-    padding-bottom: 2.5rem;
+    padding-top: 3.4rem;
+    padding-bottom: 4.25rem;
 }
 
 /* Style native st.metric widgets as subtle cards with a full orange border */
@@ -40,16 +44,59 @@ div[data-testid="stMetric"] {
     background-color: var(--secondary-background-color);
     border: 1px solid rgba(245, 158, 11, 0.55);
     border-radius: 10px;
-    padding: 0.9rem 1.1rem;
+    padding: 0.9rem 1.05rem;
+    height: 100%;
 }
 
-div[data-testid="stMetricLabel"] {
-    opacity: 0.78;
-    font-size: 0.85rem;
+div[data-testid="stMetricLabel"],
+div[data-testid="stMetricLabel"] *,
+div[data-testid="stMetricLabel"] > div,
+div[data-testid="stMetricLabel"] [data-testid="stMarkdownContainer"],
+div[data-testid="stMetricLabel"] [data-testid="stMarkdownContainer"] p {
+    opacity: 0.82;
+    font-size: 0.82rem;
+    line-height: 1.25;
+    height: auto !important;
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    flex-wrap: wrap !important;
 }
 
 div[data-testid="stMetricValue"] {
+    font-weight: 700;
+    font-size: clamp(1.3rem, 2.1vw, 1.95rem);
+    line-height: 1.15;
+}
+
+/* Prevent toggle & checkbox labels from clipping mid-word on split-screen widths */
+div[data-testid="stCheckbox"] label p,
+div[data-testid="stWidgetLabel"] p {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: unset !important;
+}
+
+/* Tech stack badge strip */
+.tt-pill-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin: 0.55rem 0 0.85rem;
+}
+
+.tt-pill {
+    display: inline-flex;
+    align-items: center;
+    background-color: var(--secondary-background-color);
+    border: 1px solid rgba(167, 139, 250, 0.42);
+    border-radius: 999px;
+    padding: 0.22rem 0.68rem;
+    font-size: 0.78rem;
     font-weight: 600;
+    color: var(--text-color);
+    letter-spacing: 0.01em;
+    white-space: nowrap;
 }
 
 /* Reusable info card for First/Last event callouts and Home page cards */
@@ -58,12 +105,108 @@ div[data-testid="stMetricValue"] {
     border: 1px solid rgba(245, 158, 11, 0.55);
     border-radius: 10px;
     padding: 1rem 1.2rem;
-    margin-bottom: 0.75rem;
-    min-height: 128px;
+    margin-bottom: 0.55rem;
+    min-height: 122px;
     transition: border-color 0.15s ease;
 }
 
 .tt-card:hover {
+    border-color: var(--tt-orange);
+}
+
+/* Headline discovery cards on Home */
+.tt-discovery-card {
+    background-color: var(--secondary-background-color);
+    border: 1px solid rgba(245, 158, 11, 0.45);
+    border-left: 4px solid var(--tt-orange);
+    border-radius: 10px;
+    padding: 0.95rem 1.15rem;
+    margin-bottom: 0.65rem;
+    min-height: 178px;
+}
+
+.tt-discovery-stat {
+    color: var(--tt-orange);
+    font-size: clamp(1.32rem, 2vw, 1.72rem);
+    font-weight: 700;
+    line-height: 1.15;
+    margin-bottom: 0.3rem;
+}
+
+.tt-discovery-title {
+    color: var(--text-color);
+    font-size: 0.98rem;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+}
+
+.tt-discovery-body {
+    color: var(--text-color);
+    opacity: 0.84;
+    font-size: 0.86rem;
+    line-height: 1.45;
+}
+
+/* 4-stage pipeline architecture grid on About */
+.tt-pipeline-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin: 0.75rem 0 1.15rem;
+}
+
+.tt-pipeline-step {
+    background-color: var(--secondary-background-color);
+    border: 1px solid rgba(245, 158, 11, 0.45);
+    border-radius: 10px;
+    padding: 0.85rem 1rem;
+}
+
+.tt-pipeline-num {
+    color: var(--primary-color);
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.25rem;
+}
+
+.tt-pipeline-title {
+    color: var(--text-color);
+    font-size: 0.96rem;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+}
+
+.tt-pipeline-desc {
+    color: var(--text-color);
+    opacity: 0.84;
+    font-size: 0.84rem;
+    line-height: 1.42;
+}
+
+/* Quick-jump anchor bar on long analytics pages */
+.tt-jump-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin: 0.35rem 0 0.85rem;
+}
+
+.tt-jump-bar a {
+    display: inline-block;
+    background-color: var(--secondary-background-color);
+    border: 1px solid rgba(245, 158, 11, 0.45);
+    border-radius: 999px;
+    padding: 0.25rem 0.72rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-color);
+    text-decoration: none;
+    transition: border-color 0.15s ease;
+}
+
+.tt-jump-bar a:hover {
     border-color: var(--tt-orange);
 }
 
@@ -153,19 +296,23 @@ div[data-testid="stMetricValue"] {
     text-underline-offset: 2px;
 }
 
-/* Subtle orange pop on page-link buttons */
-a[data-testid="stPageLink-NavLink"] {
+/* Subtle orange pop on page-link and link-button CTAs */
+a[data-testid="stPageLink-NavLink"],
+div[data-testid="stLinkButton"] a {
     border: 1px solid rgba(245, 158, 11, 0.45);
     border-radius: 8px;
     min-height: 40px;
+    display: inline-flex;
+    align-items: center;
     transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
-a[data-testid="stPageLink-NavLink"]:hover {
+a[data-testid="stPageLink-NavLink"]:hover,
+div[data-testid="stLinkButton"] a:hover {
     border-color: var(--tt-orange);
 }
 
-/* Distinct sidebar styling: overview section label & Analytics dropdown */
+/* Distinct sidebar styling: clean nav links without heavy nested box clutter */
 .tt-nav-section-label {
     color: var(--text-color);
     opacity: 0.65;
@@ -173,15 +320,33 @@ a[data-testid="stPageLink-NavLink"]:hover {
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    margin: 0.2rem 0 0.4rem 0.2rem;
+    margin: 0.1rem 0 0.35rem 0.2rem;
+}
+
+section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] {
+    border: 1px solid rgba(167, 139, 250, 0.22);
+    min-height: 36px;
+    padding-top: 0.22rem;
+    padding-bottom: 0.22rem;
+}
+
+section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]:hover {
+    border-color: var(--tt-orange);
+    background-color: rgba(245, 158, 11, 0.08);
+}
+
+section[data-testid="stSidebar"]
+a[data-testid="stPageLink-NavLink"][aria-current="page"] {
+    border-color: rgba(245, 158, 11, 0.78);
+    background-color: rgba(124, 58, 237, 0.16);
 }
 
 section[data-testid="stSidebar"] details {
     background-color: rgba(124, 58, 237, 0.08);
-    border: 1.5px solid rgba(245, 158, 11, 0.72);
+    border: 1px solid rgba(245, 158, 11, 0.62);
     border-radius: 10px;
-    padding: 0.15rem 0.35rem 0.35rem;
-    margin: 0.6rem 0 0.85rem;
+    padding: 0.1rem 0.35rem 0.3rem;
+    margin: 0.45rem 0 0.7rem;
 }
 
 section[data-testid="stSidebar"] details summary {
@@ -190,12 +355,7 @@ section[data-testid="stSidebar"] details summary {
 }
 
 section[data-testid="stSidebar"] details a[data-testid="stPageLink-NavLink"] {
-    border-color: rgba(124, 58, 237, 0.38);
-    margin-top: 0.2rem;
-}
-
-section[data-testid="stSidebar"] details a[data-testid="stPageLink-NavLink"]:hover {
-    border-color: var(--tt-orange);
+    margin-top: 0.18rem;
 }
 
 /* Match st.metric and .tt-card orange outline on st.dataframe tables */
@@ -207,11 +367,12 @@ div[data-testid="stDataFrame"] {
 
 .tt-card-label {
     color: var(--primary-color);
-    font-size: 0.78rem;
-    font-weight: 600;
+    font-size: 0.75rem;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     margin-bottom: 0.25rem;
+    white-space: nowrap;
 }
 
 .tt-card-title {
@@ -228,13 +389,27 @@ div[data-testid="stDataFrame"] {
     line-height: 1.45;
 }
 
+@media (max-width: 1024px) {
+    .tt-pipeline-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    div[data-testid="stMetric"] {
+        padding: 0.72rem 0.8rem;
+    }
+
+    .tt-discovery-card {
+        min-height: 185px;
+    }
+}
+
 /* Mobile responsiveness tweaks */
 @media (max-width: 768px) {
     .block-container {
-        padding-top: 2.15rem;
+        padding-top: 2.35rem;
         padding-left: 0.9rem;
         padding-right: 0.9rem;
-        padding-bottom: 2rem;
+        padding-bottom: 3.5rem;
     }
 
     h1 {
@@ -253,12 +428,18 @@ div[data-testid="stDataFrame"] {
         padding: 0.7rem 0.85rem;
     }
 
-    .tt-card {
+    .tt-card,
+    .tt-discovery-card {
         min-height: auto;
         padding: 0.85rem 1rem;
     }
 
+    .tt-pipeline-grid {
+        grid-template-columns: 1fr;
+    }
+
     a[data-testid="stPageLink-NavLink"],
+    div[data-testid="stLinkButton"] a,
     button[kind="segmented_control"],
     button[kind="segmented_controlActive"] {
         min-height: 44px;
@@ -311,9 +492,12 @@ def render_sidebar_nav(
 
 
 def render_sidebar_footer(snapshot_timestamp: str | None) -> None:
-    """Render author credit, snapshot timestamp, and data disclaimer in the sidebar."""
+    """Render author credit, portfolio links, snapshot timestamp, and disclaimer."""
     with st.sidebar:
-        st.caption("**Built by Marcus Annegarn**")
+        st.caption(
+            f"**Built by Marcus Annegarn**  \n"
+            f"[GitHub]({GITHUB_REPO_URL}) · [LinkedIn]({LINKEDIN_URL})"
+        )
         if snapshot_timestamp:
             st.caption(f"Data collected: `{snapshot_timestamp}`")
         st.caption(

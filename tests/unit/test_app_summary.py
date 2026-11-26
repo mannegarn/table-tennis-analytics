@@ -5,7 +5,11 @@ from __future__ import annotations
 from datetime import date
 
 import polars as pl
-from app.lib.data import build_yearly_matches_table, compute_summary_stats
+from app.lib.data import (
+    build_yearly_matches_table,
+    compute_home_insights,
+    compute_summary_stats,
+)
 from streamlit.testing.v1 import AppTest
 
 from tt_stats.core.config import project_root
@@ -128,3 +132,104 @@ def test_streamlit_pages_render_without_error() -> None:
         timeout=30
     )
     assert not serve_receive.exception
+
+
+def test_compute_home_insights() -> None:
+    events = pl.DataFrame(
+        {
+            "event_sk": [1],
+            "event_name": ["Test Open"],
+            "event_year": [2025],
+            "start_date": [date(2025, 5, 1)],
+            "end_date": [date(2025, 5, 4)],
+            "country": ["GER"],
+        }
+    )
+    players = pl.DataFrame(
+        {
+            "player_sk": [10, 20],
+            "player_name": ["Alice CHEN", "Bob MULLER"],
+            "organization_code": ["CHN", "GER"],
+            "country_code": ["CHN", "GER"],
+            "gender": ["F", "M"],
+            "style": ["Defender", "Attacker"],
+            "grip": ["Shakehand", "Shakehand"],
+            "hand": ["Right", "Right"],
+            "age": [24, 27],
+        }
+    )
+    senior_matches = pl.DataFrame(
+        {
+            "match_sk": [100],
+            "event_sk": [1],
+            "p1_player_sk": [10],
+            "p2_player_sk": [20],
+            "winner_side": [1],
+            "gender_category": ["women"],
+            "best_of": [5],
+            "result_type": ["played"],
+            "is_default_result": [False],
+            "has_result": [True],
+            "points_won_p1": [45],
+            "points_won_p2": [55],
+        }
+    )
+    senior_games = pl.DataFrame(
+        {
+            "match_sk": [100, 100, 100, 100, 100],
+            "p1_points": [11, 11, 2, 2, 19],
+            "p2_points": [9, 9, 11, 11, 15],
+            "winner_side": [1, 1, 2, 2, 1],
+            "is_valid_game_score": [True, True, True, True, True],
+        }
+    )
+    catalog_rollup = pl.DataFrame(
+        {
+            "event_sk": [1],
+            "gender_category": ["women"],
+            "discipline": ["singles"],
+            "is_youth": [False],
+            "is_para": [False],
+            "match_count": [1],
+        }
+    )
+    sr_raw = pl.DataFrame(
+        {
+            "player_sk": [10, 20],
+            "Player": ["Alice CHEN", "Bob MULLER"],
+            "Organization": ["CHN", "GER"],
+            "Gender": ["F", "M"],
+            "Style": ["Defender", "Attacker"],
+            "Grip": ["Shakehand", "Shakehand"],
+            "Hand": ["Right", "Right"],
+            "Matches": [10, 10],
+            "Points Played": [100, 100],
+            "Points Won": [52, 48],
+            "Points Lost": [48, 52],
+            "Serve Points": [50, 50],
+            "Serve Won": [28, 26],
+            "Serve Lost": [22, 24],
+            "Receive Points": [50, 50],
+            "Receive Won": [24, 22],
+            "Receive Lost": [26, 28],
+        }
+    )
+
+    insights = compute_home_insights(
+        events=events,
+        players=players,
+        senior_matches=senior_matches,
+        senior_games=senior_games,
+        catalog_rollup=catalog_rollup,
+        serve_receive_raw=sr_raw,
+    )
+    assert insights.senior_total_matches == 1
+    assert insights.senior_year_min == 2025
+    assert insights.senior_year_max == 2025
+    assert insights.commentary_points == 100
+    assert insights.global_serve_win_pct == 54.0
+    assert insights.global_receive_win_pct == 46.0
+    assert insights.server_edge_pp == 8.0
+    assert insights.bo5_matches == 1
+    assert insights.bo5_won_below_50 == 1
+    assert insights.bo5_won_below_50_pct == 100.0

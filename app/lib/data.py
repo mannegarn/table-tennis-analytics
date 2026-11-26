@@ -64,6 +64,29 @@ class SummaryStats:
     last_catalog_event: EventBoundary | None
 
 
+@dataclass(frozen=True)
+class HomeInsights:
+    """Dynamic headline scale & discovery metrics rendered on the Home page."""
+
+    senior_total_matches: int
+    total_players: int
+    distinct_countries: int
+    events_with_senior_singles: int
+    senior_year_min: int | None
+    senior_year_max: int | None
+    commentary_matches: int
+    commentary_points: int
+    global_serve_win_pct: float | None
+    global_receive_win_pct: float | None
+    server_edge_pp: float | None
+    bo5_matches: int
+    bo5_won_below_50: int
+    bo5_won_below_50_pct: float | None
+    defender_set_delta_pp: float | None
+    defender_bo5_delta_pp: float | None
+    defender_bo7_delta_pp: float | None
+
+
 def data_files_exist() -> bool:
     """Return True when all required Parquet snapshots are present."""
     required = (
@@ -324,4 +347,119 @@ def build_yearly_matches_table(
         .group_by(["event_year", "Gender"])
         .agg(pl.len().alias("Matches"))
         .sort(["event_year", "Gender"])
+    )
+
+
+def _mean_defender_delta_pp(
+    df: pl.DataFrame,
+    *,
+    mode: str,
+    best_of: int | None = None,
+    min_matches: int = 10,
+) -> float | None:
+    """Return mean percentage-point delta vs binomial curve for Defenders."""
+    import numpy as np
+
+    from .win_rates import PlotMode, compute_binomial_expected, filter_win_rate_rows
+
+    filtered = filter_win_rate_rows(
+        df,
+        min_matches=min_matches,
+        best_of=best_of,
+        styles=["Defender"],
+    )
+    if filtered.is_empty():
+        return None
+    x_col = "Point %"
+    y_col = "Set %" if mode == "point_to_set" else "Win %"
+    clean = filtered.filter(
+        pl.col(x_col).is_not_null()
+        & pl.col(y_col).is_not_null()
+        & pl.col(x_col).is_finite()
+        & pl.col(y_col).is_finite()
+    )
+    if clean.is_empty():
+        return None
+    xs = clean[x_col].to_numpy().astype(np.float64)
+    ys = clean[y_col].to_numpy().astype(np.float64)
+    plot_mode: PlotMode = "point_to_set" if mode == "point_to_set" else "point_to_match"
+    expected = compute_binomial_expected(xs, mode=plot_mode, best_of=best_of)
+    return round(float(np.mean(ys - expected)), 2)
+
+
+def compute_home_insights(
+    events: pl.DataFrame,
+    players: pl.DataFrame,
+    senior_matches: pl.DataFrame,
+    senior_games: pl.DataFrame,
+    catalog_rollup: pl.DataFrame,
+    serve_receive_raw: pl.DataFrame,
+) -> HomeInsights:
+    """Compute live scale and headline analytics insights for the Home page."""
+    from .serve_receive import compute_global_kpis, enrich_serve_receive_stats
+    from .win_rates import (
+        build_combined_point_set_stats,
+        build_format_win_rates,
+        build_match_point_share_bins,
+    )
+
+    summary = compute_summary_stats(events, players, senior_matches, catalog_rollup)
+
+    yearly = build_yearly_matches_table(events, senior_matches)
+    if not yearly.is_empty():
+        yr_min_raw = yearly["event_year"].min()
+        yr_max_raw = yearly["event_year"].max()
+        senior_year_min = int(yr_min_raw) if isinstance(yr_min_raw, int) else None
+        senior_year_max = int(yr_max_raw) if isinstance(yr_max_raw, int) else None
+    else:
+        senior_year_min = None
+        senior_year_max = None
+
+    sr_enriched = enrich_serve_receive_stats(serve_receive_raw)
+    sr_kpis = compute_global_kpis(sr_enriched)
+    server_edge_pp: float | None = None
+    if (
+        sr_kpis.global_serve_win_pct is not None
+        and sr_kpis.global_receive_win_pct is not None
+    ):
+        server_edge_pp = round(
+            sr_kpis.global_serve_win_pct - sr_kpis.global_receive_win_pct, 2
+        )
+
+    _, bo5_matches, bo5_below_50, _ = build_match_point_share_bins(
+        senior_matches,
+        best_of=5,
+        gender="All",
+    )
+    bo5_below_50_pct = (
+        round(100.0 * bo5_below_50 / bo5_matches, 2) if bo5_matches > 0 else None
+    )
+
+    combined_df = build_combined_point_set_stats(senior_matches, senior_games, players)
+    format_df = build_format_win_rates(senior_matches, senior_games, players)
+
+    return HomeInsights(
+        senior_total_matches=summary.senior_total_matches,
+        total_players=summary.total_players,
+        distinct_countries=summary.distinct_countries,
+        events_with_senior_singles=summary.events_with_senior_singles,
+        senior_year_min=senior_year_min,
+        senior_year_max=senior_year_max,
+        commentary_matches=sr_kpis.total_matches,
+        commentary_points=sr_kpis.total_points,
+        global_serve_win_pct=sr_kpis.global_serve_win_pct,
+        global_receive_win_pct=sr_kpis.global_receive_win_pct,
+        server_edge_pp=server_edge_pp,
+        bo5_matches=bo5_matches,
+        bo5_won_below_50=bo5_below_50,
+        bo5_won_below_50_pct=bo5_below_50_pct,
+        defender_set_delta_pp=_mean_defender_delta_pp(
+            combined_df, mode="point_to_set", best_of=None
+        ),
+        defender_bo5_delta_pp=_mean_defender_delta_pp(
+            format_df, mode="point_to_match", best_of=5
+        ),
+        defender_bo7_delta_pp=_mean_defender_delta_pp(
+            format_df, mode="point_to_match", best_of=7
+        ),
     )

@@ -124,6 +124,7 @@ def _render_extremes_expander(
 def _render_plot_section(
     *,
     section_key: str,
+    anchor_id: str,
     subheader: str,
     bullets_html: list[str],
     chart_title: str,
@@ -136,6 +137,7 @@ def _render_plot_section(
     highlight_player: str | None,
 ) -> None:
     """Render one complete Win Rates plot section with per-plot controls."""
+    st.markdown(f'<div id="{anchor_id}"></div>', unsafe_allow_html=True)
     st.subheader(subheader)
     _render_insight_card(bullets_html)
 
@@ -174,7 +176,7 @@ def _render_plot_section(
         )
         active_best_of = None
 
-    c_slider, c_toggle = st.columns([3, 1.4], vertical_alignment="bottom")
+    c_slider, c_toggle = st.columns([2.1, 1.7], vertical_alignment="bottom")
     with c_slider:
         min_matches = st.slider(
             "Minimum played matches",
@@ -317,16 +319,38 @@ combined_df, format_df = _cached_win_rate_tables(
     players_df.height,
 )
 
+st.markdown(
+    """
+    <div class="tt-jump-bar">
+        <a href="#plot-1-point-vs-match">1. Match % vs Point %</a>
+        <a href="#plot-2-set-vs-match">2. Match % vs Set %</a>
+        <a href="#plot-3-point-vs-set">3. Set % vs Point %</a>
+        <a href="#plot-4-match-point-share">4. Per-Match Point Share</a>
+        <a href="#binomial-model-addendum">Math Addendum</a>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
 # ---------------------------------------------------------------------------
-# Shared Secondary Profile Filters (Collapsed by default for clean mobile UX)
+# Shared Player Highlight (Surfaced) & Secondary Profile Filters (Collapsed)
 # ---------------------------------------------------------------------------
 available_styles = sorted(combined_df["Style"].unique().to_list())
 available_grips = sorted(combined_df["Grip"].unique().to_list())
 available_hands = sorted(combined_df["Hand"].unique().to_list())
 all_player_names = sorted(combined_df["Player"].unique().to_list())
 
+highlight_choice = st.selectbox(
+    "Highlight a player across Plots 1-3",
+    options=["None", *all_player_names],
+    index=0,
+    key="wr_highlight_player",
+    help="Spot any player as a red star across the three player-level scatter plots.",
+)
+highlight_player: str | None = None if highlight_choice == "None" else highlight_choice
+
 with st.expander(
-    "Player Profile Filters & Highlight (Style, Grip, Hand, Player Search)",
+    "Player Profile Filters (Style, Grip, Hand)",
     expanded=False,
 ):
     pf1, pf2, pf3 = st.columns(3)
@@ -352,16 +376,6 @@ with st.expander(
             key="wr_hands",
         )
 
-    highlight_choice = st.selectbox(
-        "Highlight a player across all three plots",
-        options=["None", *all_player_names],
-        index=0,
-        key="wr_highlight_player",
-    )
-    highlight_player: str | None = (
-        None if highlight_choice == "None" else highlight_choice
-    )
-
 st.divider()
 
 # ---------------------------------------------------------------------------
@@ -369,6 +383,7 @@ st.divider()
 # ---------------------------------------------------------------------------
 _render_plot_section(
     section_key="pt_vs_match",
+    anchor_id="plot-1-point-vs-match",
     subheader="1. Match Win Rate vs Point Win Rate",
     bullets_html=[
         (
@@ -426,6 +441,7 @@ st.divider()
 # ---------------------------------------------------------------------------
 _render_plot_section(
     section_key="set_vs_match",
+    anchor_id="plot-2-set-vs-match",
     subheader="2. Match Win Rate vs Set Win Rate",
     bullets_html=[
         (
@@ -479,6 +495,7 @@ st.divider()
 # ---------------------------------------------------------------------------
 _render_plot_section(
     section_key="pt_vs_set",
+    anchor_id="plot-3-point-vs-set",
     subheader="3. Set Win Rate vs Point Win Rate",
     bullets_html=[
         (
@@ -530,6 +547,7 @@ st.divider()
 # ---------------------------------------------------------------------------
 # Plot 4: Match Win Probability vs Match Point Share (Per-Match 1% Histogram)
 # ---------------------------------------------------------------------------
+st.markdown('<div id="plot-4-match-point-share"></div>', unsafe_allow_html=True)
 st.subheader("4. Match Point Share vs Match Win Probability (Per-Match)")
 _render_insight_card(
     [
@@ -569,7 +587,7 @@ _render_insight_card(
             "<strong>Why:</strong>"
             "<ul>"
             "<li>Plots 1&ndash;3 condition on a player's <em>underlying</em> "
-            "career probability $p$, leaving room for match-to-match point "
+            "career probability <em>p</em>, leaving room for match-to-match point "
             "variance.</li>"
             "<li>Plot 4 conditions on the <em>realized</em> point share already "
             "scored inside that match &mdash; so only <em>how points are "
@@ -650,7 +668,7 @@ st.markdown('<div id="binomial-model-addendum"></div>', unsafe_allow_html=True)
 st.subheader("Mathematical Addendum: Binomial & Logistic S-Curve Models")
 
 with st.expander(
-    "Read the full mathematical explanation for all three plots",
+    "Read the full mathematical explanation for all four plots",
     expanded=False,
 ):
     st.markdown(

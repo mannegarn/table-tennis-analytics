@@ -70,19 +70,20 @@ st.subheader("Overview")
 k1, k2, k3 = st.columns(3)
 
 k1.metric(
-    "Events (with matches)",
+    "Active Events",
     f"{stats.events_with_senior_singles:,}",
     help=(
-        f"Total events in catalog: {stats.total_events:,}. "
-        f"Events with any catalog match: {stats.events_with_catalog_matches:,}."
+        f"Events with senior singles matches. Total events in catalog: "
+        f"{stats.total_events:,}. Events with any catalog match: "
+        f"{stats.events_with_catalog_matches:,}."
     ),
 )
 k2.metric(
-    "Senior Singles Matches",
+    "Matches",
     f"{stats.senior_total_matches:,}",
     help=(
-        "Full match catalog (all disciplines, youth, para, team rubbers): "
-        f"{stats.catalog_total_matches:,}."
+        "Senior singles matches. Full match catalog (all disciplines, youth, "
+        f"para, team rubbers): {stats.catalog_total_matches:,}."
     ),
 )
 k3.metric(
@@ -192,14 +193,21 @@ with st.expander("Full catalog date span (all events & all match disciplines)"):
     if stats.first_catalog_event and stats.last_catalog_event:
         first_cat = stats.first_catalog_event
         last_cat = stats.last_catalog_event
+        first_word = "match" if first_cat.match_count == 1 else "matches"
+        last_word = "match" if last_cat.match_count == 1 else "matches"
         st.write(
             f"- **First catalog event with matches:** {first_cat.event_name} "
-            f"(`{first_cat.start_date}`, {first_cat.match_count:,} matches)"
+            f"(`{first_cat.start_date}`, {first_cat.match_count:,} {first_word})"
         )
         st.write(
             f"- **Last catalog event with matches:** {last_cat.event_name} "
-            f"(`{last_cat.start_date}`, {last_cat.match_count:,} matches)"
+            f"(`{last_cat.start_date}`, {last_cat.match_count:,} {last_word})"
         )
+    st.caption(
+        "Event calendar metadata includes historical ITTF archive entries back "
+        "to 1926 and upcoming scheduled events into 2027; detailed senior singles "
+        "match records span 2021 onward."
+    )
 
 st.divider()
 
@@ -217,6 +225,7 @@ with col_gender:
             "Matches": [stats.senior_mens_matches, stats.senior_womens_matches],
         }
     )
+    gender_max = max(stats.senior_mens_matches, stats.senior_womens_matches, 1)
     fig_gender = px.bar(
         gender_df,
         x="Category",
@@ -228,6 +237,7 @@ with col_gender:
     )
     fig_gender.update_traces(texttemplate="%{text:,}", textposition="outside")
     fig_gender.update_layout(showlegend=False)
+    fig_gender.update_yaxes(range=[0, gender_max * 1.15])
     fig_gender = style_figure(fig_gender, height=340)
     render_chart(fig_gender, key="overview_gender_chart")
 
@@ -242,6 +252,17 @@ with col_format:
             ],
         }
     ).filter(pl.col("Matches") > 0)
+    format_max = max(
+        stats.senior_bo5_matches,
+        stats.senior_bo7_matches,
+        stats.senior_other_format_matches,
+        1,
+    )
+    format_title = (
+        "Senior Singles Match Formats (Bo5, Bo7 & Other)"
+        if stats.senior_other_format_matches > 0
+        else "Best-of-5 vs Best-of-7 Matches"
+    )
     fig_format = px.bar(
         format_df,
         x="Format",
@@ -249,10 +270,11 @@ with col_format:
         color="Format",
         color_discrete_map=FORMAT_COLORS,
         text="Matches",
-        title="Best-of-5 vs Best-of-7 Matches",
+        title=format_title,
     )
     fig_format.update_traces(texttemplate="%{text:,}", textposition="outside")
     fig_format.update_layout(showlegend=False)
+    fig_format.update_yaxes(range=[0, format_max * 1.15])
     fig_format = style_figure(fig_format, height=340)
     render_chart(fig_format, key="overview_format_chart")
 

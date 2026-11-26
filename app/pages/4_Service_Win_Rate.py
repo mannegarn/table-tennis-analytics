@@ -70,39 +70,96 @@ def _render_chart_caption(summary: ServeReceiveChartSummary) -> None:
     st.caption(" · ".join(parts))
 
 
-def _table_column_config() -> dict[str, Any]:
-    """Return clean Streamlit column formatting for the leaderboard table."""
+def _table_column_config(metric_view: MetricView) -> dict[str, Any]:
+    """Return clean Streamlit column formatting for the leaderboard table.
+
+    Uses compact headers and explicit pixel widths when ``metric_view == "All"``
+    so all 15 columns fit comfortably on desktop viewports without clipping.
+    """
+    compact = metric_view == "All"
+    num_w: int | str = 52 if compact else "small"
+    pct_w: int | str = 58 if compact else "small"
     return {
-        "Player": st.column_config.TextColumn("Player"),
-        "Org": st.column_config.TextColumn("Org"),
-        "Style": st.column_config.TextColumn("Style"),
+        "Player": st.column_config.TextColumn(
+            "Player",
+            width=128 if compact else "medium",
+            pinned=True,
+        ),
+        "Org": st.column_config.TextColumn("Org", width=44 if compact else "small"),
+        "Style": st.column_config.TextColumn("Style", width=66 if compact else "small"),
         "Matches": st.column_config.NumberColumn(
             "Matches",
             format="%d",
+            width=56 if compact else "small",
             help="Completed played senior singles matches with full commentary",
         ),
-        "Total Won": st.column_config.NumberColumn("Total Won", format="%d"),
-        "Total Lost": st.column_config.NumberColumn("Total Lost", format="%d"),
-        "Total Win %": st.column_config.NumberColumn("Total Win %", format="%.2f%%"),
-        "Serve Won": st.column_config.NumberColumn("Serve Won", format="%d"),
-        "Serve Lost": st.column_config.NumberColumn("Serve Lost", format="%d"),
-        "Serve Win %": st.column_config.NumberColumn("Serve Win %", format="%.2f%%"),
+        "Total Won": st.column_config.NumberColumn(
+            "Tot W" if compact else "Total Won",
+            format="%d",
+            width=num_w,
+            help="Total points won across commentary-covered matches",
+        ),
+        "Total Lost": st.column_config.NumberColumn(
+            "Tot L" if compact else "Total Lost",
+            format="%d",
+            width=num_w,
+            help="Total points lost across commentary-covered matches",
+        ),
+        "Total Win %": st.column_config.NumberColumn(
+            "Tot %" if compact else "Total Win %",
+            format="%.2f%%",
+            width=pct_w,
+            help="Overall point win percentage",
+        ),
+        "Serve Won": st.column_config.NumberColumn(
+            "Srv W" if compact else "Serve Won",
+            format="%d",
+            width=num_w,
+            help="Points won while serving",
+        ),
+        "Serve Lost": st.column_config.NumberColumn(
+            "Srv L" if compact else "Serve Lost",
+            format="%d",
+            width=num_w,
+            help="Points lost while serving",
+        ),
+        "Serve Win %": st.column_config.NumberColumn(
+            "Srv %" if compact else "Serve Win %",
+            format="%.2f%%",
+            width=pct_w,
+            help="Point win percentage when serving",
+        ),
         "Serve Delta": st.column_config.NumberColumn(
-            "Serve Delta (pp)",
+            "Srv Δ" if compact else "Serve Delta (pp)",
             format="%+.2f pp",
+            width=64 if compact else "small",
             help=(
                 "Serve Win % minus the player's Total Point Win % "
                 "(positive = stronger on serve than overall average)."
             ),
         ),
-        "Receive Won": st.column_config.NumberColumn("Receive Won", format="%d"),
-        "Receive Lost": st.column_config.NumberColumn("Receive Lost", format="%d"),
+        "Receive Won": st.column_config.NumberColumn(
+            "Rcv W" if compact else "Receive Won",
+            format="%d",
+            width=num_w,
+            help="Points won while receiving",
+        ),
+        "Receive Lost": st.column_config.NumberColumn(
+            "Rcv L" if compact else "Receive Lost",
+            format="%d",
+            width=num_w,
+            help="Points lost while receiving",
+        ),
         "Receive Win %": st.column_config.NumberColumn(
-            "Receive Win %", format="%.2f%%"
+            "Rcv %" if compact else "Receive Win %",
+            format="%.2f%%",
+            width=pct_w,
+            help="Point win percentage when receiving",
         ),
         "Receive Delta": st.column_config.NumberColumn(
-            "Receive Delta (pp)",
+            "Rcv Δ" if compact else "Receive Delta (pp)",
             format="%+.2f pp",
+            width=64 if compact else "small",
             help=(
                 "Receive Win % minus the player's Total Point Win % "
                 "(shows relative receive advantage or disadvantage)."
@@ -309,10 +366,13 @@ table_view_df = build_player_table_view(
     metric_view=metric_view,
 )
 
+sort_col_label = (
+    "Serve Win %" if metric_view in ("All", "Serve") else f"{metric_view} Win %"
+)
 st.caption(
     f"Showing **{table_view_df.height:,}** players with at least "
     f"**{table_min_matches}** commentary-covered matches "
-    f"(sorted by **{'Total' if metric_view == 'Total' else metric_view} Win %**; "
+    f"(sorted by **{sort_col_label}**; "
     "click any column header—including **Serve Delta** / **Receive Delta**—to "
     "re-sort)."
 )
@@ -326,7 +386,7 @@ else:
         width="stretch",
         hide_index=True,
         height=520,
-        column_config=_table_column_config(),
+        column_config=_table_column_config(metric_view),
     )
 
 st.divider()
@@ -392,14 +452,16 @@ with c_comp:
     )
     comparison = COMPARISON_LABELS[comp_label]
 
-chart_min_matches = st.slider(
-    "Minimum matches (with commentary)",
-    min_value=0,
-    max_value=100,
-    value=10,
-    step=5,
-    key="sr_chart_min_matches",
-)
+c_chart_min, c_chart_hl = st.columns([1.4, 1.2], vertical_alignment="bottom")
+with c_chart_min:
+    chart_min_matches = st.slider(
+        "Minimum matches (with commentary)",
+        min_value=0,
+        max_value=100,
+        value=10,
+        step=5,
+        key="sr_chart_min_matches",
+    )
 
 filtered_chart_df = filter_serve_receive_rows(
     sr_df,
@@ -408,6 +470,19 @@ filtered_chart_df = filter_serve_receive_rows(
     styles=selected_styles,
     grips=selected_grips,
     hands=selected_hands,
+)
+
+chart_player_names = sorted(filtered_chart_df["Player"].unique().to_list())
+with c_chart_hl:
+    sr_highlight_choice = st.selectbox(
+        "Highlight a player on scatter plot",
+        options=["None", *chart_player_names],
+        index=0,
+        key="sr_chart_highlight_player",
+        help="Spot any visible player as a red star on the scatter plot.",
+    )
+sr_highlight_player: str | None = (
+    None if sr_highlight_choice == "None" else sr_highlight_choice
 )
 
 chart_title = (
@@ -420,6 +495,7 @@ fig, chart_summary = build_serve_receive_scatter(
     comparison=comparison,
     title=chart_title,
     gender_label=chart_gender,
+    highlight_player=sr_highlight_player,
 )
 render_chart(fig, key="sr_scatter_chart")
 _render_chart_caption(chart_summary)
@@ -437,10 +513,9 @@ with st.expander(
     expanded=False,
 ):
     st.markdown(
-        "The underlying point counts are pre-aggregated from "
-        "`marts.fct_match_commentary` joined to completed, played senior singles "
-        "matches (`result_type = 'played'`, `not is_default_result`) during "
-        "`make app-refresh`:"
+        "Point-level counts are pre-aggregated from the curated match commentary "
+        "feed joined to completed, played senior singles matches (excluding "
+        "walkovers, injuries, retirements, and defaults) during snapshot export:"
     )
     st.markdown(
         "1. **Action types parsed (`PT`, `SSR`, `DPT`):**\n"

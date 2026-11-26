@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import streamlit as st
 from lib.data import load_snapshot_timestamp
-from lib.theme import ensure_standalone_shell
+from lib.theme import (
+    CONTACT_EMAIL,
+    GITHUB_REPO_URL,
+    LINKEDIN_URL,
+    ensure_standalone_shell,
+)
 
 ensure_standalone_shell(load_snapshot_timestamp())
 
-st.title("📖 About")
+st.title("📖 About & Architecture")
 
 st.divider()
 
@@ -25,7 +30,55 @@ st.markdown(
 )
 
 # ---------------------------------------------------------------------------
-# 2. Where the Data Comes From
+# 2. End-to-End Architecture (For Engineering Reviewers)
+# ---------------------------------------------------------------------------
+st.subheader("End-to-End Data Platform Architecture")
+st.markdown(
+    """
+    <div class="tt-pipeline-grid">
+        <div class="tt-pipeline-step">
+            <div class="tt-pipeline-num">1 · Ingest &amp; Vision</div>
+            <div class="tt-pipeline-title">Async Collectors + Gemini</div>
+            <div class="tt-pipeline-desc">
+                Concurrent <code>httpx</code> collectors fetch WTT &amp; ITTF
+                records; a Gemini Vision pipeline identifies missing tournament
+                table sponsors from match video.
+            </div>
+        </div>
+        <div class="tt-pipeline-step">
+            <div class="tt-pipeline-num">2 · Warehouse</div>
+            <div class="tt-pipeline-title">PostgreSQL 16 + dbt</div>
+            <div class="tt-pipeline-desc">
+                Raw JSONB payloads land transactionally in PostgreSQL and
+                transform through staged, intermediate, and mart models with
+                manual CSV override seeds.
+            </div>
+        </div>
+        <div class="tt-pipeline-step">
+            <div class="tt-pipeline-num">3 · Serving Layer</div>
+            <div class="tt-pipeline-title">Parquet + Polars</div>
+            <div class="tt-pipeline-desc">
+                Curated marts export atomically to compact <code>zstd</code>
+                Parquet snapshots (export-time age instead of DOB) for
+                millisecond Polars queries.
+            </div>
+        </div>
+        <div class="tt-pipeline-step">
+            <div class="tt-pipeline-num">4 · Analytics &amp; UI</div>
+            <div class="tt-pipeline-title">Models + Streamlit</div>
+            <div class="tt-pipeline-desc">
+                Exact 11-pt deuce binomial models, 2-param logistic S-curves,
+                and point-by-point server inference rendered interactively with
+                Plotly.
+            </div>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+# ---------------------------------------------------------------------------
+# 3. Where the Data Comes From
 # ---------------------------------------------------------------------------
 st.subheader("Where the Data Comes From")
 st.markdown(
@@ -38,40 +91,58 @@ st.markdown(
 )
 
 # ---------------------------------------------------------------------------
-# 3. How It's Built
+# 4. Engineering & Quality Practices
 # ---------------------------------------------------------------------------
-st.subheader("How It's Built")
+st.subheader("How It's Built & Verified")
 st.markdown(
     "- **Collection & Enrichment:** Automated async Python collectors gather "
-    "raw match, event, and player records. Where tournament equipment metadata "
-    "is missing, a **Gemini** vision script identifies table brands from "
-    "tournament footage.\n"
+    "raw match, event, and player records with idempotent landing and run-level "
+    "audit logs. Where tournament equipment metadata is missing, a **Gemini** "
+    "vision workflow identifies table brands from tournament footage.\n"
     "- **Warehouse & Modelling:** Raw payloads are landed in **PostgreSQL** "
     "and transformed through **dbt** (`staging`, `intermediate`, and `marts` "
-    "layers), alongside **manual CSV overrides** (local dbt seeds) for "
-    "edge-case score, format, sponsor, and player-profile corrections.\n"
-    "- **Analysis & Front End:** Curated warehouse marts are exported to "
-    "compact **Parquet** snapshots (with senior-singles players and "
-    "export-time age instead of dates of birth) and read with **Polars** in "
-    "this **Streamlit** app. Skill ratings (Glicko-2) and point-level "
-    "analytics pages are planned next.\n\n"
-    "The current launch version was developed with AI assistance using "
-    "**DeepSeek** and **Google Antigravity**, building upon an earlier "
-    "prototype built by hand in Jupyter notebooks."
+    "layers), alongside **manual CSV overrides** (dbt seeds) for edge-case "
+    "score, format, sponsor, and player-profile corrections.\n"
+    "- **Testing & Quality Tooling:** Backed by unit and PostgreSQL integration "
+    "tests (`pytest`, including Streamlit `AppTest` smoke and filter tests), "
+    "strict `mypy` type checking, `ruff` linting/formatting, `sqlfluff` SQL "
+    "linting, and `dbt` schema/data tests.\n"
+    "- **AI Transparency:** The current launch version was developed with AI "
+    "assistance using **DeepSeek** and **Google Antigravity**, building upon "
+    "an earlier prototype built by hand in Jupyter notebooks."
 )
 
 # ---------------------------------------------------------------------------
-# 4. About Me & Inspiration
+# 5. About Me & Contact
 # ---------------------------------------------------------------------------
 st.subheader("About Me / Inspiration Behind This Project")
 st.markdown(
     "I picked up table tennis in London in my mid-20s and enjoy both the "
-    "sport and working with data.\n In major sports such as tennis and football, "
-    "there is endless public data and analysis available.\n Those same "
-    "metrics and insights are not widely available for table tennis. "
-    "I want to change that.\n\n"
-    "If you have any questions or would like to collaborate, reach out via "
-    "email at [marcusannegarn@gmail.com](mailto:marcusannegarn@gmail.com) or "
-    "connect on "
-    "[LinkedIn](https://www.linkedin.com/in/marcus-annegarn-5009a4195/)."
+    "sport and working with data. In major sports such as tennis and football, "
+    "there is endless public data and analysis available. Those same "
+    "metrics and insights are not widely available for table tennis — "
+    "I want to change that."
 )
+
+c_gh, c_li, c_em = st.columns(3)
+with c_gh:
+    st.link_button(
+        "Source Code on GitHub",
+        GITHUB_REPO_URL,
+        icon="💻",
+        width="stretch",
+    )
+with c_li:
+    st.link_button(
+        "Connect on LinkedIn",
+        LINKEDIN_URL,
+        icon="🔗",
+        width="stretch",
+    )
+with c_em:
+    st.link_button(
+        "Email Marcus",
+        f"mailto:{CONTACT_EMAIL}",
+        icon="✉️",
+        width="stretch",
+    )

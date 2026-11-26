@@ -39,12 +39,12 @@ class StyleMarkerSpec:
 STYLE_MARKERS: tuple[StyleMarkerSpec, ...] = (
     StyleMarkerSpec(
         label="Unknown",
-        color="#94A3B8",
+        color="#64748B",
         symbol="square",
         size=6.5,
-        opacity=0.40,
-        line_width=0.5,
-        line_color="rgba(148, 163, 184, 0.6)",
+        opacity=0.55,
+        line_width=0.8,
+        line_color="rgba(100, 116, 139, 0.75)",
     ),
     StyleMarkerSpec(
         label="Attacker",
@@ -97,12 +97,12 @@ def style_figure(
             "bgcolor": "rgba(0,0,0,0)",
             "orientation": "h",
             "yanchor": "top",
-            "y": -0.22,
+            "y": -0.28,
             "xanchor": "center",
             "x": 0.5,
             "font": {"size": 12},
         }
-        bottom_margin = 90
+        bottom_margin = 108
     else:
         legend_cfg = {
             "bgcolor": "rgba(0,0,0,0)",
