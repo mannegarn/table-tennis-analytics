@@ -1,8 +1,6 @@
 # Table Tennis Analytics Platform
 
-End-to-end data platform for international table tennis: collect from the
-source, land raw payloads in PostgreSQL, transform with dbt, and analyse with
-Polars.
+Table tennis skill ratings and match analytics.
 
 > Status: ongoing. Initial Streamlit dashboard live at [pingpongstats.streamlit.app](https://pingpongstats.streamlit.app/).
 
