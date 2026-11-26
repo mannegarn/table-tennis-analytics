@@ -38,8 +38,8 @@ st.info(
     "- Current players and matches are taken from **senior singles** matches "
     "(including team events).\n"
     "- Doubles, Youth, Para, and other matches are not covered yet.\n"
-    "- The match catalog is based on **WTT** and **ITTF** sources. \n"
-    "- Other leagues coming soon ..."
+    "- The match catalog is based on **WTT** and **ITTF** sources.\n"
+    "- Additional national and regional leagues planned."
 )
 
 if not data_files_exist():
@@ -158,7 +158,11 @@ def render_event_card(label: str, boundary: EventBoundary | None) -> None:
         return
     name = escape(boundary.event_name)
     country = escape(boundary.country or "Unknown location")
-    date_span = f"{boundary.start_date} to {boundary.end_date or boundary.start_date}"
+    if boundary.start_date is not None:
+        end = boundary.end_date or boundary.start_date
+        date_span = f"{boundary.start_date:%d/%m/%y} to {end:%d/%m/%y}"
+    else:
+        date_span = "Unknown"
     st.markdown(
         f"""
         <div class="tt-card">

@@ -32,6 +32,11 @@ html {
     background-color: var(--background-color) !important;
 }
 
+.stApp,
+[data-testid="stAppViewContainer"] {
+    overflow-x: clip;
+}
+
 /* Leave safe clearance for Streamlit Cloud's top-right toolbar and bottom badge */
 .block-container {
     padding-top: 3.4rem;
@@ -425,6 +430,7 @@ div[data-testid="stDataFrame"] {
 
     div[data-testid="stMetric"] {
         padding: 0.7rem 0.85rem;
+        margin-bottom: 0.35rem;
     }
 
     .tt-card,
@@ -444,11 +450,175 @@ div[data-testid="stDataFrame"] {
         min-height: 44px;
     }
 
+    div[data-testid="stSegmentedControl"] button {
+        font-size: 0.94rem !important;
+        min-height: 44px !important;
+    }
+
     .katex-display {
         font-size: 0.82em;
         overflow-x: auto;
         overflow-y: hidden;
         padding-bottom: 0.25rem;
+    }
+}
+
+/* Top-5 Home showcase rows */
+.tt-top5-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.tt-top5-row {
+    display: flex;
+    align-items: center;
+    gap: 0.95rem;
+    background-color: var(--secondary-background-color);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    border-radius: 12px;
+    padding: 0.7rem 0.95rem;
+    transition: border-color 0.15s ease;
+}
+
+.tt-top5-row:hover {
+    border-color: var(--tt-orange);
+}
+
+.tt-top5-rank {
+    min-width: 2.1rem;
+    text-align: center;
+    font-size: 1.85rem;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--text-color);
+    opacity: 0.85;
+    font-variant-numeric: tabular-nums;
+}
+
+.tt-top5-rank-1 {
+    color: var(--tt-orange);
+    opacity: 1;
+}
+
+.tt-top5-avatar {
+    width: 84px;
+    height: 84px;
+    border-radius: 14px;
+    object-fit: cover;
+    object-position: top center;
+    border: 2px solid rgba(167, 139, 250, 0.45);
+    background-color: rgba(124, 58, 237, 0.12);
+    flex-shrink: 0;
+}
+
+.tt-top5-player {
+    min-width: 0;
+    flex: 1;
+}
+
+.tt-top5-name {
+    color: var(--text-color);
+    font-weight: 700;
+    font-size: 1.02rem;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tt-top5-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.24rem;
+    color: var(--text-color);
+    opacity: 0.76;
+    font-size: 0.82rem;
+}
+
+.tt-top5-flag {
+    width: 22px;
+    height: 15px;
+    border-radius: 2px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.tt-top5-stats {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    flex-shrink: 0;
+}
+
+.tt-top5-stat {
+    text-align: right;
+}
+
+.tt-top5-stat-val {
+    color: var(--text-color);
+    font-weight: 800;
+    font-size: 1.08rem;
+    line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+}
+
+.tt-top5-stat-sub {
+    color: var(--text-color);
+    font-weight: 600;
+    font-size: 0.94rem;
+    line-height: 1.15;
+    opacity: 0.88;
+    font-variant-numeric: tabular-nums;
+}
+
+.tt-top5-stat-lbl {
+    color: var(--text-color);
+    opacity: 0.62;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 0.1rem;
+}
+
+@media (max-width: 640px) {
+    .tt-top5-row {
+        display: grid;
+        grid-template-columns: auto 68px 1fr;
+        column-gap: 0.7rem;
+        row-gap: 0.55rem;
+        align-items: center;
+        padding: 0.62rem 0.75rem;
+    }
+
+    .tt-top5-rank {
+        min-width: 1.5rem;
+        font-size: 1.45rem;
+    }
+
+    .tt-top5-avatar {
+        width: 68px;
+        height: 68px;
+        border-radius: 12px;
+    }
+
+    .tt-top5-name {
+        white-space: normal;
+        font-size: 0.98rem;
+    }
+
+    .tt-top5-stats {
+        grid-column: 1 / -1;
+        justify-content: space-around;
+        border-top: 1px solid rgba(245, 158, 11, 0.22);
+        padding-top: 0.45rem;
+        gap: 0.5rem;
+    }
+
+    .tt-top5-stat {
+        text-align: center;
     }
 }
 </style>
@@ -491,8 +661,9 @@ def render_sidebar_nav(
 
 
 def render_sidebar_footer(snapshot_timestamp: str | None) -> None:
-    """Render repository link, snapshot timestamp, and disclaimer."""
+    """Render author credit, repository link, snapshot timestamp, and disclaimer."""
     with st.sidebar:
+        st.caption("Made by Marcus Annegarn")
         st.caption(f"[GitHub]({GITHUB_REPO_URL})")
         if snapshot_timestamp:
             st.caption(f"Data collected: `{snapshot_timestamp}`")

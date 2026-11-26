@@ -239,6 +239,7 @@ substantial from 2021.
 | `make collect-all` | Run every collector, unpacker, seed, and sponsor sync in dependency order |
 | `make player-profile-overrides-sync` | Sync senior players missing hand/grip/style into `dbt/seeds/player_profile_overrides.csv` |
 | `make update-summary` | Regenerate `docs/data-summary.md` from live warehouse counts |
+| `make glicko-run` | Apply migrations and recompute Glicko-2 ratings into `analytics.fct_glicko_match_ratings` |
 | `make app-refresh` | Export warehouse marts and collection metadata to `app/data/*.parquet` |
 | `make app-run` | Launch the Streamlit dashboard locally (`app/Home.py`) |
 | `make notebook` | Start JupyterLab in the browser against `notebooks/` |

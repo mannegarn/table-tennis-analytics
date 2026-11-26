@@ -82,6 +82,30 @@ def test_gitignore_excludes_dbt_seed_csvs() -> None:
     assert "!dbt/seeds/*.csv" not in lines
 
 
+def test_exported_glicko_match_ratings_parquet_exists_and_has_expected_columns() -> (
+    None
+):
+    ratings_path = default_output_dir() / "fct_glicko_match_ratings.parquet"
+    assert ratings_path.exists()
+
+    ratings = pl.read_parquet(ratings_path)
+    assert ratings.height > 0
+    for col in (
+        "match_sk",
+        "event_sk",
+        "gender_category",
+        "rating_date",
+        "p1_player_sk",
+        "p2_player_sk",
+        "p1_pre_rating",
+        "p1_post_rating",
+        "p2_pre_rating",
+        "p2_post_rating",
+        "p1_expected_win_prob",
+    ):
+        assert col in ratings.columns
+
+
 def _default_dim_players_rows() -> list[dict[str, Any]]:
     return [
         {

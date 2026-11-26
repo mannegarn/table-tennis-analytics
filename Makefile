@@ -41,7 +41,7 @@ endef
 # Collectors share one pending queue and one API; never run them side by side.
 .NOTPARALLEL:
 
-.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-collect events-unpack events-unpack-preview matches-collect matches-unpack matches-unpack-preview match-details-collect match-details-seed match-commentary-collect event-sponsors-collect event-sponsors-identify event-sponsors-sync event-sponsors-refresh player-details-collect collect-all ittf-players-seed player-profile-overrides-sync update-summary app-refresh app-run notebook test test-integration dbt-debug dbt-run dbt-test dbt-clean lint lint-sql format typecheck check hooks-install hooks-run
+.PHONY: help setup db-up db-down db-reset db-logs db-psql db-test-psql db-check db-test-check db-migrate events-collect events-unpack events-unpack-preview matches-collect matches-unpack matches-unpack-preview match-details-collect match-details-seed match-commentary-collect event-sponsors-collect event-sponsors-identify event-sponsors-sync event-sponsors-refresh player-details-collect collect-all ittf-players-seed player-profile-overrides-sync update-summary glicko-run app-refresh app-run notebook test test-integration dbt-debug dbt-run dbt-test dbt-clean lint lint-sql format typecheck check hooks-install hooks-run
 
 help: ## Show available commands
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -238,6 +238,10 @@ hooks-install: ## Install git hooks, then run them once (requires git init)
 
 hooks-run: ## Run all pre-commit hooks against every file
 	uv run pre-commit run --all-files
+
+glicko-run: ## Apply migrations and recompute Glicko-2 ratings into analytics.fct_glicko_match_ratings
+	uv run tt-db-migrate
+	uv run tt-glicko-build
 
 app-refresh: ## Refresh Parquet snapshots in app/data/ from the warehouse
 	uv run tt-app-export

@@ -133,6 +133,14 @@ def test_streamlit_pages_render_without_error() -> None:
     )
     assert not serve_receive.exception
 
+    glicko = AppTest.from_file(app_dir / "pages" / "5_Glicko_Ratings.py").run(
+        timeout=30
+    )
+    assert not glicko.exception
+
+    upsets = AppTest.from_file(app_dir / "pages" / "6_Upsets.py").run(timeout=30)
+    assert not upsets.exception
+
 
 def test_compute_home_insights() -> None:
     events = pl.DataFrame(

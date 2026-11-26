@@ -1,30 +1,25 @@
 """Table Tennis Analytics — App Entrypoint, Router & Landing Page (Home).
 
 Uses ``st.navigation(..., position="hidden")`` paired with a custom grouped
-left sidebar so Overview pages (Home, About, Data Overview) stay cleanly
-separated from the collapsible, distinctly styled Analytics menu (Win Rates,
-and upcoming Serve & Receive / Glicko-2 Ratings pages).
+left sidebar separating Overview pages (Home, About, Data Overview) from the
+Analytics menu (Glicko-2 Ratings, Win Rates, Upsets, Service Win Rate).
 """
 
 from __future__ import annotations
 
-from typing import Any
+import html
+from typing import Any, Literal
 
+import polars as pl
 import streamlit as st
 from lib.data import (
-    HomeInsights,
-    compute_home_insights,
     data_files_exist,
-    load_catalog_rollup,
-    load_events,
+    load_glicko_match_ratings,
     load_players,
-    load_senior_games,
-    load_senior_matches,
-    load_serve_receive_stats,
     load_snapshot_timestamp,
 )
+from lib.glicko import build_glicko_leaderboard, resolve_placeholder_data_uri
 from lib.theme import (
-    GITHUB_REPO_URL,
     apply_page_theme,
     render_sidebar_nav,
 )
@@ -38,341 +33,222 @@ st.set_page_config(
 )
 
 
+def _active_theme() -> Literal["dark", "light"]:
+    """Return active Streamlit theme ('dark' or 'light'), defaulting to 'dark'."""
+    try:
+        theme_type = st.context.theme.type
+    except Exception:
+        return "dark"
+    return "light" if theme_type == "light" else "dark"
+
+
 @st.cache_data(show_spinner=False)
-def _load_cached_home_insights(
-    matches_height: int,
-    games_height: int,
+def _cached_home_top5(
+    ratings_height: int,
     players_height: int,
-    sr_height: int,
-) -> HomeInsights:
-    """Compute and cache Home page warehouse scale & headline findings."""
-    _ = (matches_height, games_height, players_height, sr_height)
-    return compute_home_insights(
-        events=load_events(),
-        players=load_players(),
-        senior_matches=load_senior_matches(),
-        senior_games=load_senior_games(),
-        catalog_rollup=load_catalog_rollup(),
-        serve_receive_raw=load_serve_receive_stats(),
+    gender: Literal["men", "women"],
+    theme: Literal["dark", "light"],
+) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """Build Top 5 highest-rated and Top 5 most-matches tables for Home."""
+    _ = (ratings_height, players_height)
+    ratings = load_glicko_match_ratings()
+    players = load_players()
+
+    top_rated = build_glicko_leaderboard(
+        ratings,
+        players,
+        gender=gender,
+        min_matches=5,
+        trend_days=90,
+        theme=theme,
+    ).head(5)
+
+    most_matches = (
+        build_glicko_leaderboard(
+            ratings,
+            players,
+            gender=gender,
+            min_matches=1,
+            trend_days=90,
+            theme=theme,
+        )
+        .sort(["matches", "rating", "player_sk"], descending=[True, True, False])
+        .head(5)
+        .with_columns(pl.int_range(1, pl.len() + 1, dtype=pl.Int64).alias("rank"))
+    )
+    return top_rated, most_matches
+
+
+def _render_showcase_list(
+    df: pl.DataFrame,
+    *,
+    mode: Literal["rated", "matches"],
+    gender: Literal["men", "women"],
+    theme: Literal["dark", "light"],
+) -> None:
+    """Render Top 5 players with big rank numbers, circular photos, flags, and stats."""
+    fallback_uri = html.escape(
+        resolve_placeholder_data_uri(gender, theme=theme),
+        quote=True,
+    )
+    rows_html: list[str] = []
+    for row in df.to_dicts():
+        rank = int(row["rank"])
+        rank_cls = "tt-top5-rank tt-top5-rank-1" if rank == 1 else "tt-top5-rank"
+        name = html.escape(str(row["player_name"] or "Unknown Player"))
+        org = html.escape(str(row["org"] or ""))
+        country = html.escape(str(row["country_name"] or org or "Unknown"), quote=True)
+        photo_url = html.escape(str(row["photo_url"] or fallback_uri), quote=True)
+        flag_url_raw = row["flag_url"]
+        flag_src = html.escape(str(flag_url_raw), quote=True) if flag_url_raw else ""
+        flag_html = (
+            f'<img class="tt-top5-flag" src="{flag_src}" '
+            f'alt="{org}" title="{country}" />'
+            if flag_src
+            else ""
+        )
+        meta_html = (
+            f'<div class="tt-top5-meta">{flag_html}<span>{org or country}</span></div>'
+            if (flag_html or org)
+            else ""
+        )
+
+        rating_val = float(row["rating"])
+        win_pct_val = float(row["win_pct"])
+        matches_val = int(row["matches"])
+
+        if mode == "rated":
+            stats_html = (
+                '<div class="tt-top5-stats">'
+                '<div class="tt-top5-stat">'
+                f'<div class="tt-top5-stat-val">{rating_val:.1f}</div>'
+                '<div class="tt-top5-stat-lbl">Rating</div>'
+                "</div>"
+                '<div class="tt-top5-stat">'
+                f'<div class="tt-top5-stat-sub">{win_pct_val:.1f}%</div>'
+                '<div class="tt-top5-stat-lbl">Win %</div>'
+                "</div>"
+                "</div>"
+            )
+        else:
+            stats_html = (
+                '<div class="tt-top5-stats">'
+                '<div class="tt-top5-stat">'
+                f'<div class="tt-top5-stat-val">{matches_val:,}</div>'
+                '<div class="tt-top5-stat-lbl">Matches</div>'
+                "</div>"
+                '<div class="tt-top5-stat">'
+                f'<div class="tt-top5-stat-sub">{win_pct_val:.1f}%</div>'
+                '<div class="tt-top5-stat-lbl">Win %</div>'
+                "</div>"
+                '<div class="tt-top5-stat">'
+                f'<div class="tt-top5-stat-sub">{rating_val:.1f}</div>'
+                '<div class="tt-top5-stat-lbl">Rating</div>'
+                "</div>"
+                "</div>"
+            )
+
+        rows_html.append(
+            '<div class="tt-top5-row">'
+            f'<div class="{rank_cls}">{rank}</div>'
+            f'<img class="tt-top5-avatar" src="{photo_url}" alt="{name}" '
+            f"onerror=\"this.onerror=null;this.src='{fallback_uri}';\" />"
+            '<div class="tt-top5-player">'
+            f'<div class="tt-top5-name" title="{name}">{name}</div>'
+            f"{meta_html}"
+            "</div>"
+            f"{stats_html}"
+            "</div>"
+        )
+
+    st.markdown(
+        f'<div class="tt-top5-list">{"".join(rows_html)}</div>',
+        unsafe_allow_html=True,
     )
 
 
 def _render_home(
     *,
-    overview_page: Any,
+    glicko_ratings_page: Any,
+    upsets_page: Any,
     about_page: Any,
-    win_rates_page: Any,
-    service_win_rate_page: Any,
 ) -> None:
-    """Render the landing page content."""
+    """Render the clean Home landing page with Top 5 snapshots."""
     st.title("🏓 Table Tennis Analytics")
     st.subheader(
-        "Match outcomes, point-by-point breakdowns, and skill ratings "
-        "models across professional table tennis matches."
+        "Glicko-2 skill ratings, upsets, match outcomes, and point-by-point "
+        "analytics across professional senior singles table tennis."
     )
 
-    st.markdown(
-        """
-        <div class="tt-pill-row">
-            <span class="tt-pill">Python 3.13</span>
-            <span class="tt-pill">PostgreSQL 16</span>
-            <span class="tt-pill">dbt</span>
-            <span class="tt-pill">Polars &amp; Parquet</span>
-            <span class="tt-pill">Plotly</span>
-            <span class="tt-pill">Gemini Vision</span>
-            <span class="tt-pill">Streamlit</span>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    cta1, cta2, _ = st.columns(
-        [1.2, 1.25, 2.55],
-        vertical_alignment="center",
-    )
-    with cta1:
-        st.link_button(
-            "View Code on GitHub",
-            GITHUB_REPO_URL,
-            icon="💻",
+    c1, c2, c3 = st.columns(3, gap="small")
+    with c1:
+        st.page_link(
+            glicko_ratings_page,
+            label="Glicko-2 Ratings",
+            icon="🏆",
             width="stretch",
         )
-    with cta2:
+    with c2:
+        st.page_link(
+            upsets_page,
+            label="Biggest Upsets",
+            icon="⚡",
+            width="stretch",
+        )
+    with c3:
         st.page_link(
             about_page,
-            label="Architecture & About",
+            label="About & Architecture",
             icon="📖",
             width="stretch",
         )
+    st.caption(
+        "Open the sidebar menu (top-left on mobile) to explore full ratings, "
+        "upsets, win-rate models, and serve/receive breakdowns."
+    )
 
-    insights: HomeInsights | None = None
-    if data_files_exist():
-        insights = _load_cached_home_insights(
-            load_senior_matches().height,
-            load_senior_games().height,
-            load_players().height,
-            load_serve_receive_stats().height,
+    if not data_files_exist():
+        st.warning(
+            "Parquet snapshots are missing in `app/data/`. "
+            "Run `make app-refresh` to generate them."
         )
+        return
 
-    if insights is not None:
-        st.divider()
-        year_span = (
-            f"{insights.senior_year_min}-{insights.senior_year_max}"
-            if insights.senior_year_min and insights.senior_year_max
-            else "WTT & ITTF"
-        )
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric(
-            "Senior Singles Matches",
-            f"{insights.senior_total_matches:,}",
-            help=f"Active senior singles span: {year_span}.",
-        )
-        m2.metric(
-            "Point-by-point plays",
-            f"{insights.commentary_points:,}",
-            help=(
-                f"Parsed across {insights.commentary_matches:,} "
-                "with full point by point breakdown."
-            ),
-        )
-        m3.metric(
-            "Senior Players",
-            f"{insights.total_players:,}",
-            help=(
-                f"Representing {insights.distinct_countries:,} "
-                "countries & associations."
-            ),
-        )
-        m4.metric(
-            "Events Covered",
-            f"{insights.events_with_senior_singles:,}",
-            help=f"Tournaments with senior singles records ({year_span}).",
-        )
-
-        st.markdown("### What the Data Reveals")
-        d1, d2, d3 = st.columns(3)
-
-        with d1:
-            edge_str = (
-                f"+{insights.server_edge_pp:.2f} pp"
-                if insights.server_edge_pp is not None
-                else "N/A"
-            )
-            srv_str = (
-                f"{insights.global_serve_win_pct:.2f}%"
-                if insights.global_serve_win_pct is not None
-                else "N/A"
-            )
-            rcv_str = (
-                f"{insights.global_receive_win_pct:.2f}%"
-                if insights.global_receive_win_pct is not None
-                else "N/A"
-            )
-            st.markdown(
-                f"""
-                <div class="tt-discovery-card">
-                    <div class="tt-discovery-stat">{edge_str}</div>
-                    <div class="tt-discovery-title">Server Advantage</div>
-                    <div class="tt-discovery-body">
-                        Across {insights.commentary_points:,} points, servers win
-                        <strong>{srv_str}</strong> on serve vs
-                        <strong>{rcv_str}</strong> on receive.
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            st.page_link(
-                service_win_rate_page,
-                label="Explore Serve & Receive",
-                icon="🎯",
-                width="stretch",
-            )
-
-        with d2:
-            pct_str = (
-                f"{insights.bo5_won_below_50_pct:.2f}%"
-                if insights.bo5_won_below_50_pct is not None
-                else "N/A"
-            )
-            st.markdown(
-                f"""
-                <div class="tt-discovery-card">
-                    <div class="tt-discovery-stat">{pct_str}</div>
-                    <div class="tt-discovery-title">Won With &lt;50% of Points</div>
-                    <div class="tt-discovery-body">
-                        <strong>{insights.bo5_won_below_50:,}</strong> of
-                        {insights.bo5_matches:,} Best-of-5 winners lost the total
-                        point count yet won the match by clustering points into sets.
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            st.page_link(
-                win_rates_page,
-                label="Explore Win Rates",
-                icon="📈",
-                width="stretch",
-            )
-
-        with d3:
-            bo5_def = (
-                f"{insights.defender_bo5_delta_pp:+.1f} pp"
-                if insights.defender_bo5_delta_pp is not None
-                else "N/A"
-            )
-            bo7_def = (
-                f"{insights.defender_bo7_delta_pp:+.1f} pp"
-                if insights.defender_bo7_delta_pp is not None
-                else "N/A"
-            )
-            set_def = (
-                f"{insights.defender_set_delta_pp:+.2f} pp"
-                if insights.defender_set_delta_pp is not None
-                else "N/A"
-            )
-            st.markdown(
-                f"""
-                <div class="tt-discovery-card">
-                    <div class="tt-discovery-stat">{bo5_def} / {bo7_def}</div>
-                    <div class="tt-discovery-title">The Defender Match Gap</div>
-                    <div class="tt-discovery-body">
-                        Choppers match binomial theory in 11-pt sets
-                        (<code>{set_def}</code>), yet trail in Bo5 and Bo7 as
-                        attackers adapt.
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            st.page_link(
-                win_rates_page,
-                label="Compare Styles vs Theory",
-                icon="📉",
-                width="stretch",
-            )
-
-    st.divider()
-
-    # -----------------------------------------------------------------------
-    # Explore Pages (Navigation Cards)
-    # -----------------------------------------------------------------------
-    st.markdown("### Explore")
-
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown(
-            """
-            <div class="tt-card">
-                <div class="tt-card-label">Analytics</div>
-                <div class="tt-card-title">📈 Win Rates</div>
-                <div class="tt-card-meta">
-                    Point, Set, and Match win rates vs exact binomial models,
-                    Defender vs Attacker comparisons, and Best-of-5 vs Best-of-7.
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.page_link(win_rates_page, label="Open Win Rates", icon="📈", width="stretch")
-
-    with col2:
-        st.markdown(
-            """
-            <div class="tt-card">
-                <div class="tt-card-label">Analytics</div>
-                <div class="tt-card-title">🎯 Service Win Rate</div>
-                <div class="tt-card-meta">
-                    Point-by-point Total, Serve, and Receive win rates across
-                    commentary-covered matches, plus global server advantage.
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.page_link(
-            service_win_rate_page,
-            label="Open Service Win Rate",
-            icon="🎯",
-            width="stretch",
-        )
-
-    col3, col4 = st.columns(2)
-    with col3:
-        st.markdown(
-            """
-            <div class="tt-card">
-                <div class="tt-card-label">Overview</div>
-                <div class="tt-card-title">📊 Data Overview</div>
-                <div class="tt-card-meta">
-                    Warehouse coverage: events, Men vs Women players &amp; matches,
-                    Best-of-5 vs Best-of-7 formats, and tournament date ranges.
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.page_link(
-            overview_page, label="Open Data Overview", icon="📊", width="stretch"
-        )
-
-    with col4:
-        st.markdown(
-            """
-            <div class="tt-card">
-                <div class="tt-card-label">Overview</div>
-                <div class="tt-card-title">📖 About &amp; Architecture</div>
-                <div class="tt-card-meta">
-                    Project overview and about the author.
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.page_link(about_page, label="Open About", icon="📖", width="stretch")
-
-    st.markdown("#### Coming Soon")
-    st.markdown(
-        """
-        <div class="tt-card">
-            <div class="tt-card-label">Planned</div>
-            <div class="tt-card-title">🏆 Glicko Ratings &amp; Upsets</div>
-            <div class="tt-card-meta">
-                Historical Glicko-2 ratings by date or tournament, peak ratings,
-                rating volatility, and biggest upsets.
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    ratings = load_glicko_match_ratings()
+    players = load_players()
+    theme = _active_theme()
+    men_rated, men_matches = _cached_home_top5(
+        ratings.height, players.height, "men", theme
+    )
+    women_rated, women_matches = _cached_home_top5(
+        ratings.height, players.height, "women", theme
     )
 
     st.divider()
-
-    # -----------------------------------------------------------------------
-    # Inspired By / Credits
-    # -----------------------------------------------------------------------
-    st.markdown("### Inspired By & Credits")
-    st.markdown(
-        "- **[JeffSackmann/tennis_MatchChartingProject & tennis_atp]"
-        "(https://github.com/JeffSackmann)** — Racquet-sport reference separating "
-        "match-level outcomes from granular point-by-point logs, inspiring the "
-        "point-vs-match leverage analysis.\n"
-        "- **[dbt-labs/jaffle-shop](https://github.com/dbt-labs/jaffle-shop)** — "
-        "Canonical dbt reference for layered staged, intermediate, and mart "
-        "modeling and schema tests.\n"
-        "- **[alan-turing-institute/AIrsenal]"
-        "(https://github.com/alan-turing-institute/AIrsenal)** — Python + SQL "
-        "sports analytics architecture separating ingestion, relational storage, "
-        "strength estimation, and backtesting.\n"
-        "- **[sublee/glicko2](https://github.com/sublee/glicko2) & "
-        "ryankirkman/pyglicko2** — Lightweight Python reference implementations "
-        "of the Glicko-2 update equations.\n"
-        '- **Mark Glickman: ["Example of the Glicko-2 System"]'
-        "(https://www.glicko.net/glicko/glicko2.pdf)** — Primary paper defining "
-        "the Glicko-2 equations, scaling factor (`173.7178`), and iterative "
-        "Illinois volatility algorithm."
+    st.markdown("### 🏆 Highest Rated Currently (Top 5)")
+    st.caption(
+        "Current Glicko-2 leaders across senior singles (minimum 5 rated matches)."
     )
+    col_m, col_w = st.columns(2, gap="large")
+    with col_m:
+        st.markdown("#### Men's Singles")
+        _render_showcase_list(men_rated, mode="rated", gender="men", theme=theme)
+    with col_w:
+        st.markdown("#### Women's Singles")
+        _render_showcase_list(women_rated, mode="rated", gender="women", theme=theme)
+
+    st.markdown("<div style='height: 1.25rem;'></div>", unsafe_allow_html=True)
+    st.markdown("### 🏓 Most Matches Played (Top 5)")
+    st.caption("Most active senior singles players in the rating pool.")
+    col_m2, col_w2 = st.columns(2, gap="large")
+    with col_m2:
+        st.markdown("#### Men's Singles")
+        _render_showcase_list(men_matches, mode="matches", gender="men", theme=theme)
+    with col_w2:
+        st.markdown("#### Women's Singles")
+        _render_showcase_list(
+            women_matches, mode="matches", gender="women", theme=theme
+        )
 
 
 about_page = st.Page(
@@ -399,14 +275,25 @@ service_win_rate_page = st.Page(
     icon="🎯",
     url_path="service-win-rate",
 )
+glicko_ratings_page = st.Page(
+    "pages/5_Glicko_Ratings.py",
+    title="Glicko-2 Ratings",
+    icon="🏆",
+    url_path="glicko-ratings",
+)
+upsets_page = st.Page(
+    "pages/6_Upsets.py",
+    title="Upsets",
+    icon="⚡",
+    url_path="upsets",
+)
 
 
 def _home_entry() -> None:
     _render_home(
-        overview_page=overview_page,
+        glicko_ratings_page=glicko_ratings_page,
+        upsets_page=upsets_page,
         about_page=about_page,
-        win_rates_page=win_rates_page,
-        service_win_rate_page=service_win_rate_page,
     )
 
 
@@ -418,7 +305,12 @@ home_page = st.Page(
 )
 
 overview_pages = [home_page, about_page, overview_page]
-analytics_pages = [win_rates_page, service_win_rate_page]
+analytics_pages = [
+    glicko_ratings_page,
+    win_rates_page,
+    upsets_page,
+    service_win_rate_page,
+]
 
 # Register routes with st.navigation first so deep links (/win-rates, etc.)
 # resolve cleanly before rendering sidebar page links.

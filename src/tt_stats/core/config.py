@@ -2,6 +2,7 @@
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -89,6 +90,18 @@ class Settings(BaseSettings):
     # Gemini Vision API (optional; required only by tt-event-sponsors-identify).
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-3.8-flash"
+
+    # Glicko-2 rating engine defaults (used by tt-glicko-build / make glicko-run).
+    # ``glicko_rd_decay_days`` defaults to None (zero inactivity decay) because
+    # players compete in domestic/non-WTT leagues that are not yet ingested, so
+    # missing WTT appearances must not penalize or inflate their RD.
+    glicko_initial_rating: float = 1500.0
+    glicko_initial_rd: float = 350.0
+    glicko_initial_vol: float = 0.06
+    glicko_tau: float = 0.5
+    glicko_rd_decay_days: float | None = None
+    glicko_update_mode: Literal["match", "event", "week"] = "match"
+    glicko_separate_gender_pools: bool = True
 
     # Local scratch area for captures, logs and notebooks. Defaults to the
     # repository's ``data/`` directory rather than the current working

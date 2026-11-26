@@ -96,6 +96,7 @@ def data_files_exist() -> bool:
         "fct_senior_singles_games.parquet",
         "catalog_matches_by_event_gender.parquet",
         "player_serve_receive_stats.parquet",
+        "fct_glicko_match_ratings.parquet",
     )
     return all((DATA_DIR / name).exists() for name in required)
 
@@ -186,6 +187,12 @@ def load_catalog_rollup() -> pl.DataFrame:
 def load_serve_receive_stats() -> pl.DataFrame:
     """Load pre-aggregated per-player serve and receive stats from Parquet."""
     filename = "player_serve_receive_stats.parquet"
+    return _read_parquet_cached(filename, _file_version(DATA_DIR / filename))
+
+
+def load_glicko_match_ratings() -> pl.DataFrame:
+    """Load pre- and post-match Glicko-2 ratings from Parquet."""
+    filename = "fct_glicko_match_ratings.parquet"
     return _read_parquet_cached(filename, _file_version(DATA_DIR / filename))
 
 

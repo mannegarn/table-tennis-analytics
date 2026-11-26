@@ -39,6 +39,7 @@ tt-ittf-players-seed = "tt_stats.players.ittf_seed:main"
 tt-player-profile-overrides-sync = "tt_stats.players.profile_overrides_sync:main"
 tt-update-summary = "tt_stats.summary:main"
 tt-app-export = "tt_stats.analytics.export_app_data:main"
+tt-glicko-build = "tt_stats.analytics.glicko2:main"
 
 [dependency-groups]
 dev = [

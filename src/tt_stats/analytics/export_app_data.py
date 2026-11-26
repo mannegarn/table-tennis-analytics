@@ -165,6 +165,33 @@ EXPORT_QUERIES: tuple[ExportQuery, ...] = (
         group by 1, 2, 3, 4, 5
         """,
     ),
+    ExportQuery(
+        filename="fct_glicko_match_ratings.parquet",
+        sql="""
+        select
+            match_sk,
+            event_sk,
+            gender_category,
+            rating_date,
+            p1_player_sk,
+            p2_player_sk,
+            round(p1_pre_rating::numeric, 2)::real as p1_pre_rating,
+            round(p1_pre_rd::numeric, 2)::real as p1_pre_rd,
+            round(p1_pre_vol::numeric, 5)::real as p1_pre_vol,
+            round(p1_post_rating::numeric, 2)::real as p1_post_rating,
+            round(p1_post_rd::numeric, 2)::real as p1_post_rd,
+            round(p1_post_vol::numeric, 5)::real as p1_post_vol,
+            round(p2_pre_rating::numeric, 2)::real as p2_pre_rating,
+            round(p2_pre_rd::numeric, 2)::real as p2_pre_rd,
+            round(p2_pre_vol::numeric, 5)::real as p2_pre_vol,
+            round(p2_post_rating::numeric, 2)::real as p2_post_rating,
+            round(p2_post_rd::numeric, 2)::real as p2_post_rd,
+            round(p2_post_vol::numeric, 5)::real as p2_post_vol,
+            round(p1_expected_win_prob::numeric, 4)::real as p1_expected_win_prob,
+            p1_actual_score::real as p1_actual_score
+        from analytics.fct_glicko_match_ratings
+        """,
+    ),
 )
 
 
