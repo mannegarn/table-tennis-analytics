@@ -25,7 +25,6 @@ from lib.data import (
 )
 from lib.theme import (
     GITHUB_REPO_URL,
-    LINKEDIN_URL,
     apply_page_theme,
     render_sidebar_nav,
 )
@@ -68,8 +67,8 @@ def _render_home(
     """Render the landing page content."""
     st.title("🏓 Table Tennis Analytics")
     st.subheader(
-        "Match outcomes, point-by-point server analytics, and exact probability "
-        "models across international professional table tennis."
+        "Match outcomes, point-by-point breakdowns, and skill ratings "
+        "models across professional table tennis matches."
     )
 
     st.markdown(
@@ -87,8 +86,8 @@ def _render_home(
         unsafe_allow_html=True,
     )
 
-    cta1, cta2, cta3, _ = st.columns(
-        [1.15, 1.15, 1.25, 1.45],
+    cta1, cta2, _ = st.columns(
+        [1.2, 1.25, 2.55],
         vertical_alignment="center",
     )
     with cta1:
@@ -99,13 +98,6 @@ def _render_home(
             width="stretch",
         )
     with cta2:
-        st.link_button(
-            "LinkedIn Profile",
-            LINKEDIN_URL,
-            icon="🔗",
-            width="stretch",
-        )
-    with cta3:
         st.page_link(
             about_page,
             label="Architecture & About",
@@ -136,11 +128,11 @@ def _render_home(
             help=f"Active senior singles span: {year_span}.",
         )
         m2.metric(
-            "Commentary Points",
+            "Point-by-point plays",
             f"{insights.commentary_points:,}",
             help=(
                 f"Parsed across {insights.commentary_matches:,} "
-                "full-commentary matches."
+                "with full point by point breakdown."
             ),
         )
         m3.metric(
@@ -180,11 +172,11 @@ def _render_home(
                 f"""
                 <div class="tt-discovery-card">
                     <div class="tt-discovery-stat">{edge_str}</div>
-                    <div class="tt-discovery-title">Tour-Wide Server Advantage</div>
+                    <div class="tt-discovery-title">Server Advantage</div>
                     <div class="tt-discovery-body">
                         Across {insights.commentary_points:,} points, servers win
-                        <strong>{srv_str}</strong> vs <strong>{rcv_str}</strong> on
-                        receive &mdash; driven by third-ball attack control.
+                        <strong>{srv_str}</strong> on serve vs
+                        <strong>{rcv_str}</strong> on receive.
                     </div>
                 </div>
                 """,
@@ -332,8 +324,7 @@ def _render_home(
                 <div class="tt-card-label">Overview</div>
                 <div class="tt-card-title">📖 About &amp; Architecture</div>
                 <div class="tt-card-meta">
-                    End-to-end data pipeline, data sources, Gemini Vision
-                    enrichment, project engineering practices, and author bio.
+                    Project overview and about the author.
                 </div>
             </div>
             """,

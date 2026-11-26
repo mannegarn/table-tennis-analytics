@@ -13,7 +13,6 @@ from typing import Any
 import streamlit as st
 
 GITHUB_REPO_URL = "https://github.com/mannegarn/table-tennis-analytics"
-LINKEDIN_URL = "https://www.linkedin.com/in/marcus-annegarn-5009a4195/"
 CONTACT_EMAIL = "marcusannegarn@gmail.com"
 
 APP_CSS = """
@@ -492,12 +491,9 @@ def render_sidebar_nav(
 
 
 def render_sidebar_footer(snapshot_timestamp: str | None) -> None:
-    """Render author credit, portfolio links, snapshot timestamp, and disclaimer."""
+    """Render repository link, snapshot timestamp, and disclaimer."""
     with st.sidebar:
-        st.caption(
-            f"**Built by Marcus Annegarn**  \n"
-            f"[GitHub]({GITHUB_REPO_URL}) · [LinkedIn]({LINKEDIN_URL})"
-        )
+        st.caption(f"[GitHub]({GITHUB_REPO_URL})")
         if snapshot_timestamp:
             st.caption(f"Data collected: `{snapshot_timestamp}`")
         st.caption(

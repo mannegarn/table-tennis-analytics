@@ -7,7 +7,6 @@ from lib.data import load_snapshot_timestamp
 from lib.theme import (
     CONTACT_EMAIL,
     GITHUB_REPO_URL,
-    LINKEDIN_URL,
     ensure_standalone_shell,
 )
 
@@ -38,38 +37,37 @@ st.markdown(
     <div class="tt-pipeline-grid">
         <div class="tt-pipeline-step">
             <div class="tt-pipeline-num">1 · Ingest &amp; Vision</div>
-            <div class="tt-pipeline-title">Async Collectors + Gemini</div>
+            <div class="tt-pipeline-title">Python + Google Gemini API</div>
             <div class="tt-pipeline-desc">
-                Concurrent <code>httpx</code> collectors fetch WTT &amp; ITTF
-                records; a Gemini Vision pipeline identifies missing tournament
-                table sponsors from match video.
+                Async Python code is used to fetch match and player records;
+                a Gemini Vision pipeline identifies table manufacturers from
+                Youtube match footage.
             </div>
         </div>
         <div class="tt-pipeline-step">
             <div class="tt-pipeline-num">2 · Warehouse</div>
             <div class="tt-pipeline-title">PostgreSQL 16 + dbt</div>
             <div class="tt-pipeline-desc">
-                Raw JSONB payloads land transactionally in PostgreSQL and
-                transform through staged, intermediate, and mart models with
-                manual CSV override seeds.
+                Raw data lands into the database before cleaning and
+                transformations managed with DBT. Additional data is seeded
+                here as well.
             </div>
         </div>
         <div class="tt-pipeline-step">
-            <div class="tt-pipeline-num">3 · Serving Layer</div>
+            <div class="tt-pipeline-num">3 · Analysis</div>
             <div class="tt-pipeline-title">Parquet + Polars</div>
             <div class="tt-pipeline-desc">
-                Curated marts export atomically to compact <code>zstd</code>
-                Parquet snapshots (export-time age instead of DOB) for
-                millisecond Polars queries.
+                Cleaned data exported to parquet files - used for analysis with
+                Polars. Data is compared to theoretical models such as binomial
+                win rate predictions based on % of points scored.
             </div>
         </div>
         <div class="tt-pipeline-step">
             <div class="tt-pipeline-num">4 · Analytics &amp; UI</div>
-            <div class="tt-pipeline-title">Models + Streamlit</div>
+            <div class="tt-pipeline-title">Streamlit Frontend</div>
             <div class="tt-pipeline-desc">
-                Exact 11-pt deuce binomial models, 2-param logistic S-curves,
-                and point-by-point server inference rendered interactively with
-                Plotly.
+                Data is plotted using potly and served in a frontend built with
+                Streamlit
             </div>
         </div>
     </div>
@@ -90,30 +88,9 @@ st.markdown(
     "- **Other leagues:** Coming soon."
 )
 
-# ---------------------------------------------------------------------------
-# 4. Engineering & Quality Practices
-# ---------------------------------------------------------------------------
-st.subheader("How It's Built & Verified")
-st.markdown(
-    "- **Collection & Enrichment:** Automated async Python collectors gather "
-    "raw match, event, and player records with idempotent landing and run-level "
-    "audit logs. Where tournament equipment metadata is missing, a **Gemini** "
-    "vision workflow identifies table brands from tournament footage.\n"
-    "- **Warehouse & Modelling:** Raw payloads are landed in **PostgreSQL** "
-    "and transformed through **dbt** (`staging`, `intermediate`, and `marts` "
-    "layers), alongside **manual CSV overrides** (dbt seeds) for edge-case "
-    "score, format, sponsor, and player-profile corrections.\n"
-    "- **Testing & Quality Tooling:** Backed by unit and PostgreSQL integration "
-    "tests (`pytest`, including Streamlit `AppTest` smoke and filter tests), "
-    "strict `mypy` type checking, `ruff` linting/formatting, `sqlfluff` SQL "
-    "linting, and `dbt` schema/data tests.\n"
-    "- **AI Transparency:** The current launch version was developed with AI "
-    "assistance using **DeepSeek** and **Google Antigravity**, building upon "
-    "an earlier prototype built by hand in Jupyter notebooks."
-)
 
 # ---------------------------------------------------------------------------
-# 5. About Me & Contact
+# 4. About Me & Contact
 # ---------------------------------------------------------------------------
 st.subheader("About Me / Inspiration Behind This Project")
 st.markdown(
@@ -124,19 +101,12 @@ st.markdown(
     "I want to change that."
 )
 
-c_gh, c_li, c_em = st.columns(3)
+c_gh, c_em = st.columns(2)
 with c_gh:
     st.link_button(
         "Source Code on GitHub",
         GITHUB_REPO_URL,
         icon="💻",
-        width="stretch",
-    )
-with c_li:
-    st.link_button(
-        "Connect on LinkedIn",
-        LINKEDIN_URL,
-        icon="🔗",
         width="stretch",
     )
 with c_em:
