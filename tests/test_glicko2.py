@@ -10,8 +10,10 @@ from tt_stats.analytics.glicko2 import (
     Glicko2Config,
     MatchInput,
     PlayerState,
+    TableTypeMatchInput,
     apply_inactivity_decay,
     compute_glicko2_ratings,
+    compute_table_type_glicko2_ratings,
     expected_win_probability,
     update_player_state,
 )
@@ -157,3 +159,97 @@ def test_config_validation() -> None:
         Glicko2Config(tau=-0.1)
     with pytest.raises(ValueError, match="rd_decay_days"):
         Glicko2Config(rd_decay_days=0.0)
+
+
+def test_table_type_glicko2_isolates_pools_and_ignores_other() -> None:
+    """Asian and European table pools are isolated and 'Other' matches are ignored."""
+    config = Glicko2Config()
+    matches = [
+        TableTypeMatchInput(
+            match_sk=1,
+            event_sk=10,
+            gender_category="men",
+            table_group="Asian",
+            rating_date=date(2025, 1, 1),
+            p1_player_sk=1,
+            p2_player_sk=2,
+            winner_side=1,
+        ),
+        TableTypeMatchInput(
+            match_sk=2,
+            event_sk=20,
+            gender_category="men",
+            table_group="European",
+            rating_date=date(2025, 1, 2),
+            p1_player_sk=1,
+            p2_player_sk=3,
+            winner_side=1,
+        ),
+        TableTypeMatchInput(
+            match_sk=3,
+            event_sk=30,
+            gender_category="men",
+            table_group="Other",
+            rating_date=date(2025, 1, 3),
+            p1_player_sk=1,
+            p2_player_sk=4,
+            winner_side=2,
+        ),
+    ]
+
+    rows, players_rated = compute_table_type_glicko2_ratings(matches, config)
+
+    assert len(rows) == 2
+    assert players_rated == 3  # Players 1, 2, 3 (player 4 only played 'Other')
+
+    asian_row, euro_row = rows
+    assert asian_row.table_group == "Asian"
+    assert euro_row.table_group == "European"
+    assert asian_row.p1_pre_rating == pytest.approx(1500.0)
+    assert euro_row.p1_pre_rating == pytest.approx(1500.0)
+    assert euro_row.p1_pre_rd == pytest.approx(350.0)
+    assert euro_row.p1_post_rating == pytest.approx(asian_row.p1_post_rating)
+    assert euro_row.as_tuple()[3] == "European"
+    assert len(euro_row.as_tuple()) == 21
+
+    empty_rows, empty_players = compute_table_type_glicko2_ratings(
+        [matches[2]],
+        config,
+    )
+    assert empty_rows == []
+    assert empty_players == 0
+
+
+def test_table_type_glicko2_isolates_gender_within_table_group() -> None:
+    """Men's and Women's rating pools remain isolated inside each table group."""
+    config = Glicko2Config(separate_gender_pools=True)
+    matches = [
+        TableTypeMatchInput(
+            match_sk=1,
+            event_sk=10,
+            gender_category="men",
+            table_group="Asian",
+            rating_date=date(2025, 2, 1),
+            p1_player_sk=10,
+            p2_player_sk=20,
+            winner_side=1,
+        ),
+        TableTypeMatchInput(
+            match_sk=2,
+            event_sk=10,
+            gender_category="women",
+            table_group="Asian",
+            rating_date=date(2025, 2, 2),
+            p1_player_sk=10,
+            p2_player_sk=30,
+            winner_side=2,
+        ),
+    ]
+
+    rows, players_rated = compute_table_type_glicko2_ratings(matches, config)
+
+    assert len(rows) == 2
+    assert players_rated == 3
+    assert rows[0].p1_post_rating > 1500.0
+    assert rows[1].p1_pre_rating == pytest.approx(1500.0)
+    assert rows[1].p1_pre_rd == pytest.approx(350.0)

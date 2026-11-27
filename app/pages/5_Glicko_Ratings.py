@@ -161,9 +161,16 @@ def _table_column_config(
         )
 
     if show_profile:
-        columns.extend(["country_name", "org", "age", "hand", "grip", "style"])
+        columns.extend(
+            ["continent", "country_name", "org", "age", "hand", "grip", "style"]
+        )
         config.update(
             {
+                "continent": st.column_config.TextColumn(
+                    "Continent",
+                    width="small",
+                    help="Continent of represented association",
+                ),
                 "country_name": st.column_config.TextColumn(
                     "Country",
                     width="medium",
@@ -262,8 +269,11 @@ def _render_page() -> None:
     )
 
     # Optional attribute filters inside a collapsed expander.
-    with st.expander("Filter by Org / Style / Hand / Grip", expanded=False):
-        f1, f2, f3, f4 = st.columns(4, gap="small")
+    with st.expander("Filter by Continent / Org / Style / Hand / Grip", expanded=False):
+        f0, f1, f2, f3, f4 = st.columns(5, gap="small")
+        continent_opts = sorted(
+            c for c in base_lb["continent"].drop_nulls().unique().to_list() if c
+        )
         org_opts = sorted(
             o for o in base_lb["org"].drop_nulls().unique().to_list() if o
         )
@@ -271,6 +281,10 @@ def _render_page() -> None:
         hand_opts = sorted(base_lb["hand"].drop_nulls().unique().to_list())
         grip_opts = sorted(base_lb["grip"].drop_nulls().unique().to_list())
 
+        with f0:
+            sel_continents = st.multiselect(
+                "Continent", continent_opts, key=f"glicko_continent_{gender}"
+            )
         with f1:
             sel_orgs = st.multiselect("Org", org_opts, key=f"glicko_org_{gender}")
         with f2:
@@ -288,6 +302,8 @@ def _render_page() -> None:
         filtered_lb = filtered_lb.filter(
             pl.col("player_name").str.to_lowercase().str.contains(needle, literal=True)
         )
+    if sel_continents:
+        filtered_lb = filtered_lb.filter(pl.col("continent").is_in(sel_continents))
     if sel_orgs:
         filtered_lb = filtered_lb.filter(pl.col("org").is_in(sel_orgs))
     if sel_styles:
@@ -352,7 +368,7 @@ def _render_page() -> None:
         )
     with t3:
         show_profile = st.toggle(
-            "Full player info (Org, Age, Style, Hand, Grip)",
+            "Full player info (Continent, Org, Age, Style, Hand, Grip)",
             value=False,
             key="glicko_show_profile",
         )

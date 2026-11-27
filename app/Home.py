@@ -287,6 +287,12 @@ upsets_page = st.Page(
     icon="⚡",
     url_path="upsets",
 )
+table_types_page = st.Page(
+    "pages/7_Table_Types.py",
+    title="Table Types",
+    icon="🏟️",
+    url_path="table-types",
+)
 
 
 def _home_entry() -> None:
@@ -310,6 +316,7 @@ analytics_pages = [
     win_rates_page,
     upsets_page,
     service_win_rate_page,
+    table_types_page,
 ]
 
 # Register routes with st.navigation first so deep links (/win-rates, etc.)

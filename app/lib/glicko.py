@@ -218,6 +218,217 @@ IOC_TO_ISO2: dict[str, str] = {
 
 NEUTRAL_ORG_CODES: frozenset[str] = frozenset({"AIN", "EOR", "ITT", "REF", "WTT"})
 
+CONTINENT_OPTIONS: tuple[str, ...] = (
+    "Africa",
+    "Americas",
+    "Asia",
+    "Europe",
+    "Oceania",
+    "Neutral / Other",
+)
+
+# ITTF / IOC 3-letter codes -> continent (aligned with dim_events.continent_code).
+IOC_TO_CONTINENT: dict[str, str] = {
+    **dict.fromkeys(
+        (
+            "ALG",
+            "ANG",
+            "BDI",
+            "BEN",
+            "BOT",
+            "CAF",
+            "CGO",
+            "CIV",
+            "CMR",
+            "COD",
+            "DJI",
+            "EGY",
+            "ETH",
+            "GAB",
+            "GHA",
+            "KEN",
+            "LBA",
+            "LES",
+            "MAD",
+            "MAR",
+            "MAW",
+            "MRI",
+            "MTN",
+            "NAM",
+            "NGR",
+            "RSA",
+            "RWA",
+            "SEN",
+            "SEY",
+            "SUD",
+            "TAN",
+            "TOG",
+            "TUN",
+            "UGA",
+            "ZAM",
+            "ZIM",
+        ),
+        "Africa",
+    ),
+    **dict.fromkeys(
+        (
+            "ANT",
+            "ARG",
+            "BAH",
+            "BAR",
+            "BOL",
+            "BRA",
+            "CAN",
+            "CHI",
+            "COL",
+            "CRC",
+            "CUB",
+            "DMA",
+            "DOM",
+            "ECU",
+            "ESA",
+            "GRL",
+            "GUA",
+            "GUY",
+            "HON",
+            "JAM",
+            "LCA",
+            "MEX",
+            "NCA",
+            "PAN",
+            "PAR",
+            "PER",
+            "PUR",
+            "TTO",
+            "URU",
+            "USA",
+            "VEN",
+        ),
+        "Americas",
+    ),
+    **dict.fromkeys(
+        (
+            "AFG",
+            "BAN",
+            "BHU",
+            "BRN",
+            "CAM",
+            "CHN",
+            "HKG",
+            "INA",
+            "IND",
+            "IRI",
+            "IRQ",
+            "JOR",
+            "JPN",
+            "KAZ",
+            "KGZ",
+            "KOR",
+            "KSA",
+            "KUW",
+            "LAO",
+            "LBN",
+            "MAC",
+            "MAS",
+            "MDV",
+            "MGL",
+            "MYA",
+            "NEP",
+            "OMA",
+            "PAK",
+            "PHI",
+            "PLE",
+            "PRK",
+            "QAT",
+            "SGP",
+            "SRI",
+            "SYR",
+            "THA",
+            "TPE",
+            "UAE",
+            "UZB",
+            "VIE",
+            "YEM",
+        ),
+        "Asia",
+    ),
+    **dict.fromkeys(
+        (
+            "ALB",
+            "ARM",
+            "AUT",
+            "AZE",
+            "BEL",
+            "BIH",
+            "BLR",
+            "BUL",
+            "CRO",
+            "CYP",
+            "CZE",
+            "DEN",
+            "ENG",
+            "ESP",
+            "EST",
+            "FIN",
+            "FRA",
+            "GBR",
+            "GEO",
+            "GER",
+            "GRE",
+            "HUN",
+            "IRL",
+            "ISL",
+            "ISR",
+            "ITA",
+            "JEY",
+            "KOS",
+            "LAT",
+            "LTU",
+            "LUX",
+            "MDA",
+            "MKD",
+            "MLT",
+            "MNE",
+            "MON",
+            "NED",
+            "NIR",
+            "NOR",
+            "POL",
+            "POR",
+            "ROU",
+            "RUS",
+            "SCO",
+            "SLO",
+            "SMR",
+            "SRB",
+            "SUI",
+            "SVK",
+            "SWE",
+            "TUR",
+            "UKR",
+            "WAL",
+        ),
+        "Europe",
+    ),
+    **dict.fromkeys(
+        (
+            "AUS",
+            "COK",
+            "FIJ",
+            "MHL",
+            "NCL",
+            "NZL",
+            "PNG",
+            "PYF",
+            "SOL",
+            "TGA",
+            "VAN",
+            "WLF",
+        ),
+        "Oceania",
+    ),
+}
+
 
 @dataclass(frozen=True)
 class HeadToHeadSummary:
@@ -252,6 +463,18 @@ def flag_url_for_code(code: str | None, *, width: int = 40) -> str | None:
     if iso2 is None:
         return None
     return f"https://flagcdn.com/w{width}/{iso2}.png"
+
+
+def continent_for_code(code: str | None) -> str:
+    """Return the player's continent for an IOC/ITTF 3-letter code."""
+    if not code:
+        return "Unknown"
+    norm = code.strip().upper()
+    if not norm:
+        return "Unknown"
+    if norm in NEUTRAL_ORG_CODES:
+        return "Neutral / Other"
+    return IOC_TO_CONTINENT.get(norm, "Unknown")
 
 
 @lru_cache(maxsize=16)
@@ -441,6 +664,7 @@ def _empty_leaderboard() -> pl.DataFrame:
             "photo_url": pl.String,
             "flag_url": pl.String,
             "org": pl.String,
+            "continent": pl.String,
             "country_name": pl.String,
             "player_name": pl.String,
             "rating": pl.Float64,
@@ -623,6 +847,7 @@ def build_glicko_leaderboard(
     }
 
     flag_urls = [flag_url_for_code(code) for code in ranked["org"].to_list()]
+    continents = [continent_for_code(code) for code in ranked["org"].to_list()]
     photo_urls = [
         sanitize_headshot_url(
             url,
@@ -653,6 +878,7 @@ def build_glicko_leaderboard(
 
     return ranked.with_columns(
         pl.Series("flag_url", flag_urls, dtype=pl.String),
+        pl.Series("continent", continents, dtype=pl.String),
         pl.Series("photo_url", photo_urls, dtype=pl.String),
         pl.Series("peak_display", peak_displays, dtype=pl.String),
     ).select(
@@ -661,6 +887,7 @@ def build_glicko_leaderboard(
         "photo_url",
         "flag_url",
         "org",
+        "continent",
         "country_name",
         "player_name",
         "rating",

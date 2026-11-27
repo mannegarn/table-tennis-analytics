@@ -109,6 +109,8 @@ def test_migrations_create_the_raw_table(
         "017_backfill_team_rubber_players",
         "018_pending_views_refactor",
         "019_analytics_glicko2",
+        "020_analytics_table_types",
+        "021_butterfly_asian_table",
     }
     assert [row["schema_name"] for row in schemas] == ["ingest_ittf", "ingest_wtt"]
 

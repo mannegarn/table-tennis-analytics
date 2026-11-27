@@ -141,6 +141,11 @@ def test_streamlit_pages_render_without_error() -> None:
     upsets = AppTest.from_file(app_dir / "pages" / "6_Upsets.py").run(timeout=30)
     assert not upsets.exception
 
+    table_types = AppTest.from_file(app_dir / "pages" / "7_Table_Types.py").run(
+        timeout=30
+    )
+    assert not table_types.exception
+
 
 def test_compute_home_insights() -> None:
     events = pl.DataFrame(

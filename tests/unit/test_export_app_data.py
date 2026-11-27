@@ -106,6 +106,67 @@ def test_exported_glicko_match_ratings_parquet_exists_and_has_expected_columns()
         assert col in ratings.columns
 
 
+def test_table_type_export_queries_defined() -> None:
+    queries_by_file = {q.filename: q.sql.lower() for q in EXPORT_QUERIES}
+    assert "dim_table_brands.parquet" in queries_by_file
+    assert "analytics.dim_table_brands" in queries_by_file["dim_table_brands.parquet"]
+    assert "fct_table_type_glicko_match_ratings.parquet" in queries_by_file
+    ratings_sql = queries_by_file["fct_table_type_glicko_match_ratings.parquet"]
+    assert "analytics.fct_table_type_glicko_match_ratings" in ratings_sql
+    assert "table_group" in ratings_sql
+
+
+def test_exported_dim_table_brands_parquet_exists_and_has_expected_mapping() -> None:
+    brands_path = default_output_dir() / "dim_table_brands.parquet"
+    assert brands_path.exists()
+
+    brands = pl.read_parquet(brands_path)
+    assert brands.height == 13
+    for col in ("table_sponsor", "table_group", "notes"):
+        assert col in brands.columns
+
+    mapping = dict(
+        zip(
+            brands["table_sponsor"].to_list(),
+            brands["table_group"].to_list(),
+            strict=True,
+        )
+    )
+    assert mapping["Nittaku"] == "Other"
+    assert mapping["San-Ei"] == "Other"
+    assert mapping["Xiom"] == "Other"
+    assert mapping["Butterfly"] == "Asian"
+    assert mapping["Stag"] == "European"
+    assert set(mapping.values()) == {"Asian", "European", "Other"}
+
+
+def test_exported_table_type_glicko_match_ratings_parquet_exists_and_valid() -> None:
+    ratings_path = default_output_dir() / "fct_table_type_glicko_match_ratings.parquet"
+    assert ratings_path.exists()
+
+    ratings = pl.read_parquet(ratings_path)
+    assert ratings.height > 0
+    for col in (
+        "match_sk",
+        "event_sk",
+        "gender_category",
+        "table_group",
+        "rating_date",
+        "p1_player_sk",
+        "p2_player_sk",
+        "p1_pre_rating",
+        "p1_post_rating",
+        "p2_pre_rating",
+        "p2_post_rating",
+        "p1_expected_win_prob",
+        "p1_actual_score",
+    ):
+        assert col in ratings.columns
+
+    groups = set(ratings["table_group"].unique().to_list())
+    assert groups == {"Asian", "European"}
+
+
 def _default_dim_players_rows() -> list[dict[str, Any]]:
     return [
         {

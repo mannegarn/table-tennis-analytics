@@ -10,12 +10,14 @@ from typing import Literal
 import polars as pl
 import pytest
 from app.lib.glicko import (
+    IOC_TO_CONTINENT,
     IOC_TO_ISO2,
     NEUTRAL_ORG_CODES,
     build_as_of_event_options,
     build_glicko_leaderboard,
     build_head_to_head,
     build_player_rating_history,
+    continent_for_code,
     flag_url_for_code,
     glicko2_win_probability,
     resolve_placeholder_data_uri,
@@ -303,3 +305,31 @@ def test_build_as_of_event_options() -> None:
     assert options[1] == ("01/08/25 · Yokohama Cup", date(2025, 8, 1))
     assert options[2] == ("01/06/25 · Singapore Smash", date(2025, 6, 1))
     assert options[3] == ("10/01/25 · Doha Open", date(2025, 1, 10))
+
+
+def test_all_dim_players_org_codes_map_to_continent() -> None:
+    assert set(IOC_TO_CONTINENT) == set(IOC_TO_ISO2)
+    assert continent_for_code("CHN") == "Asia"
+    assert continent_for_code("GER") == "Europe"
+    assert continent_for_code("REF") == "Neutral / Other"
+    assert continent_for_code(None) == "Unknown"
+
+    players_path = default_output_dir() / "dim_players.parquet"
+    players = pl.read_parquet(players_path)
+    orgs = {
+        c.strip().upper()
+        for c in players["organization_code"].drop_nulls().to_list()
+        if c and c.strip()
+    }
+    valid_continents = {"Africa", "Americas", "Asia", "Europe", "Oceania"}
+    for org in orgs:
+        continent = continent_for_code(org)
+        if org in NEUTRAL_ORG_CODES:
+            assert continent == "Neutral / Other"
+        else:
+            assert continent in valid_continents, (
+                f"Unmapped org {org!r} -> {continent!r}"
+            )
+
+    lb = build_glicko_leaderboard(_sample_ratings(), _sample_players(), gender="women")
+    assert lb["continent"].to_list() == ["Asia", "Asia"]

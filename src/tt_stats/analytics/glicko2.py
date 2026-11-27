@@ -34,6 +34,7 @@ logger = get_logger(__name__)
 GLICKO2_SCALE = 173.7178
 CONVERGENCE_TOL = 1e-6
 MAX_ILLINOIS_ITERS = 100
+COMPARED_TABLE_GROUPS: tuple[str, ...] = ("Asian", "European")
 
 UpdateMode = Literal["match", "event", "week"]
 
@@ -61,11 +62,65 @@ order by
     m.match_sk asc
 """
 
+FETCH_TABLE_TYPE_MATCHES_SQL = """
+select
+    m.match_sk,
+    m.event_sk,
+    m.gender_category,
+    tb.table_group,
+    coalesce(m.start_date_utc::date, e.start_date) as rating_date,
+    m.p1_player_sk,
+    m.p2_player_sk,
+    m.winner_side
+from marts.fct_senior_singles_matches as m
+inner join marts.dim_events as e
+    on m.event_sk = e.event_sk
+inner join analytics.dim_table_brands as tb
+    on e.table_sponsor = tb.table_sponsor
+where
+    m.is_rating_eligible
+    and m.has_result
+    and m.p1_player_sk is not null
+    and m.p2_player_sk is not null
+    and tb.table_group in ('Asian', 'European')
+order by
+    coalesce(m.start_date_utc, e.start_date::timestamptz) asc nulls last,
+    m.event_sk asc,
+    m.round_order asc nulls last,
+    m.match_sk asc
+"""
+
 COPY_MATCH_RATINGS_SQL = """
 copy analytics.fct_glicko_match_ratings (
     match_sk,
     event_sk,
     gender_category,
+    rating_date,
+    p1_player_sk,
+    p2_player_sk,
+    p1_pre_rating,
+    p1_pre_rd,
+    p1_pre_vol,
+    p1_post_rating,
+    p1_post_rd,
+    p1_post_vol,
+    p2_pre_rating,
+    p2_pre_rd,
+    p2_pre_vol,
+    p2_post_rating,
+    p2_post_rd,
+    p2_post_vol,
+    p1_expected_win_prob,
+    p1_actual_score
+) from stdin
+"""
+
+COPY_TABLE_TYPE_MATCH_RATINGS_SQL = """
+copy analytics.fct_table_type_glicko_match_ratings (
+    match_sk,
+    event_sk,
+    gender_category,
+    table_group,
     rating_date,
     p1_player_sk,
     p2_player_sk,
@@ -186,6 +241,73 @@ class MatchRatingRow:
             self.match_sk,
             self.event_sk,
             self.gender_category,
+            self.rating_date,
+            self.p1_player_sk,
+            self.p2_player_sk,
+            self.p1_pre_rating,
+            self.p1_pre_rd,
+            self.p1_pre_vol,
+            self.p1_post_rating,
+            self.p1_post_rd,
+            self.p1_post_vol,
+            self.p2_pre_rating,
+            self.p2_pre_rd,
+            self.p2_pre_vol,
+            self.p2_post_rating,
+            self.p2_post_rd,
+            self.p2_post_vol,
+            self.p1_expected_win_prob,
+            self.p1_actual_score,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class TableTypeMatchInput:
+    """Minimal match record with table-type group needed for pool ratings."""
+
+    match_sk: int
+    event_sk: int
+    gender_category: str
+    table_group: str
+    rating_date: date | None
+    p1_player_sk: int
+    p2_player_sk: int
+    winner_side: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class TableTypeMatchRatingRow:
+    """Computed pre- and post-match Glicko-2 ratings for one table-type pool."""
+
+    match_sk: int
+    event_sk: int
+    gender_category: str
+    table_group: str
+    rating_date: date | None
+    p1_player_sk: int
+    p2_player_sk: int
+    p1_pre_rating: float
+    p1_pre_rd: float
+    p1_pre_vol: float
+    p1_post_rating: float
+    p1_post_rd: float
+    p1_post_vol: float
+    p2_pre_rating: float
+    p2_pre_rd: float
+    p2_pre_vol: float
+    p2_post_rating: float
+    p2_post_rd: float
+    p2_post_vol: float
+    p1_expected_win_prob: float
+    p1_actual_score: float
+
+    def as_tuple(self) -> tuple[object, ...]:
+        """Return fields in COPY column order."""
+        return (
+            self.match_sk,
+            self.event_sk,
+            self.gender_category,
+            self.table_group,
             self.rating_date,
             self.p1_player_sk,
             self.p2_player_sk,
@@ -491,6 +613,72 @@ def compute_glicko2_ratings(
     return output, len(rated_players)
 
 
+def compute_table_type_glicko2_ratings(
+    matches: Sequence[TableTypeMatchInput],
+    config: Glicko2Config,
+) -> tuple[list[TableTypeMatchRatingRow], int]:
+    """Replay matches per isolated table-type pool (Asian vs European).
+
+    Matches whose ``table_group`` is not in ``COMPARED_TABLE_GROUPS`` (e.g.
+    ``'Other'``) are ignored. Within each table group, ratings are computed
+    independently via :func:`compute_glicko2_ratings` (preserving gender pool
+    isolation). Returns ``(rows, distinct_players_rated)``.
+    """
+    eligible = [m for m in matches if m.table_group in COMPARED_TABLE_GROUPS]
+    if not eligible:
+        return [], 0
+
+    all_rows: list[TableTypeMatchRatingRow] = []
+    distinct_rated_players: set[int] = set()
+    for group in COMPARED_TABLE_GROUPS:
+        group_inputs = [
+            MatchInput(
+                match_sk=m.match_sk,
+                event_sk=m.event_sk,
+                gender_category=m.gender_category,
+                rating_date=m.rating_date,
+                p1_player_sk=m.p1_player_sk,
+                p2_player_sk=m.p2_player_sk,
+                winner_side=m.winner_side,
+            )
+            for m in eligible
+            if m.table_group == group
+        ]
+        if not group_inputs:
+            continue
+        group_rows, _ = compute_glicko2_ratings(group_inputs, config)
+        for row in group_rows:
+            distinct_rated_players.add(row.p1_player_sk)
+            distinct_rated_players.add(row.p2_player_sk)
+            all_rows.append(
+                TableTypeMatchRatingRow(
+                    match_sk=row.match_sk,
+                    event_sk=row.event_sk,
+                    gender_category=row.gender_category,
+                    table_group=group,
+                    rating_date=row.rating_date,
+                    p1_player_sk=row.p1_player_sk,
+                    p2_player_sk=row.p2_player_sk,
+                    p1_pre_rating=row.p1_pre_rating,
+                    p1_pre_rd=row.p1_pre_rd,
+                    p1_pre_vol=row.p1_pre_vol,
+                    p1_post_rating=row.p1_post_rating,
+                    p1_post_rd=row.p1_post_rd,
+                    p1_post_vol=row.p1_post_vol,
+                    p2_pre_rating=row.p2_pre_rating,
+                    p2_pre_rd=row.p2_pre_rd,
+                    p2_pre_vol=row.p2_pre_vol,
+                    p2_post_rating=row.p2_post_rating,
+                    p2_post_rd=row.p2_post_rd,
+                    p2_post_vol=row.p2_post_vol,
+                    p1_expected_win_prob=row.p1_expected_win_prob,
+                    p1_actual_score=row.p1_actual_score,
+                )
+            )
+
+    return all_rows, len(distinct_rated_players)
+
+
 def fetch_rating_eligible_matches(
     conn: psycopg.Connection[dict[str, object]],
 ) -> list[MatchInput]:
@@ -505,6 +693,32 @@ def fetch_rating_eligible_matches(
                 match_sk=int(cast(int, row["match_sk"])),
                 event_sk=int(cast(int, row["event_sk"])),
                 gender_category=str(row["gender_category"]),
+                rating_date=(
+                    rating_date_raw if isinstance(rating_date_raw, date) else None
+                ),
+                p1_player_sk=int(cast(int, row["p1_player_sk"])),
+                p2_player_sk=int(cast(int, row["p2_player_sk"])),
+                winner_side=(int(winner_raw) if isinstance(winner_raw, int) else None),
+            )
+        )
+    return result
+
+
+def fetch_table_type_matches(
+    conn: psycopg.Connection[dict[str, object]],
+) -> list[TableTypeMatchInput]:
+    """Load rating-eligible senior singles matches for compared table groups."""
+    rows = conn.execute(FETCH_TABLE_TYPE_MATCHES_SQL).fetchall()
+    result: list[TableTypeMatchInput] = []
+    for row in rows:
+        winner_raw = row["winner_side"]
+        rating_date_raw = row["rating_date"]
+        result.append(
+            TableTypeMatchInput(
+                match_sk=int(cast(int, row["match_sk"])),
+                event_sk=int(cast(int, row["event_sk"])),
+                gender_category=str(row["gender_category"]),
+                table_group=str(row["table_group"]),
                 rating_date=(
                     rating_date_raw if isinstance(rating_date_raw, date) else None
                 ),
@@ -534,6 +748,18 @@ def write_glicko2_ratings(
         )
 
 
+def write_table_type_glicko2_ratings(
+    conn: psycopg.Connection[dict[str, object]],
+    rows: Sequence[TableTypeMatchRatingRow],
+) -> None:
+    """Replace ``analytics.fct_table_type_glicko_match_ratings`` atomically."""
+    with conn.transaction(), conn.cursor() as cur:
+        cur.execute("truncate table analytics.fct_table_type_glicko_match_ratings;")
+        with cur.copy(COPY_TABLE_TYPE_MATCH_RATINGS_SQL) as copy:
+            for item in rows:
+                copy.write_row(item.as_tuple())
+
+
 def build_and_store_ratings(
     settings: Settings,
     config: Glicko2Config | None = None,
@@ -554,8 +780,20 @@ def build_and_store_ratings(
                 "No rating-eligible matches found in marts.fct_senior_singles_matches"
             )
         rated_rows, players_rated = compute_glicko2_ratings(matches, active_config)
+
+        table_type_matches = fetch_table_type_matches(conn)
+        if not table_type_matches:
+            raise RuntimeError(
+                "No rating-eligible table-type matches found in "
+                "marts.fct_senior_singles_matches"
+            )
+        table_type_rows, table_type_players_rated = compute_table_type_glicko2_ratings(
+            table_type_matches, active_config
+        )
+
         if not dry_run:
             write_glicko2_ratings(conn, rated_rows, players_rated, active_config)
+            write_table_type_glicko2_ratings(conn, table_type_rows)
 
     elapsed = time.perf_counter() - started
     logger.info(
@@ -563,6 +801,8 @@ def build_and_store_ratings(
         extra={
             "matches_rated": len(rated_rows),
             "players_rated": players_rated,
+            "table_type_matches_rated": len(table_type_rows),
+            "table_type_players_rated": table_type_players_rated,
             "elapsed_seconds": round(elapsed, 3),
             "dry_run": dry_run,
             "config": asdict(active_config),
