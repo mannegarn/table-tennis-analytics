@@ -1,4 +1,4 @@
-"""About Page — Data sources, architecture, inspiration, and author bio."""
+"""About Page: Data sources, architecture, inspiration, and author bio."""
 
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ def _load_cached_about_insights(
     )
 
 
-st.title("📖 About & Architecture")
+st.title("About & Architecture")
 
 st.divider()
 
@@ -96,7 +96,7 @@ if data_files_exist():
 # ---------------------------------------------------------------------------
 # 2. End-to-End Architecture (For Engineering Reviewers)
 # ---------------------------------------------------------------------------
-st.subheader("End-to-End Data Platform Architecture")
+st.subheader("How It's Built")
 st.markdown(
     """
     <div class="tt-pipeline-grid">
@@ -105,26 +105,26 @@ st.markdown(
             <div class="tt-pipeline-title">Python + Google Gemini API</div>
             <div class="tt-pipeline-desc">
                 Async Python collects match and player records, while a Gemini
-                Vision pipeline identifies table manufacturers from YouTube
-                match footage.
+                Vision pipeline identifies table brands from YouTube match
+                footage.
             </div>
         </div>
         <div class="tt-pipeline-step">
             <div class="tt-pipeline-num">2 · Warehouse</div>
             <div class="tt-pipeline-title">PostgreSQL 16 + dbt</div>
             <div class="tt-pipeline-desc">
-                Raw payloads land in PostgreSQL before cleaning, identity
-                resolution, and mart transformations managed with dbt and
-                curated seeds.
+                Raw records are stored in PostgreSQL 16, where dbt models and
+                reference seeds clean the data, merge duplicate player profiles,
+                and build analysis tables.
             </div>
         </div>
         <div class="tt-pipeline-step">
             <div class="tt-pipeline-num">3 · Analysis</div>
             <div class="tt-pipeline-title">Parquet + Polars</div>
             <div class="tt-pipeline-desc">
-                Cleaned marts are exported to Parquet and analyzed with
-                Polars &mdash; powering Glicko-2 ratings, upset analysis, and
-                binomial win-rate models.
+                Clean tables are exported to Parquet and queried with Polars to
+                compute Glicko-2 ratings, upset probabilities, and win-rate
+                curves.
             </div>
         </div>
         <div class="tt-pipeline-step">
@@ -160,10 +160,9 @@ st.markdown(
 st.subheader("About Me / Inspiration Behind This Project")
 st.markdown(
     "I picked up table tennis in London in my mid-20s and enjoy both the "
-    "sport and working with data. In major sports such as tennis and football, "
-    "there is endless public data and analysis available. Those same "
-    "metrics and insights are not widely available for table tennis — "
-    "I want to change that."
+    "sport and working with data. Sports like tennis and football have endless "
+    "public stats and analysis available, while table tennis has very little. "
+    "I would like to change that."
 )
 
 c_gh, c_em = st.columns(2)
@@ -171,14 +170,14 @@ with c_gh:
     st.link_button(
         "Source Code on GitHub",
         GITHUB_REPO_URL,
-        icon="💻",
+        icon=":material/code:",
         width="stretch",
     )
 with c_em:
     st.link_button(
         "Email Marcus",
         f"mailto:{CONTACT_EMAIL}",
-        icon="✉️",
+        icon=":material/mail:",
         width="stretch",
     )
 
@@ -187,17 +186,17 @@ st.markdown("<div style='height: 0.65rem;'></div>", unsafe_allow_html=True)
 with st.expander("Inspired By & Credits", expanded=False):
     st.markdown(
         "- **[JeffSackmann/tennis_MatchChartingProject & tennis_atp]"
-        "(https://github.com/JeffSackmann)** — Racquet-sport reference separating "
-        "match-level outcomes from granular point-by-point logs.\n"
-        "- **[dbt-labs/jaffle-shop](https://github.com/dbt-labs/jaffle-shop)** — "
-        "Canonical dbt reference for layered staged, intermediate, and mart "
-        "modeling and schema tests.\n"
+        "(https://github.com/JeffSackmann):** Inspiration for separating "
+        "match-level results from point-by-point logs.\n"
+        "- **[dbt-labs/jaffle-shop](https://github.com/dbt-labs/jaffle-shop):** "
+        "Reference structure for layered dbt staging, intermediate, and mart "
+        "models with schema tests.\n"
         "- **[alan-turing-institute/AIrsenal]"
-        "(https://github.com/alan-turing-institute/AIrsenal)** — Python + SQL "
-        "sports analytics architecture separating ingestion, storage, and "
-        "strength estimation.\n"
+        "(https://github.com/alan-turing-institute/AIrsenal):** Sports analytics "
+        "setup separating data collection, database storage, and player rating "
+        "models.\n"
         '- **Mark Glickman: ["Example of the Glicko-2 System"]'
-        "(https://www.glicko.net/glicko/glicko2.pdf)** — Primary paper defining "
-        "the Glicko-2 equations, scaling factor (`173.7178`), and Illinois "
+        "(https://www.glicko.net/glicko/glicko2.pdf):** Original paper defining "
+        "the Glicko-2 formulas, scaling factor (`173.7178`), and Illinois "
         "volatility solver."
     )

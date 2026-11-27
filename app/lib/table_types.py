@@ -1568,7 +1568,7 @@ def build_residual_forest_plot(
                 },
                 customdata=customdata,
                 hovertemplate=(
-                    "<b>%{customdata[0]}</b> — " + display_cohort + "<br>"
+                    "<b>%{customdata[0]}</b> · " + display_cohort + "<br>"
                     "vs. Expected: <b>%{x:+.1f}%</b> (±%{customdata[4]:.1f}%)<br>"
                     "Won %{customdata[2]:.1f}% of matches "
                     "(expected %{customdata[3]:.1f}%)<br>"

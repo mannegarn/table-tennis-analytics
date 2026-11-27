@@ -56,48 +56,6 @@ GROUPING_LABELS: dict[str, Literal["surface", "brand"]] = {
     "By Table Brand": "brand",
 }
 
-PAGE_CSS = """
-<style>
-div[data-testid="stMetricValue"],
-div[data-testid="stDataFrame"] {
-    font-variant-numeric: tabular-nums;
-}
-div[data-testid="stSegmentedControl"] button {
-    min-height: 52px !important;
-    font-size: 1.08rem !important;
-    font-weight: 700 !important;
-}
-.ttv2-tour-banner {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.32rem 0.85rem;
-    border-radius: 999px;
-    font-size: 0.85rem;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    margin: 0.35rem 0 0.75rem;
-    background-color: var(--secondary-background-color);
-}
-.ttv2-callout {
-    background-color: var(--secondary-background-color);
-    border: 1px solid rgba(148, 163, 184, 0.35);
-    border-left: 4px solid #C26D45;
-    border-radius: 8px;
-    padding: 0.85rem 1.05rem;
-    margin: 0.45rem 0 0.85rem;
-    font-size: 0.92rem;
-    line-height: 1.5;
-    font-variant-numeric: tabular-nums;
-}
-.ttv2-divider {
-    border: 0;
-    border-top: 1px solid rgba(148, 163, 184, 0.3);
-    margin: 1.35rem 0;
-}
-</style>
-"""
-
 
 @st.cache_data(show_spinner=False)
 def _cached_ratings_with_prior(ratings_height: int) -> pl.DataFrame:
@@ -186,7 +144,7 @@ def _render_top_takeaways(
     pool_label: str,
     chn_noun: str,
 ) -> None:
-    """Render plain-English summary takeaways directly beneath the KPI strip."""
+    """Render concise summary takeaways directly beneath the KPI strip."""
     bullets: list[str] = []
 
     if (
@@ -196,23 +154,23 @@ def _render_top_takeaways(
         paired_clause = ""
         if paired.n_players > 0 and paired.p_value is not None:
             clarity = (
-                "consistent pattern across players"
+                "statistically consistent"
                 if paired.p_value < 0.05
-                else "still a small sample of players"
+                else "not statistically significant"
             )
             paired_clause = (
-                f" Looking at the exact same <strong>{paired.n_players}</strong> "
-                f"{chn_noun} who played on both surfaces, "
-                f"<strong>{paired.n_better_on_asian} of {paired.n_players}</strong> "
-                f"perform better on Asian tables ({clarity})."
+                f" Among the <strong>{paired.n_players}</strong> {chn_noun} who "
+                f"played on both surfaces, <strong>{paired.n_better_on_asian} of "
+                f"{paired.n_players}</strong> perform better on Asian tables "
+                f"({clarity})."
             )
         bullets.append(
-            f"<strong>{pool_label} \u2014 Do Asian tables help {chn_noun}?</strong> "
-            f"Against non-Chinese opponents, {chn_noun} win "
-            f"<strong>{kpis.chn_h2h_asian_resid_pp:+.1f}%</strong> more often than "
-            "ratings predicted on Asian tables, compared to "
-            f"<strong>{kpis.chn_h2h_euro_resid_pp:+.1f}%</strong> on European tables."
-            f"{paired_clause}"
+            f"<strong>{pool_label} (China vs. Rest of World):</strong> "
+            f"{chn_noun.title()} outperform rating expectations by "
+            f"<strong>{kpis.chn_h2h_asian_resid_pp:+.1f}%</strong> "
+            f"on Asian tables vs. "
+            f"<strong>{kpis.chn_h2h_euro_resid_pp:+.1f}%</strong> "
+            f"on European tables.{paired_clause}"
         )
 
     if (
@@ -222,20 +180,20 @@ def _render_top_takeaways(
     ):
         direction = (
             f"<strong>{abs(kpis.upset_resid_gap_pp):.1f}% more upsets</strong> "
-            "(relative to expectations) on European tables than on Asian tables"
+            "(vs. rating expectations) on European tables than on Asian tables"
             if kpis.upset_resid_gap_pp > 0
             else "similar upset rates on Asian and European tables"
         )
         bullets.append(
-            f"<strong>{pool_label} \u2014 Which table leads to more upsets?</strong> "
-            f"Underdogs (&lt;40% pre-match chance) pull off {direction} "
-            f"(Asian: <strong>{kpis.grippy_upset_resid_pp:+.1f}%</strong> vs. "
-            f"European: <strong>{kpis.skiddy_upset_resid_pp:+.1f}%</strong>)."
+            f"<strong>{pool_label} upsets:</strong> Clear underdogs (&lt;40% pre-match "
+            f"chance) pull off {direction} (Asian: "
+            f"<strong>{kpis.grippy_upset_resid_pp:+.1f}%</strong> vs. European: "
+            f"<strong>{kpis.skiddy_upset_resid_pp:+.1f}%</strong>)."
         )
 
     bullets.append(
-        "<strong>How to read these percentages:</strong> <code>0%</code> means "
-        "winning right on schedule based on player ratings; <code>+5%</code> means "
+        "<strong>Reading these numbers:</strong> <code>0%</code> means winning "
+        "right on schedule based on player ratings; <code>+5%</code> means "
         "winning 5 percentage points more often than expected."
     )
     _render_insight_bullets(bullets, box_class="tt-summary-box")
@@ -265,7 +223,7 @@ def _render_paired_callout(
     )
     st.markdown(
         f"""
-        <div class="ttv2-callout">
+        <div class="tt-callout">
         <strong>Paired Within-Player Test ({chn_noun.title()}, {scope_lbl}):</strong>
         Across <strong>{paired.n_players}</strong> {chn_noun} with ≥5 matches on
         both surface groups, their average <em>(Asian \u2212 European)</em> shift is
@@ -305,7 +263,7 @@ def _render_tilt_summary(tilt: TiltAnalysisResult, *, players_noun: str) -> None
     )
     st.markdown(
         f"""
-        <div class="ttv2-callout">
+        <div class="tt-callout">
         <strong>2x2 Split ({tilt.total_players:,} {players_noun}{neutral_note}):
         </strong>
         <strong>{chn_share}</strong> of Chinese {players_noun} land in
@@ -338,33 +296,40 @@ def _describe_tilt_conclusion(
     fp = tilt.fisher_p_value
 
     if chn_share is not None and non_share is not None:
-        if fp is not None and fp < 0.05:
-            headcount_txt = (
-                f"<strong>Yes, by headcount too:</strong> <strong>{chn_share:.1f}%"
-                f"</strong> of {chn_noun} play better on Asian tables vs. "
-                f"<strong>{non_share:.1f}%</strong> of {non_chn_noun}."
-            )
+        if chn_share > non_share:
+            if fp is not None and fp < 0.05:
+                headcount_txt = (
+                    f"<strong>Yes, by headcount too:</strong> <strong>{chn_share:.1f}%"
+                    f"</strong> of {chn_noun} play better on Asian tables vs. "
+                    f"<strong>{non_share:.1f}%</strong> of {non_chn_noun}."
+                )
+            else:
+                headcount_txt = (
+                    f"By simple headcount, more {chn_noun} lean toward Asian tables "
+                    f"(<strong>{chn_share:.1f}%</strong> vs. "
+                    f"<strong>{non_share:.1f}%</strong> for {non_chn_noun}), though "
+                    "headcount alone isn't decisive because small swings count the "
+                    "same as large ones."
+                )
         else:
             headcount_txt = (
-                f"By simple headcount, more {chn_noun} lean toward Asian tables "
-                f"(<strong>{chn_share:.1f}%</strong> vs. "
-                f"<strong>{non_share:.1f}%</strong> for {non_chn_noun}), though "
-                "headcount alone isn't decisive because small random swings count "
-                "the same as huge ones."
+                f"By headcount, <strong>{chn_share:.1f}%</strong> of {chn_noun} "
+                f"play better on Asian tables vs. <strong>{non_share:.1f}%</strong> "
+                f"of {non_chn_noun}."
             )
     else:
         headcount_txt = "Not enough players in both groups to compare headcount shares."
 
     if tilt.welch_diff_pp is not None and tilt.welch_p_value is not None:
         strength = (
-            "a clearly larger Asian-table boost"
+            "statistically significant"
             if tilt.welch_p_value < 0.05
-            else "a modest difference in average boost"
+            else "a modest difference"
         )
         size_txt = (
             f"Looking at the <strong>size of the boost</strong> (right chart), "
-            f"{chn_noun} average <strong>{tilt.welch_diff_pp:+.1f}%</strong> more "
-            f"lift on Asian tables than {non_chn_noun} ({strength})."
+            f"{chn_noun} show a <strong>{tilt.welch_diff_pp:+.1f}%</strong> "
+            f"difference in Asian-table boost vs. {non_chn_noun} ({strength})."
         )
     else:
         size_txt = ""
@@ -393,12 +358,16 @@ def _describe_upset_conclusion(
         kpis.grippy_upset_resid_pp is not None
         and kpis.skiddy_upset_resid_pp is not None
     ):
+        reliability = (
+            ", meaning favorites hold up more reliably on grippier tables"
+            if kpis.skiddy_upset_resid_pp > kpis.grippy_upset_resid_pp
+            else ""
+        )
         gap_sentence = (
             f"In {pool_label}, Asian (Grippy) tables see <strong>"
             f"{kpis.grippy_upset_resid_pp:+.1f}%</strong> upsets vs. expected, "
             f"compared to <strong>{kpis.skiddy_upset_resid_pp:+.1f}%</strong> on "
-            "European (Skiddy) tables \u2014 meaning favorites hold up more reliably "
-            "on grippier tables. "
+            f"European (Skiddy) tables{reliability}. "
         )
 
     return (
@@ -410,12 +379,11 @@ def _describe_upset_conclusion(
 
 
 def _render_page() -> None:
-    st.markdown(PAGE_CSS, unsafe_allow_html=True)
-    st.title("🏟️ Table Types: Do Asian Tables Help Chinese Players?")
+    st.title("Table Types: Do Asian Tables Help Chinese Players?")
     st.caption(
-        "Plain-English comparison of actual vs. expected win rates across "
-        "tournament table surfaces. Men's Singles and Women's Singles are kept "
-        "completely separate."
+        "How players perform on different tournament table brands and surfaces "
+        "compared with pre-match Glicko-2 expectations. Men's and Women's "
+        "Singles are analyzed separately."
     )
 
     if not data_files_exist():
@@ -445,14 +413,13 @@ def _render_page() -> None:
 
     is_men = gender == "men"
     tour_color = GENDER_COLORS["Men"] if is_men else GENDER_COLORS["Women"]
-    tour_icon = "👨" if is_men else "👩"
     players_noun = "men" if is_men else "women"
     chn_noun = "Chinese men" if is_men else "Chinese women"
     non_chn_noun = "non-Chinese men" if is_men else "non-Chinese women"
 
     st.markdown(
-        f'<div class="ttv2-tour-banner" style="border: 1px solid {tour_color}; '
-        f'color: {tour_color};">{tour_icon} Viewing: {pool_label} '
+        f'<div class="tt-tour-banner" style="border: 1px solid {tour_color}; '
+        f'color: {tour_color};">Viewing: {pool_label} '
         "(separate rating pool)</div>",
         unsafe_allow_html=True,
     )
@@ -555,12 +522,10 @@ def _render_page() -> None:
         chn_noun=chn_noun,
     )
 
-    st.markdown('<hr class="ttv2-divider" />', unsafe_allow_html=True)
+    st.markdown('<hr class="tt-divider" />', unsafe_allow_html=True)
 
     # --- Section 1: Do Chinese Players Win More on Asian Tables? ---
-    st.subheader(
-        f"1. {pool_label} \u2014 Do {chn_noun.title()} Win More on Asian Tables?"
-    )
+    st.subheader(f"1. {pool_label}: Do {chn_noun.title()} Win More on Asian Tables?")
 
     s1_ctrl, _s1_spacer = st.columns([1.5, 2.0])
     with s1_ctrl:
@@ -605,11 +570,11 @@ def _render_page() -> None:
 
     _render_insight_bullets(
         [
-            f"<strong>What this chart shows ({pool_label}):</strong> Each dot shows "
-            "whether players won more often (right of <code>0%</code>) or less often "
-            "(left of <code>0%</code>) than pre-match ratings predicted. Horizontal "
-            "bars show the 95% margin of error (wider bars = fewer matches).",
-            f"<strong>What we can conclude:</strong> {s1_conclusion}",
+            "<strong>Reading the chart:</strong> Dots to the right of <code>0%</code> "
+            "mean players won more often than ratings predicted; dots to the left "
+            "mean fewer wins. Horizontal bars show the 95% margin of error (wider "
+            "bars = smaller sample).",
+            f"<strong>{pool_label} takeaway:</strong> {s1_conclusion}",
         ]
     )
 
@@ -683,11 +648,11 @@ def _render_page() -> None:
                 },
             )
 
-    st.markdown('<hr class="ttv2-divider" />', unsafe_allow_html=True)
+    st.markdown('<hr class="tt-divider" />', unsafe_allow_html=True)
 
     # --- Section 2: Player Grouping Approach ("Which Group Is More Chinese?") ---
     st.subheader(
-        f"2. {pool_label} \u2014 If We Group Players by Best Table, "
+        f"2. {pool_label}: If We Group Players by Best Table, "
         "Is One Group More Chinese?"
     )
 
@@ -732,13 +697,12 @@ def _render_page() -> None:
     )
     _render_insight_bullets(
         [
-            f"<strong>What these charts show ({pool_label}):</strong> Every player "
-            f"with at least <strong>{tilt_min_matches}</strong> matches on both "
-            "surfaces is placed into 'Play Better on Asian Tables' or 'Play Better "
-            "on European Tables'. The <strong>left chart</strong> shows what % of "
-            "each group is Chinese; the <strong>right chart</strong> shows how big "
-            "the average Asian-table boost is.",
-            f"<strong>What we can conclude:</strong> {tilt_conclusion}",
+            f"<strong>How players are grouped:</strong> Every player with at least "
+            f"<strong>{tilt_min_matches}</strong> matches on both surfaces is placed "
+            "into 'Play Better on Asian Tables' or 'Play Better on European Tables'. "
+            "The <strong>left chart</strong> shows how much of each group is Chinese; "
+            "the <strong>right chart</strong> shows the average Asian-table boost.",
+            f"<strong>Result:</strong> {tilt_conclusion}",
         ]
     )
 
@@ -767,7 +731,7 @@ def _render_page() -> None:
                 tilt_res.contingency_df.with_columns(
                     (
                         pl.col("pct_chn_ci_low").round(1).cast(pl.String)
-                        + pl.lit("% \u2013 ")
+                        + pl.lit("% - ")
                         + pl.col("pct_chn_ci_high").round(1).cast(pl.String)
                         + pl.lit("%")
                     ).alias("wilson_95_ci")
@@ -843,10 +807,10 @@ def _render_page() -> None:
                 },
             )
 
-    st.markdown('<hr class="ttv2-divider" />', unsafe_allow_html=True)
+    st.markdown('<hr class="tt-divider" />', unsafe_allow_html=True)
 
     # --- Section 3: Table Brand Summary & Upset Rate Matrix ---
-    st.subheader(f"3. {pool_label} \u2014 Which Tables Lead to More Upsets?")
+    st.subheader(f"3. {pool_label}: Which Tables Lead to More Upsets?")
 
     brand_matrix = build_brand_summary_matrix(
         surface_matches,
@@ -857,12 +821,11 @@ def _render_page() -> None:
 
     _render_insight_bullets(
         [
-            f"<strong>What this chart shows ({pool_label}):</strong> Looks at clear "
-            "underdogs (&lt;40% pre-match win chance) and compares how often they "
-            "actually win against what ratings predicted. Dots to the <strong>left "
-            "of 0%</strong> mean fewer upsets (favorites win reliably); dots to the "
-            "<strong>right of 0%</strong> mean more upsets.",
-            f"<strong>What we can conclude:</strong> "
+            "<strong>Reading the upset chart:</strong> Focuses on clear underdogs "
+            "(&lt;40% pre-match win chance). Dots left of <code>0%</code> mean "
+            "fewer upsets (favorites win reliably); dots right of <code>0%</code> "
+            "mean more upsets than ratings predicted.",
+            f"<strong>Key pattern:</strong> "
             f"{_describe_upset_conclusion(kpis, brand_matrix, pool_label=pool_label)}",
         ]
     )
@@ -936,22 +899,20 @@ def _render_page() -> None:
             ).map(_diverging_residual_css, subset=resid_cols)
             st.dataframe(styled_matrix, hide_index=True, width="stretch")
 
-    st.markdown('<hr class="ttv2-divider" />', unsafe_allow_html=True)
+    st.markdown('<hr class="tt-divider" />', unsafe_allow_html=True)
 
     # --- Section 4: Player Surface Boosts & Anti-Specialists ---
-    st.subheader(
-        f"4. {pool_label} \u2014 Which Individual Players Get the Biggest Boost?"
-    )
+    st.subheader(f"4. {pool_label}: Which Individual Players Get the Biggest Boost?")
 
     _render_insight_bullets(
         [
-            f"<strong>What this table shows ({pool_label}):</strong> Ranks "
-            f"individual {players_noun} by how much more (<code>+</code>) or less "
-            "(<code>-</code>) often they win compared to rating expectations on a "
-            "chosen table brand, or on Asian tables vs. European tables.",
+            f"<strong>Individual rankings:</strong> Sorts {players_noun} by how "
+            "much more (<code>+</code>) or less (<code>-</code>) often they win "
+            "compared to rating expectations on a chosen brand or surface.",
             "<strong>Watch the margin of error (<code>\u00b195% CI</code>):</strong> "
-            "Individual players have smaller sample sizes. If the error range is "
-            "bigger than the boost itself, it may just be normal match-to-match luck.",
+            "Single-player samples are smaller. When the error range is wider "
+            "than the boost itself, the difference may just be match-to-match "
+            "variance.",
         ]
     )
 
@@ -1066,7 +1027,7 @@ def _render_page() -> None:
             },
         )
 
-    st.markdown('<hr class="ttv2-divider" />', unsafe_allow_html=True)
+    st.markdown('<hr class="tt-divider" />', unsafe_allow_html=True)
 
     brand_groups = _cached_brand_groups(table_brands.height)
     asian_brands = ", ".join(brand_groups["Asian"]) or "None"
@@ -1074,20 +1035,21 @@ def _render_page() -> None:
     other_brands = ", ".join(brand_groups["Other"])
     other_clause = f"{other_brands}" if other_brands else "Nittaku, San-Ei, Xiom"
 
-    with st.expander("Methodology, Physics & Data Caveats", expanded=False):
+    with st.expander("Methodology & Data Notes", expanded=False):
         st.markdown(
-            "1. **Surface Physics (ITTF Law 2.01 & Technical Leaflet T1):** ITTF "
-            "approval regulates vertical drop bounce (23\u201326 cm from 30 cm) and "
-            "low-speed sled friction (\u03bc \u2264 0.6), but does not capture "
-            "high-spin tangential bite (Kamijima & Ushiyama, ITTF Sports Science "
+            "1. **Why approved tables play differently (ITTF Law 2.01 & "
+            "Technical Leaflet T1):** ITTF certification tests vertical bounce "
+            "height (23-26 cm from a 30 cm drop) and low-speed sliding friction "
+            "(\u03bc \u2264 0.6), but approved tables can still grip heavy topspin "
+            "and backspin differently (Kamijima & Ushiyama, ITTF Sports Science "
             "Congress, 2011/2013).\n"
-            "2. **Expected Win Rate Baseline:** Computed from pre-match Glicko-2 win "
-            "probabilities in the unified senior singles pool (separately for Men's "
-            "Singles and Women's Singles), controlling for opponent strength.\n"
-            "3. **Why China-vs-China Matches Are Hidden by Default:** When two "
-            "Chinese players meet, one must win and one must lose, pulling their "
-            "combined average toward 0%.\n"
-            "4. **Table Brand Groupings:**\n"
+            "2. **Expected win rate baseline:** Computed from pre-match Glicko-2 "
+            "win probabilities in the unified senior singles pool (separately for "
+            "Men's Singles and Women's Singles), controlling for opponent strength.\n"
+            "3. **Why China-vs-China matches are hidden by default:** When two "
+            "Chinese players meet, one wins and one loses, pulling their combined "
+            "average toward 0%.\n"
+            "4. **Table brand groupings:**\n"
             f"   - **Asian Tables (Grippy):** {asian_brands} "
             "(**Butterfly is included here for its grippier surface**)\n"
             f"   - **European Tables (Skiddy):** {euro_brands} "

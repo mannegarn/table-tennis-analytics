@@ -926,7 +926,7 @@ def build_as_of_event_options(
 
     max_date_raw = dated["rating_date"].max()
     latest_label = (
-        f"Latest ({max_date_raw:%d/%m/%y} — All matches)"
+        f"Latest ({max_date_raw:%d/%m/%y} · All matches)"
         if isinstance(max_date_raw, date)
         else "Latest (All matches)"
     )

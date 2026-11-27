@@ -2,7 +2,7 @@
 
 Showcases player-level Total, Serve, and Receive point win rates from
 ``marts.fct_match_commentary`` across completed, played senior singles matches
-with complete point-by-point commentary (pooling Best of 5 and Best of 7).
+with complete point-by-point logs (pooling Best of 5 and Best of 7).
 """
 
 from __future__ import annotations
@@ -171,13 +171,12 @@ def _table_column_config(metric_view: MetricView) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Page Header & Scope Note
 # ---------------------------------------------------------------------------
-st.title("🎯 Service Win Rate")
-st.info(
-    "**Scope note:** Not all matches in the warehouse have full point-by-point "
-    "commentary data. This page covers only completed, played senior singles "
-    "matches with complete commentary (`PT`, `SSR`, `DPT`) and an identifiable "
-    "server (Best of 5 and Best of 7 pooled). The **Matches** column reflects "
-    "only those commentary-covered matches."
+st.title("Service Win Rate")
+st.caption(
+    "Point-by-point serve and receive tracking is available for a subset of "
+    "tournaments. This page covers completed senior singles matches with full "
+    "point-by-point logs (Best of 5 and Best of 7 combined), and match counts "
+    "below reflect only those tracked matches."
 )
 
 if not data_files_exist():
@@ -231,7 +230,7 @@ k4.metric(
         else "N/A"
     ),
 )
-k5.metric("Commentary Matches", f"{kpis.total_matches:,}")
+k5.metric("Detailed Match Logs", f"{kpis.total_matches:,}")
 k6.metric("Points Analyzed", f"{kpis.total_points:,}")
 
 st.markdown(
@@ -259,13 +258,13 @@ st.markdown(
                 edge over receiving.
             </li>
             <li>
-                <strong>Best of 5 &amp; Best of 7 pooled:</strong> Unlike match
-                win rates, per-point serve and receive probabilities are
-                format-invariant, so Bo5 and Bo7 matches are combined.
+                <strong>Best of 5 &amp; Best of 7 combined:</strong> Winning a
+                single point on serve or receive works the same in both match
+                formats, so Bo5 and Bo7 matches are pooled together.
             </li>
         </ul>
         <a href="#serve-receive-addendum">
-            Jump to commentary parsing &amp; server inference methodology &darr;
+            Jump to Methodology &amp; Data Notes &darr;
         </a>
     </div>
     """,
@@ -310,7 +309,7 @@ with f2:
 c_min, c_search = st.columns([1.4, 1.2], vertical_alignment="bottom")
 with c_min:
     table_min_matches = st.slider(
-        "Minimum matches (with commentary)",
+        "Minimum matches (with point-by-point logs)",
         min_value=0,
         max_value=100,
         value=10,
@@ -371,10 +370,10 @@ sort_col_label = (
 )
 st.caption(
     f"Showing **{table_view_df.height:,}** players with at least "
-    f"**{table_min_matches}** commentary-covered matches "
+    f"**{table_min_matches}** detailed match logs "
     f"(sorted by **{sort_col_label}**; "
-    "click any column header—including **Serve Delta** / **Receive Delta**—to "
-    "re-sort)."
+    "click any column header, such as **Serve Delta** or **Receive Delta**, "
+    "to re-sort)."
 )
 
 if table_view_df.is_empty():
@@ -399,32 +398,29 @@ st.subheader("2. Serve & Receive vs Total Point Win %")
 _render_insight_card(
     [
         (
-            "<strong>On paper:</strong> In an equal-skill rally with no server "
-            "edge, Serve Win % and Receive Win % would both sit right on the "
-            "dashed <code>y = x</code> parity line (and around the dotted 50% "
-            "crosshairs)."
+            "<strong>Dashed green parity line (<code>y = x</code>):</strong> "
+            "Shows where players would sit if serving gave no advantage "
+            "(Serve Win % = Receive Win % = Total Point %)."
         ),
         (
-            "<strong>What the data shows:</strong> Serving gives a clear, "
-            "consistent edge across the tour: <strong>53.34%</strong> global "
-            "serve win rate vs <strong>46.66%</strong> on receive (Men: "
-            "<code>53.37%</code>, Women: <code>53.29%</code>). Across players "
-            "with 10+ commentary matches, <strong>Serve Win %</strong> sits an "
-            "average of <code>+3.32 pp</code> <em>above</em> Total Point % while "
+            "<strong>Clear server advantage:</strong> Tour-wide, servers win "
+            "<strong>53.34%</strong> of points vs. <strong>46.66%</strong> on "
+            "receive (Men: <code>53.37%</code>, Women: <code>53.29%</code>). "
+            "Among players with 10+ tracked matches, <strong>Serve Win %</strong> "
+            "averages <code>+3.32 pp</code> above Total Point % while "
             "<strong>Receive Win %</strong> sits <code>&minus;3.32 pp</code> "
-            "<em>below</em> it — a <strong>+6.64 pp</strong> serve-over-receive "
-            "gap (<code>+6.79 pp</code> for Men vs <code>+6.45 pp</code> for "
-            "Women). Notably, <strong>Defenders</strong> show a tighter split "
+            "below, a <strong>+6.64 pp</strong> serve-over-receive gap "
+            "(<code>+6.79 pp</code> for Men vs. <code>+6.45 pp</code> for "
+            "Women). <strong>Defenders</strong> have a tighter split "
             "(<code>+5.59 pp</code>) than <strong>Attackers</strong> "
             "(<code>+6.68 pp</code>)."
         ),
         (
-            "<strong>Why:</strong> In table tennis, the server controls the "
-            "spin, placement, and length of the first ball and sets up an "
-            "aggressive third-ball attack — especially on the men's tour. "
-            "Choppers/defenders rely less on quick third-ball winners and "
-            "neutralize opponents' serves more consistently, compressing the gap "
-            "between their serve and receive win rates."
+            "<strong>Why:</strong> Serving lets a player dictate spin, "
+            "placement, and length to set up an aggressive third-ball attack, "
+            "especially in the men's game. Defenders rely less on quick "
+            "third-ball winners and neutralize opponents' serves more steadily, "
+            "narrowing the gap between their serve and receive rates."
         ),
     ]
 )
@@ -506,10 +502,10 @@ st.divider()
 # Bottom Methodology Addendum
 # ---------------------------------------------------------------------------
 st.markdown('<div id="serve-receive-addendum"></div>', unsafe_allow_html=True)
-st.subheader("Methodology Addendum: Commentary Parsing & Server Inference")
+st.subheader("Methodology & Data Notes")
 
 with st.expander(
-    "How PT, SSR, DPT deletions, and opening-server inference work",
+    "Commentary parsing, server inference, and scope rules",
     expanded=False,
 ):
     st.markdown(
@@ -534,6 +530,6 @@ with st.expander(
         "opening server as $(3 - s)$ if $u$ is even (or $s$ if $u$ is odd). "
         "Matches with no identifiable `SSR` or null `PT` actors are excluded.\n"
         "3. **Why Best of 5 and Best of 7 are pooled:** Unlike match win "
-        "probabilities, a player's per-point win rate on serve or receive does "
-        "not change theoretical scale between Bo5 and Bo7 matches."
+        "probabilities, a player's per-point win rate on serve or receive has "
+        "the same baseline in Bo5 and Bo7 matches."
     )

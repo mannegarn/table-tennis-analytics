@@ -301,7 +301,7 @@ def test_build_as_of_event_options() -> None:
     )
 
     options = build_as_of_event_options(ratings, events, gender="women")
-    assert options[0] == ("Latest (01/08/25 — All matches)", None)
+    assert options[0] == ("Latest (01/08/25 · All matches)", None)
     assert options[1] == ("01/08/25 · Yokohama Cup", date(2025, 8, 1))
     assert options[2] == ("01/06/25 · Singapore Smash", date(2025, 6, 1))
     assert options[3] == ("10/01/25 · Doha Open", date(2025, 1, 10))

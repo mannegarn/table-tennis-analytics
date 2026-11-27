@@ -1,15 +1,27 @@
-# Custom Light and Dark purple palettes while keeping Streamlit's Light / Dark /
+# Custom Light and Dark palettes while keeping Streamlit's Light / Dark /
 # System toggle active under the top-right menu (⋮ -> Settings -> Theme).
 # Paired with the warm orange (#F59E0B) card borders in app/lib/theme.py.
 
+[theme]
+baseRadius = "10px"
+buttonRadius = "8px"
+
 [theme.light]
 primaryColor = "#7C3AED"
-backgroundColor = "#EAE5FA"
-secondaryBackgroundColor = "#DDD5F7"
+backgroundColor = "#F4F2FC"
+secondaryBackgroundColor = "#FFFFFF"
 textColor = "#1E1B4B"
+
+[theme.light.sidebar]
+backgroundColor = "#E6E0F8"
+secondaryBackgroundColor = "#DDD5F7"
 
 [theme.dark]
 primaryColor = "#A78BFA"
-backgroundColor = "#1B162C"
-secondaryBackgroundColor = "#27203F"
+backgroundColor = "#161325"
+secondaryBackgroundColor = "#201B34"
 textColor = "#F3F0FF"
+
+[theme.dark.sidebar]
+backgroundColor = "#1D1730"
+secondaryBackgroundColor = "#292142"

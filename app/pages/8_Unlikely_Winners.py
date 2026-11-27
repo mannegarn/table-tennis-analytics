@@ -1,4 +1,4 @@
-"""Unlikely Winners — Tournament-Level Glicko-2 Upset Champions Page.
+"""Unlikely Winners: Tournament-Level Glicko-2 Upset Champions Page.
 
 Works backwards from each non-team singles tournament Final winner and multiplies
 their pre-match Glicko-2 expected win probabilities across qualifying and knockout
@@ -33,16 +33,6 @@ from lib.unlikely_winners import (
 from lib.upsets import attach_prior_match_counts
 
 ensure_standalone_shell(load_snapshot_timestamp())
-
-PAGE_CSS = """
-<style>
-div[data-testid="stSegmentedControl"] button {
-    min-height: 48px !important;
-    font-size: 1.05rem !important;
-    font-weight: 700 !important;
-}
-</style>
-"""
 
 
 def _active_theme() -> Literal["dark", "light"]:
@@ -229,21 +219,12 @@ def _table_column_config() -> tuple[list[str], dict[str, Any]]:
 
 
 def _render_page() -> None:
-    st.markdown(PAGE_CSS, unsafe_allow_html=True)
-    st.title("🏅 Unlikely Winners")
-    st.markdown(
-        """
-        <div class="tt-insight-card">
-            <strong>About Knockout Run Chances:</strong> This metric multiplies the
-            champion's pre-match Glicko-2 win probabilities across their actual
-            qualifying and knockout matches (excluding group matches, team rubbers,
-            and Bo5/Bo7 format differences). It is a <strong>realized run
-            probability</strong> rather than full pre-tournament bracket odds (which
-            would require simulating every possible draw and opponent)—making it a
-            clean, direct measure of the most impressive individual title runs.
-        </div>
-        """,
-        unsafe_allow_html=True,
+    st.title("Unlikely Winners")
+    st.caption(
+        "Singles champions who overcame the longest pre-match odds to win a "
+        "title. Knockout Run Chance multiplies the champion's pre-match "
+        "Glicko-2 win probabilities across every qualifying and knockout match "
+        "they won."
     )
 
     if not data_files_exist():
@@ -324,14 +305,14 @@ def _render_page() -> None:
         )
 
     st.divider()
-    st.markdown("### 🏆 Top 10 Most Unlikely Winners")
-    st.caption(
-        "🏟️ Lowest Glicko-2 title-run probabilities across Men's and Women's Singles"
-    )
+    st.markdown("### Top 10 Most Unlikely Winners")
     types_display = (
         ", ".join(selected_types) if selected_types else "All tournament types"
     )
-    st.caption(f"Tournament types: `{types_display}`")
+    st.caption(
+        "Lowest knockout-run probabilities in Men's and Women's Singles · "
+        f"Showing: {types_display}"
+    )
 
     men_top10 = top_unlikely_winners_by_gender(winners_df, gender="men", limit=10)
     women_top10 = top_unlikely_winners_by_gender(winners_df, gender="women", limit=10)
@@ -367,7 +348,7 @@ def _render_page() -> None:
             _render_top10_list(women_top10, gender="women", theme=theme)
 
     st.divider()
-    st.markdown("### 📈 Tournament vs. Winner Knockout Run Chance")
+    st.markdown("### Tournament vs. Winner Knockout Run Chance")
     p1, p2 = st.columns([1.4, 1.0], gap="medium")
     with p1:
         category_choice = st.segmented_control(
@@ -408,7 +389,7 @@ def _render_page() -> None:
     )
 
     st.divider()
-    st.markdown("### 📋 All Tournament Winners")
+    st.markdown("### All Tournament Winners")
     if scoped_df.is_empty():
         st.info("No tournament winners match the current filters.")
     else:
@@ -419,6 +400,26 @@ def _render_page() -> None:
             width="stretch",
             height=560,
             column_config=col_config,
+        )
+
+    st.divider()
+    with st.expander("Methodology & Scope Notes", expanded=False):
+        st.markdown(
+            "- **How Knockout Run Chance is calculated:** Multiplies the "
+            "champion's pre-match Glicko-2 win probability across each qualifying "
+            "and knockout win through the Final (`round_code = 'F'`). Unrated "
+            "wins (such as walkovers or defaults) count as `1.0`.\n"
+            "- **What is excluded:** Team events (`is_team_rubber`), group-stage "
+            "matches, placement matches, and consolation rounds are excluded so "
+            "only direct elimination and qualifying wins count.\n"
+            "- **Actual path vs. pre-tournament odds:** Measures the difficulty "
+            "of the opponents the champion actually beat, rather than full "
+            "pre-tournament bracket odds (which would require simulating every "
+            "possible draw before round one).\n"
+            "- **Prior-match filter & format:** Champions must have at least the "
+            "selected number of prior rated matches (`10+` by default) entering "
+            "the run so brand-new `1500`-rated players do not skew the list. "
+            "Best-of-5 vs. Best-of-7 differences are not adjusted separately."
         )
 
 

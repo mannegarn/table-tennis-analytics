@@ -17,12 +17,24 @@ CONTACT_EMAIL = "marcusannegarn@gmail.com"
 
 APP_CSS = """
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap');
+
 :root {
     --tt-orange: #F59E0B;
 }
 
 html {
     scroll-behavior: smooth;
+}
+
+.stApp {
+    font-family:
+        "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.stApp code,
+.stApp pre {
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 /* Ensure main app body and header follow the active theme background */
@@ -41,6 +53,71 @@ html {
 .block-container {
     padding-top: 3.4rem;
     padding-bottom: 4.25rem;
+}
+
+/* Shared segmented-control sizing across tour/filter toggles */
+div[data-testid="stSegmentedControl"] button {
+    min-height: 46px !important;
+    font-size: 1.0rem !important;
+    font-weight: 700 !important;
+}
+
+/* Sidebar brand mark & wordmark */
+.tt-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.15rem 0.2rem 0.75rem;
+    margin-bottom: 0.55rem;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.tt-brand-name {
+    font-size: 1.02rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    color: var(--text-color);
+    line-height: 1.1;
+}
+
+.tt-brand-sub {
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--text-color);
+    opacity: 0.65;
+    margin-top: 0.12rem;
+}
+
+/* Shared tour badge, callout box, and divider (used on Table Types & analytics) */
+.tt-tour-banner {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.32rem 0.85rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    margin: 0.35rem 0 0.75rem;
+    background-color: var(--secondary-background-color);
+}
+
+.tt-callout {
+    background-color: var(--secondary-background-color);
+    border: 1px solid rgba(245, 158, 11, 0.45);
+    border-left: 4px solid #C26D45;
+    border-radius: 8px;
+    padding: 0.85rem 1.05rem;
+    margin: 0.45rem 0 0.85rem;
+    font-size: 0.92rem;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+}
+
+.tt-divider {
+    border: 0;
+    border-top: 1px solid rgba(148, 163, 184, 0.28);
+    margin: 1.35rem 0;
 }
 
 /* Style native st.metric widgets as subtle cards with a full orange border */
@@ -71,6 +148,11 @@ div[data-testid="stMetricValue"] {
     font-weight: 700;
     font-size: clamp(1.3rem, 2.1vw, 1.95rem);
     line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+}
+
+div[data-testid="stDataFrame"] {
+    font-variant-numeric: tabular-nums;
 }
 
 /* Prevent toggle & checkbox labels from clipping mid-word on split-screen widths */
@@ -347,10 +429,10 @@ a[data-testid="stPageLink-NavLink"][aria-current="page"] {
 
 section[data-testid="stSidebar"] details {
     background-color: rgba(124, 58, 237, 0.08);
-    border: 1px solid rgba(245, 158, 11, 0.62);
+    border: 1px solid rgba(245, 158, 11, 0.55);
     border-radius: 10px;
     padding: 0.1rem 0.35rem 0.3rem;
-    margin: 0.45rem 0 0.7rem;
+    margin: 0.5rem 0 0.7rem;
 }
 
 section[data-testid="stSidebar"] details summary {
@@ -820,16 +902,47 @@ def render_sidebar_nav(
     analytics_pages: Sequence[Any],
     snapshot_timestamp: str | None,
 ) -> None:
-    """Render grouped left-sidebar navigation with a collapsible Analytics menu."""
+    """Render grouped left-sidebar navigation with brand mark and section headers."""
     with st.sidebar:
         st.markdown(
-            '<div class="tt-nav-section-label">Overview</div>',
+            """
+            <div class="tt-brand">
+                <svg
+                    width="26"
+                    height="26"
+                    viewBox="0 0 28 28"
+                    fill="none"
+                    aria-hidden="true"
+                >
+                    <circle
+                        cx="12"
+                        cy="12"
+                        r="8.5"
+                        fill="rgba(245, 158, 11, 0.18)"
+                        stroke="#F59E0B"
+                        stroke-width="2"
+                    />
+                    <path
+                        d="M18 18L24.5 24.5"
+                        stroke="#F59E0B"
+                        stroke-width="2.6"
+                        stroke-linecap="round"
+                    />
+                    <circle cx="22" cy="7.5" r="3" fill="#A78BFA"/>
+                </svg>
+                <div>
+                    <div class="tt-brand-name">PingPongStats</div>
+                    <div class="tt-brand-sub">WTT &amp; ITTF Singles</div>
+                </div>
+            </div>
+            <div class="tt-nav-section-label">Overview</div>
+            """,
             unsafe_allow_html=True,
         )
         for page in overview_pages:
             st.page_link(page, label=page.title, icon=page.icon)
 
-        with st.expander("📈 Analytics", expanded=True):
+        with st.expander("Analytics", icon=":material/analytics:", expanded=True):
             for page in analytics_pages:
                 st.page_link(page, label=page.title, icon=page.icon)
 

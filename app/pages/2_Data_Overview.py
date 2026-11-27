@@ -31,15 +31,12 @@ from lib.theme import ensure_standalone_shell
 
 ensure_standalone_shell(load_snapshot_timestamp())
 
-st.title("📊 Data Overview")
-
-st.info(
-    "**Scope:**\n"
-    "- Current players and matches are taken from **senior singles** matches "
-    "(including team events).\n"
-    "- Doubles, Youth, Para, and other matches are not covered yet.\n"
-    "- The match catalog is based on **WTT** and **ITTF** sources.\n"
-    "- Additional national and regional leagues planned."
+st.title("Data Overview")
+st.caption(
+    "Summary of the tournaments, matches, and players in this app. All analytics "
+    "pages cover senior singles matches (including singles matches inside team "
+    "events) from WTT and ITTF tournaments. Doubles, youth, and para events are "
+    "not included yet, and domestic leagues are planned."
 )
 
 if not data_files_exist():
@@ -144,8 +141,8 @@ if unknown_gender_players > 0:
     )
 st.caption(
     "Men's match counts are higher because open-entry tournaments (especially "
-    "WTT Feeder and Contender events) attract larger men's fields, resulting in "
-    "more qualifying and group-stage matches."
+    "WTT Feeder and Contender events) attract larger men's fields, so there "
+    "are more qualifying and group-stage matches."
 )
 
 st.divider()
@@ -192,38 +189,12 @@ with c_first:
 with c_last:
     render_event_card("Last Event with Senior Singles Matches", stats.last_senior_event)
 
-with st.expander("Full catalog date span (all events & all match disciplines)"):
-    st.write(
-        f"- **Catalog events date range:** `{stats.catalog_first_event_date}` "
-        f"to `{stats.catalog_last_event_date}` "
-        f"({stats.total_events:,} total events, "
-        f"{stats.events_with_catalog_matches:,} with matches)"
-    )
-    if stats.first_catalog_event and stats.last_catalog_event:
-        first_cat = stats.first_catalog_event
-        last_cat = stats.last_catalog_event
-        first_word = "match" if first_cat.match_count == 1 else "matches"
-        last_word = "match" if last_cat.match_count == 1 else "matches"
-        st.write(
-            f"- **First catalog event with matches:** {first_cat.event_name} "
-            f"(`{first_cat.start_date}`, {first_cat.match_count:,} {first_word})"
-        )
-        st.write(
-            f"- **Last catalog event with matches:** {last_cat.event_name} "
-            f"(`{last_cat.start_date}`, {last_cat.match_count:,} {last_word})"
-        )
-    st.caption(
-        "Event calendar metadata includes historical ITTF archive entries back "
-        "to 1926 and upcoming scheduled events into 2027; detailed senior singles "
-        "match records span 2021 onward."
-    )
-
 st.divider()
 
 # ---------------------------------------------------------------------------
 # 3. Gender & Match Format Breakdown (Senior Singles)
 # ---------------------------------------------------------------------------
-st.subheader("Matches Breakdown (Senior Singles)")
+st.subheader("Matches by Gender and Format")
 
 col_gender, col_format = st.columns(2)
 
@@ -310,3 +281,33 @@ else:
     )
     fig_yearly = style_figure(fig_yearly, height=380)
     render_chart(fig_yearly, key="overview_yearly_chart")
+
+st.divider()
+
+with st.expander("Methodology & Data Notes", expanded=False):
+    st.markdown(
+        f"- **Senior singles vs. full catalog:** Analytics pages use the "
+        f"**{stats.senior_total_matches:,}** senior singles matches across "
+        f"**{stats.events_with_senior_singles:,}** events. The broader WTT/ITTF "
+        f"catalog holds **{stats.catalog_total_matches:,}** total match records "
+        f"across all disciplines ({stats.total_events:,} events total, "
+        f"{stats.events_with_catalog_matches:,} with match records).\n"
+        f"- **Calendar span:** Catalog event metadata runs from "
+        f"`{stats.catalog_first_event_date}` to `{stats.catalog_last_event_date}` "
+        "(including historical ITTF archive entries back to 1926 and scheduled "
+        "events into 2027), while detailed senior singles match records start "
+        "from 2021 onward.\n"
+        "- **Player age privacy:** Ages reflect each player's age at snapshot "
+        "export time; raw dates of birth are not exported."
+    )
+    if stats.first_catalog_event and stats.last_catalog_event:
+        first_cat = stats.first_catalog_event
+        last_cat = stats.last_catalog_event
+        first_word = "match" if first_cat.match_count == 1 else "matches"
+        last_word = "match" if last_cat.match_count == 1 else "matches"
+        st.markdown(
+            f"- **First catalog event with matches:** {first_cat.event_name} "
+            f"(`{first_cat.start_date}`, {first_cat.match_count:,} {first_word})\n"
+            f"- **Last catalog event with matches:** {last_cat.event_name} "
+            f"(`{last_cat.start_date}`, {last_cat.match_count:,} {last_word})"
+        )

@@ -29,16 +29,6 @@ POOL_LABELS: dict[str, Literal["men", "women"]] = {
     "Women's Singles": "women",
 }
 
-PAGE_CSS = """
-<style>
-div[data-testid="stSegmentedControl"] button {
-    min-height: 48px !important;
-    font-size: 1.05rem !important;
-    font-weight: 700 !important;
-}
-</style>
-"""
-
 
 @st.cache_data(show_spinner=False)
 def _cached_leaderboard(
@@ -197,12 +187,10 @@ def _table_column_config(
 
 
 def _render_page() -> None:
-    st.markdown(PAGE_CSS, unsafe_allow_html=True)
-    st.title("🏆 Glicko-2 Ratings")
+    st.title("Glicko-2 Ratings")
     st.caption(
-        "Match-level Glicko-2 skill ratings across senior singles matches "
-        "(zero inactivity time decay). All dates are shown in `DD/MM/YY` "
-        "(day/month/year) format."
+        "Player skill ratings across senior singles matches, with historical "
+        "snapshots by tournament. Dates use `DD/MM/YY`."
     )
 
     if not data_files_exist():
@@ -392,29 +380,26 @@ def _render_page() -> None:
     st.markdown("<div style='height: 1.5rem;'></div>", unsafe_allow_html=True)
     st.divider()
 
-    with st.expander("About Glicko-2, zero decay & implementation", expanded=False):
+    with st.expander("Methodology & Rating Rules", expanded=False):
         st.markdown(
-            "**What is Glicko-2?**\n\n"
-            "Developed by Prof. Mark Glickman, Glicko-2 extends Elo by tracking each "
-            "player's **rating**, **rating deviation (RD / uncertainty)**, and "
-            "**volatility** (consistency). All players start at `1500.0` (RD `350.0`, "
-            "volatility `0.06`, `τ = 0.5`) and update after every rating-eligible "
-            "senior singles match (`W = 1.0`, `Draw = 0.5`, `L = 0.0`), with Men's and "
-            "Women's Singles rated in separate pools.\n\n"
-            "**Why zero time decay?**\n\n"
-            "Inactivity RD decay is intentionally disabled (`rd_decay_days = None`). "
-            "Players regularly compete in domestic and regional leagues not yet "
-            "ingested here, so gaps between WTT events must not inflate their "
-            "uncertainty or penalize their rating.\n\n"
-            "**Implementation & packages**\n\n"
-            "Built with a custom pure-Python implementation of Glickman's Glicko-2 "
-            "equations and Illinois volatility solver "
-            "(`src/tt_stats/analytics/glicko2.py`, using `Polars` and `NumPy` "
-            "downstream) rather than an opaque external rating package.\n\n"
-            "**90d Δ & privacy**\n\n"
-            "`90d Δ` is the rating change over the 90 days ending at the selected "
-            "anchor date. Player names are shown verbatim from WTT/ITTF profiles, "
-            "and `Age` at export time is shown instead of `dob`."
+            "- **Glicko-2 model:** Developed by Prof. Mark Glickman, extending "
+            "Elo with **rating**, **rating deviation (RD / uncertainty)**, and "
+            "**volatility** (consistency). All players start at `1500.0` "
+            "(RD `350.0`, volatility `0.06`, `τ = 0.5`) and update after each "
+            "rating-eligible senior singles match (`W = 1.0`, `Draw = 0.5`, "
+            "`L = 0.0`). Men's and Women's Singles are rated in separate pools.\n"
+            "- **No inactivity penalty:** Inactivity RD decay is disabled "
+            "(`rd_decay_days = None`). Players regularly compete in domestic "
+            "and regional leagues not yet included here, so breaks between "
+            "WTT events do not inflate uncertainty or penalize their rating.\n"
+            "- **Implementation:** Computed with a custom pure-Python "
+            "implementation of Glickman's equations and the Illinois volatility "
+            "solver (`src/tt_stats/analytics/glicko2.py`, using `Polars` and "
+            "`NumPy` downstream).\n"
+            "- **90d Δ & privacy:** `90d Δ` shows rating change over the 90 "
+            "days ending at the selected anchor date. Player names match "
+            "WTT/ITTF profiles, and `Age` at export time is shown instead of "
+            "date of birth."
         )
 
 

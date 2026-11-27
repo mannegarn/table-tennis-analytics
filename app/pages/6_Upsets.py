@@ -43,16 +43,6 @@ RANK_BY_LABELS: dict[str, RankBy] = {
     "Largest Rating Difference": "rating_diff",
 }
 
-PAGE_CSS = """
-<style>
-div[data-testid="stSegmentedControl"] button {
-    min-height: 48px !important;
-    font-size: 1.05rem !important;
-    font-weight: 700 !important;
-}
-</style>
-"""
-
 
 @st.cache_data(show_spinner=False)
 def _cached_ratings_with_prior(ratings_height: int) -> pl.DataFrame:
@@ -207,12 +197,10 @@ def _format_acc_pct(metrics: AccuracyMetrics) -> str:
 
 
 def _render_page() -> None:
-    st.markdown(PAGE_CSS, unsafe_allow_html=True)
-    st.title("⚡ Biggest Upsets")
+    st.title("Biggest Upsets")
     st.caption(
-        "Match-level Glicko-2 upsets and winner prediction accuracy across senior "
-        "singles. Match format differences (Best of 5 vs Best of 7) are ignored for "
-        "now; all dates use `DD/MM/YY`."
+        "Biggest underdog wins in senior singles, ranked by pre-match Glicko-2 "
+        "win chance or rating gap, plus overall model accuracy. Dates use `DD/MM/YY`."
     )
 
     if not data_files_exist():
@@ -385,10 +373,11 @@ def _render_page() -> None:
         f"""
         <div class="tt-insight-card">
             <p style="margin-top: 0; margin-bottom: 0.55rem;">
-                Every decisive <strong>{active_label}</strong> match (both players with
+                Every completed <strong>{active_label}</strong> match with a clear
+                pre-match favorite (both players with
                 <strong>{min_prior_matches}+</strong> prior rated matches) is grouped
-                into <strong>1% buckets</strong> by the pre-match win chance Glicko-2
-                gave the favorite (<code>50-51%</code>, <code>51-52%</code>, &hellip;,
+                into <strong>1% buckets</strong> by the win chance Glicko-2 gave the
+                favorite (<code>50-51%</code>, <code>51-52%</code>, &hellip;,
                 <code>99-100%</code>):
             </p>
             <ul>
@@ -424,6 +413,20 @@ def _render_page() -> None:
         build_calibration_chart(buckets, gender_label=gender_short),
         key=f"upsets_calibration_{gender}_{min_prior_matches}",
     )
+
+    st.divider()
+    with st.expander("Methodology & Definitions", expanded=False):
+        st.markdown(
+            "- **What counts as an upset:** Any completed match where the "
+            "player with `< 50%` pre-match Glicko-2 win probability won "
+            "(draws and exact `50/50` toss-ups are excluded).\n"
+            "- **Why filter by prior matches (`10+` default):** New players "
+            "start in the rating pool at `1500.0` (`RD = 350.0`), so early "
+            "matches often reflect initial calibration rather than true upsets.\n"
+            "- **Match format note:** Pre-match win probabilities come "
+            "directly from match-level Glicko-2 ratings and do not adjust "
+            "separately for Best-of-5 vs. Best-of-7 length."
+        )
 
 
 _render_page()

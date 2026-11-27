@@ -1,8 +1,8 @@
-"""Table Tennis Analytics — App Entrypoint, Router & Landing Page (Home).
+"""Table Tennis Analytics: App Entrypoint, Router & Landing Page (Home).
 
 Uses ``st.navigation(..., position="hidden")`` paired with a custom grouped
 left sidebar separating Overview pages (Home, About, Data Overview) from the
-Analytics menu (Glicko-2 Ratings, Win Rates, Upsets, Service Win Rate).
+Analytics menu.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from lib.theme import (
 # Page configuration must be the first Streamlit call in the router entrypoint.
 st.set_page_config(
     page_title="Table Tennis Analytics",
-    page_icon="🏓",
+    page_icon=":material/sports_tennis:",
     layout="wide",
     initial_sidebar_state="auto",
 )
@@ -174,10 +174,10 @@ def _render_home(
     about_page: Any,
 ) -> None:
     """Render the clean Home landing page with Top 5 snapshots."""
-    st.title("🏓 Table Tennis Analytics")
+    st.title("Table Tennis Analytics")
     st.subheader(
-        "Glicko-2 skill ratings, upsets, match outcomes, and point-by-point "
-        "analytics across professional senior singles table tennis."
+        "Glicko-2 player ratings, biggest upsets, win rates, and point-by-point "
+        "stats from pro singles table tennis."
     )
 
     c1, c2, c3 = st.columns(3, gap="small")
@@ -185,26 +185,26 @@ def _render_home(
         st.page_link(
             glicko_ratings_page,
             label="Glicko-2 Ratings",
-            icon="🏆",
+            icon=":material/leaderboard:",
             width="stretch",
         )
     with c2:
         st.page_link(
             upsets_page,
             label="Biggest Upsets",
-            icon="⚡",
+            icon=":material/bolt:",
             width="stretch",
         )
     with c3:
         st.page_link(
             about_page,
             label="About & Architecture",
-            icon="📖",
+            icon=":material/info:",
             width="stretch",
         )
     st.caption(
-        "Open the sidebar menu (top-left on mobile) to explore full ratings, "
-        "upsets, win-rate models, and serve/receive breakdowns."
+        "Use the sidebar menu (top-left on mobile) to explore player ratings, "
+        "upsets, unlikely champions, win rates, serve stats, and table surfaces."
     )
 
     if not data_files_exist():
@@ -225,7 +225,7 @@ def _render_home(
     )
 
     st.divider()
-    st.markdown("### 🏆 Highest Rated Currently (Top 5)")
+    st.markdown("### Top 5 Rated Players")
     st.caption(
         "Current Glicko-2 leaders across senior singles (minimum 5 rated matches)."
     )
@@ -238,7 +238,7 @@ def _render_home(
         _render_showcase_list(women_rated, mode="rated", gender="women", theme=theme)
 
     st.markdown("<div style='height: 1.25rem;'></div>", unsafe_allow_html=True)
-    st.markdown("### 🏓 Most Matches Played (Top 5)")
+    st.markdown("### Most Matches Played (Top 5)")
     st.caption("Most active senior singles players in the rating pool.")
     col_m2, col_w2 = st.columns(2, gap="large")
     with col_m2:
@@ -254,49 +254,49 @@ def _render_home(
 about_page = st.Page(
     "pages/1_About.py",
     title="About",
-    icon="📖",
+    icon=":material/info:",
     url_path="about",
 )
 overview_page = st.Page(
     "pages/2_Data_Overview.py",
     title="Data Overview",
-    icon="📊",
+    icon=":material/database:",
     url_path="data-overview",
 )
 win_rates_page = st.Page(
     "pages/3_Win_Rates.py",
     title="Win Rates",
-    icon="📈",
+    icon=":material/ssid_chart:",
     url_path="win-rates",
 )
 service_win_rate_page = st.Page(
     "pages/4_Service_Win_Rate.py",
     title="Service Win Rate",
-    icon="🎯",
+    icon=":material/track_changes:",
     url_path="service-win-rate",
 )
 glicko_ratings_page = st.Page(
     "pages/5_Glicko_Ratings.py",
     title="Glicko-2 Ratings",
-    icon="🏆",
+    icon=":material/leaderboard:",
     url_path="glicko-ratings",
 )
 upsets_page = st.Page(
     "pages/6_Upsets.py",
     title="Upsets",
-    icon="⚡",
+    icon=":material/bolt:",
     url_path="upsets",
 )
 unlikely_winners_page = st.Page(
     "pages/8_Unlikely_Winners.py",
     title="Unlikely Winners",
-    icon="🏅",
+    icon=":material/workspace_premium:",
     url_path="unlikely-winners",
 )
 table_types_page = st.Page(
     "pages/7_Table_Types.py",
     title="Table Types",
-    icon="🏟️",
+    icon=":material/layers:",
     url_path="table-types",
 )
 
@@ -312,7 +312,7 @@ def _home_entry() -> None:
 home_page = st.Page(
     _home_entry,
     title="Home",
-    icon="🏓",
+    icon=":material/home:",
     default=True,
 )
 

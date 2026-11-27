@@ -192,12 +192,12 @@ def _render_plot_section(
         )
     with c_toggle:
         show_logistic = st.toggle(
-            "2-param logistic S-curve",
+            "Show fitted S-curve",
             value=False,
             key=f"{section_key}_logistic",
             help=(
-                "Overlay an empirical 2-parameter logistic S-curve fitted to "
-                "the visible players alongside the theoretical binomial curve."
+                "Overlay a smooth S-curve fitted to the visible players "
+                "alongside the theoretical binomial curve."
             ),
         )
 
@@ -247,21 +247,21 @@ def _render_match_share_caption(metrics: MatchPointShareMetrics) -> None:
 # ---------------------------------------------------------------------------
 # Page Header & Executive Summary
 # ---------------------------------------------------------------------------
-st.title("📈 Win Rates")
+st.title("Win Rates")
 st.markdown(
-    "Small edges at the point level compound across 11-point sets and "
-    "multi-set matches — **at least in theory**. Below we test that across "
-    "four views:\n"
-    "- **1. Match % vs Point % (per player):** The headline career gap "
-    "between raw point rate and match wins.\n"
-    "- **2. Match % vs Set % (per player):** Isolates set-to-match "
-    "conversion and format length.\n"
-    "- **3. Set % vs Point % (per player):** Pinpoints how cleanly single "
-    "11-point sets follow binomial theory.\n"
-    "- **4. Match Win % vs Point Share (per match):** A 1% histogram of "
-    "realized match point share vs winning that match.\n\n"
-    "*Scope: Completed, played senior singles matches only (walkovers, "
-    "injuries, retirements, and draws excluded).*"
+    "Winning just a few extra points per game adds up fast across 11-point "
+    "sets and multi-set matches. Below, we compare what pure probability "
+    "predicts against how pro players actually perform across four views:\n"
+    "- **1. Match % vs Point % (per player):** How career point win rate "
+    "turns into match wins.\n"
+    "- **2. Match % vs Set % (per player):** How set win rate turns into "
+    "Best-of-5 and Best-of-7 match wins.\n"
+    "- **3. Set % vs Point % (per player):** How closely single 11-point sets "
+    "follow the math.\n"
+    "- **4. Match Win % vs Point Share (per match):** How often winning a "
+    "given share of points inside a single match wins that match.\n\n"
+    "*Includes completed senior singles matches only (walkovers, injuries, "
+    "retirements, and draws are excluded).*"
 )
 
 st.markdown(
@@ -270,32 +270,30 @@ st.markdown(
         <strong>How to read these charts:</strong>
         <ul>
             <li>
-                <strong>Green Binomial curve (theory):</strong> Exact expected
-                win rate for i.i.d. trials at a player's average rate. Points
-                <em>above</em> outperform expectations; points <em>below</em>
-                leave wins on the table.
+                <strong>Green curve (theory):</strong> Expected win rate if
+                every point or set were an independent coin flip at a player's
+                average rate. Players <em>above</em> the line win more than
+                expected; players <em>below</em> win less.
             </li>
             <li>
-                <strong>Dashed purple 2-parameter Logistic S-curve (toggle):</strong>
-                Empirical S-curve bounded strictly in 0%&ndash;100%, showing how
-                much real schedules flatten (Plots 1&ndash;3) or steepen (Plot 4)
-                compared to theory.
+                <strong>Dashed purple curve (fitted S-curve toggle):</strong>
+                Smooth curve fitted to the real data, showing where pro results
+                flatten (Plots 1-3) or steepen (Plot 4) compared to theory.
             </li>
             <li>
-                <strong>Defenders vs Attackers (Plots 1&ndash;3):</strong>
+                <strong>Defenders vs Attackers (Plots 1-3):</strong>
                 <strong>Defenders</strong> appear as larger
                 <strong>orange diamonds</strong> over <strong>blue Attacker
-                circles</strong>, anchored on dotted 50% crosshairs.
+                circles</strong>, with dotted lines at 50%.
             </li>
             <li>
-                <strong>Per-match 1% histogram (Plot 4):</strong> Groups every
-                played match's winner and loser into centered 1% point-share
-                intervals (<code>[c &minus; 0.5%, c + 0.5%)</code>) across the
-                active data span.
+                <strong>Per-match point share (Plot 4):</strong> Groups every
+                match's winner and loser into 1% point-share bins across the
+                full dataset.
             </li>
         </ul>
         <a href="#binomial-model-addendum">
-            Jump to the full mathematical explanation (Addendum) &darr;
+            Jump to Methodology &amp; Math &darr;
         </a>
     </div>
     """,
@@ -326,7 +324,7 @@ st.markdown(
         <a href="#plot-2-set-vs-match">2. Match % vs Set %</a>
         <a href="#plot-3-point-vs-set">3. Set % vs Point %</a>
         <a href="#plot-4-match-point-share">4. Per-Match Point Share</a>
-        <a href="#binomial-model-addendum">Math Addendum</a>
+        <a href="#binomial-model-addendum">Methodology &amp; Math</a>
     </div>
     """,
     unsafe_allow_html=True,
@@ -387,41 +385,29 @@ _render_plot_section(
     subheader="1. Match Win Rate vs Point Win Rate",
     bullets_html=[
         (
-            "<strong>On paper:</strong> Small point edges compound sharply "
-            "across 11-point sets and multi-set matches:"
-            "<ul>"
-            "<li><strong>52% points</strong> predicts <strong>64.2%</strong> "
-            "match wins in Best of 5 and <strong>66.5%</strong> in Best of 7.</li>"
-            "<li><strong>55% points</strong> predicts <strong>81.9%</strong> "
-            "in Bo5 and <strong>85.6%</strong> in Bo7.</li>"
-            "</ul>"
+            "<strong>Theory vs. reality:</strong> Winning <strong>52%</strong> "
+            "of points predicts <strong>64.2%</strong> match wins in Best of 5 "
+            "(<strong>66.5%</strong> in Best of 7), and <strong>55%</strong> "
+            "predicts <strong>81.9%</strong> in Bo5 (<strong>85.6%</strong> in "
+            "Bo7). In practice, players follow a flatter curve: at <strong>55%"
+            "</strong> points, the fitted curve lands around <strong>72%-73%"
+            "</strong> instead of 82%-86% (~7 pp below theory in Bo5, ~11 pp in "
+            "Bo7), while players below <strong>48%</strong> sit <strong>6-12 pp "
+            "above</strong> theory."
         ),
         (
-            "<strong>What the data shows:</strong> Real players follow a "
-            "noticeably <em>flatter</em> S-curve than theory:"
-            "<ul>"
-            "<li>At <strong>55% points</strong>, the empirical logistic S-curve "
-            "(toggle on) lands around <strong>72%&ndash;73%</strong> instead of "
-            "82%&ndash;86% (~7 pp below theory in Bo5, ~11 pp in Bo7).</li>"
-            "<li>Players below <strong>48% points</strong> sit 6&ndash;12 pp "
-            "<em>above</em> the green curve.</li>"
-            "<li>Orange <strong>Defender</strong> diamonds trail the curve on "
-            "average (<code>&minus;3.0 pp</code> in Bo5, "
-            "<code>&minus;7.5 pp</code> in Bo7).</li>"
-            "</ul>"
+            "<strong>Why real careers flatten:</strong> Lopsided <code>11-4"
+            "</code> wins over weaker opponents lift career Point % without "
+            "adding extra match wins, while losses against peers happen in "
+            "tighter matches."
         ),
         (
-            "<strong>Why:</strong>"
-            "<ul>"
-            "<li><strong>Opponent heterogeneity (Jensen's inequality):</strong> "
-            "Lopsided 11&ndash;4 wins over weaker opponents inflate career "
-            "Point % without adding extra match wins, while losses to peers "
-            "occur in tight matches.</li>"
-            "<li><strong>Defender variance:</strong> Defenders blow out "
-            "opponents who struggle against chop, then face close tactical "
-            "losses against top attackers who adapt over a match &mdash; "
-            "especially in Bo7.</li>"
-            "</ul>"
+            "<strong>Defenders trail the curve:</strong> Orange <strong>Defender"
+            "</strong> diamonds average <code>&minus;3.0 pp</code> vs. theory "
+            "in Bo5 and <code>&minus;7.5 pp</code> in Bo7. Defenders often beat "
+            "opponents who struggle against chop by wide point margins, then "
+            "lose tight tactical matches to top attackers who adjust over "
+            "longer Bo7 matches."
         ),
     ],
     chart_title="Match Win Rate vs Point Win Rate",
@@ -445,37 +431,24 @@ _render_plot_section(
     subheader="2. Match Win Rate vs Set Win Rate",
     bullets_html=[
         (
-            "<strong>On paper:</strong> With individual sets already decided, "
-            "fewer trials remain and the green curve is gentler:"
-            "<ul>"
-            "<li><strong>60% of sets</strong> predicts <strong>68.3%</strong> "
-            "of Bo5 matches and <strong>71.0%</strong> of Bo7 matches.</li>"
-            "<li>Bo5 and Bo7 stay strictly separate so each format uses its "
-            "exact binomial curve.</li>"
-            "</ul>"
+            "<strong>Closer to theory:</strong> Winning <strong>60%</strong> of "
+            "sets predicts <strong>68.3%</strong> of Bo5 matches and "
+            "<strong>71.0%</strong> of Bo7 matches. Counting sets ignores blowout "
+            "set scores (<code>11-2</code> counts the same as <code>11-9</code>"
+            "), dropping Binomial RMSE from <code>7.4</code> to <code>4.8 pp"
+            "</code> in Bo5 and from <code>10.5</code> to <code>7.4 pp</code> "
+            "in Bo7."
         ),
         (
-            "<strong>What the data shows:</strong>"
-            "<ul>"
-            "<li>Scatter tightens sharply vs Plot 1 (Binomial RMSE drops from "
-            "<code>7.4</code> to <code>4.8 pp</code> in Bo5, and from "
-            "<code>10.5</code> to <code>7.4 pp</code> in Bo7).</li>"
-            "<li>The empirical logistic S-curve still flattens (~65% vs "
-            "68%&ndash;71% at 60% sets).</li>"
-            "<li>Defenders remain below the baseline (<code>&minus;1.5 pp</code> "
-            "in Bo5, <code>&minus;5.1 pp</code> in Bo7).</li>"
-            "</ul>"
+            "<strong>Remaining gap:</strong> The fitted curve is still slightly "
+            "flatter (~65% at 60% sets) because players mix <code>3-0</code> "
+            "sweeps with <code>2-3</code> losses and adapt mid-match, while "
+            "Defenders still sit below the line (<code>&minus;1.5 pp</code> in "
+            "Bo5, <code>&minus;5.1 pp</code> in Bo7)."
         ),
         (
-            "<strong>Why:</strong>"
-            "<ul>"
-            "<li>Counting sets rather than points removes within-set blowouts "
-            "(<code>11&ndash;2</code> counts the same as <code>11&ndash;9</code>), "
-            "cutting much of Plot 1's noise.</li>"
-            "<li>Residual flattening comes from match-to-match schedule mix "
-            "(<code>3&ndash;0</code> wins vs <code>2&ndash;3</code> losses) and "
-            "in-match tactical adaptation across longer Bo7 battles.</li>"
-            "</ul>"
+            "<strong>Separate formats:</strong> Best of 5 and Best of 7 are "
+            "plotted separately so each uses its exact theoretical curve."
         ),
     ],
     chart_title="Match Win Rate vs Set Win Rate",
@@ -499,37 +472,25 @@ _render_plot_section(
     subheader="3. Set Win Rate vs Point Win Rate",
     bullets_html=[
         (
-            "<strong>On paper:</strong> Every senior singles set is first to 11 "
-            "(win by 2) regardless of match length, so Bo5 and Bo7 pool cleanly:"
-            "<ul>"
-            "<li><strong>52% points</strong> predicts <strong>57.7%</strong> "
-            "of sets.</li>"
-            "<li><strong>55% points</strong> predicts <strong>68.7%</strong> "
-            "of sets.</li>"
-            "</ul>"
+            "<strong>Closest match to theory:</strong> Every set is first to 11 "
+            "(win by 2) in both Bo5 and Bo7, so both formats pool cleanly. "
+            "Winning <strong>52%</strong> of points predicts <strong>57.7%"
+            "</strong> of sets, and <strong>55%</strong> predicts <strong>68.7%"
+            "</strong>."
         ),
         (
-            "<strong>What the data shows:</strong>"
-            "<ul>"
-            "<li>Tightest theoretical fit on the page (<code>3.09 pp</code> "
-            "Binomial RMSE across 1,181 players; at 55% points the empirical "
-            "S-curve reaches <strong>66.1%</strong> vs <strong>68.7%</strong> "
-            "predicted).</li>"
-            "<li>Attackers sit dead-on the curve (<code>&minus;0.02 pp</code>) "
-            "and Defenders are nearly neutral (<code>&minus;0.62 pp</code>), "
-            "proving the Defender gap in Plots 1 &amp; 2 emerges <em>between</em> "
-            "sets rather than <em>within</em> them.</li>"
-            "</ul>"
+            "<strong>Attackers and Defenders align:</strong> Across 1,181 players "
+            "(<code>3.09 pp</code> Binomial RMSE; <strong>66.1%</strong> fitted "
+            "vs. <strong>68.7%</strong> predicted at 55% points), Attackers "
+            "(<code>&minus;0.02 pp</code>) and Defenders (<code>&minus;0.62 pp"
+            "</code>) sit right on the line. That confirms the Defender gap in "
+            "Plots 1 &amp; 2 emerges <em>between</em> sets rather than "
+            "<em>within</em> them."
         ),
         (
-            "<strong>Why:</strong>"
-            "<ul>"
-            "<li>Within a single 11-point set, point-level randomness dominates "
-            "and opponent mismatch has little room to skew the curve.</li>"
-            "<li>The small remaining spread reflects clutch deuce play at "
-            "<code>9&ndash;9</code> / <code>10&ndash;10</code>, eased-off "
-            "trailing sets (<code>2&ndash;8</code>), and serve-receive dynamics.</li>"
-            "</ul>"
+            "<strong>Small remaining spread:</strong> Comes from clutch deuce "
+            "play at <code>9-9</code> and <code>10-10</code>, easing off in "
+            "trailing sets (<code>2-8</code>), and serve/receive swings."
         ),
     ],
     chart_title="Set Win Rate vs Point Win Rate",
@@ -552,49 +513,31 @@ st.subheader("4. Match Point Share vs Match Win Probability (Per-Match)")
 _render_insight_card(
     [
         (
-            "<strong>On paper:</strong> Instead of career player averages, this "
-            "plot evaluates every individual match using both sides "
-            "(<code>winner</code> and <code>loser</code>) grouped into centered "
-            "<strong>1% intervals</strong> (<code>[49.5%, 50.5%)</code> at 50%):"
-            "<ul>"
-            "<li>Including both sides ensures exact symmetry around "
-            "<code>(50%, 50%)</code>.</li>"
-            "<li>Because matches are won by taking 3 (Bo5) or 4 (Bo7) sets "
-            "rather than total points, a player can win &lt;50% of points and "
-            "still win the match.</li>"
-            "</ul>"
-        ),
-        (
-            "<strong>What the data shows:</strong>"
-            "<ul>"
-            "<li><strong>Winning with fewer points happens ~3.7% of the "
-            "time:</strong> <strong>1,094</strong> of 29,396 Bo5 winners "
+            "<strong>Winning with fewer points (~3.7% of matches):</strong> "
+            "Because matches go by sets (first to 3 or 4) rather than total "
+            "points, <strong>1,094</strong> of 29,396 Bo5 winners "
             "(<code>3.72%</code>; Men <code>3.80%</code>, Women "
             "<code>3.63%</code>) and <strong>143</strong> of 3,938 Bo7 winners "
             "(<code>3.63%</code>; Men <code>3.93%</code>, Women "
-            "<code>3.30%</code>) won with &lt;50% of total points.</li>"
-            "<li><strong>Much steeper than the green Binomial line:</strong> "
-            "The 1% histogram climbs from near <code>0%</code> to "
-            "<code>100%</code> across <code>44%&ndash;56%</code> &mdash; "
-            "winning <strong>52%</strong> of points in a single match wins "
-            "<strong>85.1%</strong> in Bo5 and <strong>89.0%</strong> in Bo7 "
-            "(vs <code>64.2%</code> / <code>66.5%</code> on the green player "
-            "curve), while the purple Logistic S-curve fits within "
-            "<code>~0.45 pp</code> weighted RMSE.</li>"
-            "</ul>"
+            "<code>3.30%</code>) won despite scoring &lt;50% of points."
         ),
         (
-            "<strong>Why:</strong>"
-            "<ul>"
-            "<li>Plots 1&ndash;3 condition on a player's <em>underlying</em> "
-            "career probability <em>p</em>, leaving room for match-to-match point "
-            "variance.</li>"
-            "<li>Plot 4 conditions on the <em>realized</em> point share already "
-            "scored inside that match &mdash; so only <em>how points are "
-            "packed across sets</em> (e.g. dropping two lopsided sets "
-            "<code>3&ndash;11</code> while edging three <code>11&ndash;9</code> "
-            "sets) can separate point share from the match outcome.</li>"
-            "</ul>"
+            "<strong>Steeper than career averages:</strong> Across 1% "
+            "point-share bins (counting both sides of every match), win rate "
+            "climbs from near <code>0%</code> to <code>100%</code> between "
+            "<code>44%</code> and <code>56%</code>. Winning <strong>52%</strong> "
+            "of points inside a match wins <strong>85.1%</strong> in Bo5 and "
+            "<strong>89.0%</strong> in Bo7 (vs. <code>64.2%</code> / "
+            "<code>66.5%</code> on the career curve), and the fitted S-curve "
+            "matches the bins within <code>~0.45 pp</code> weighted RMSE."
+        ),
+        (
+            "<strong>Why it's steeper:</strong> Plots 1-3 look at a player's "
+            "long-run average across many opponents. Here, all points inside "
+            "that match are already scored, so only how points cluster across "
+            "sets (like losing two <code>3-11</code> sets while winning three "
+            "<code>11-9</code> sets) lets a player win despite scoring fewer "
+            "total points."
         ),
     ]
 )
@@ -623,12 +566,12 @@ with m_col2:
 match_best_of = 5 if match_format == "Best of 5" else 7
 
 show_match_logistic = st.toggle(
-    "2-param logistic S-curve",
+    "Show fitted S-curve",
     value=True,
     key="match_pt_share_logistic",
     help=(
-        "Overlay the empirical 2-parameter logistic S-curve fitted to the "
-        "1% point-share bins alongside the theoretical binomial curve."
+        "Overlay the smooth S-curve fitted to the 1% point-share bins "
+        "alongside the theoretical binomial curve."
     ),
 )
 
@@ -665,10 +608,10 @@ st.divider()
 # Mathematical Addendum (Anchor target from top summary link)
 # ---------------------------------------------------------------------------
 st.markdown('<div id="binomial-model-addendum"></div>', unsafe_allow_html=True)
-st.subheader("Mathematical Addendum: Binomial & Logistic S-Curve Models")
+st.subheader("Methodology & Math")
 
 with st.expander(
-    "Read the full mathematical explanation for all four plots",
+    "Binomial formulas, logistic S-curve fit, and why pro data flattens",
     expanded=False,
 ):
     st.markdown(
@@ -754,8 +697,8 @@ with st.expander(
         "tactical adaptations between games, momentum, and fatigue violate the "
         "strict i.i.d. assumption.\n"
         "- **Clutch play & playing styles:** Players who save their best "
-        "variations for deuce — or Defenders whose match-to-match variance is "
-        "higher across different opponents — systematically separate from the "
+        "variations for deuce, or Defenders whose match-to-match variance is "
+        "higher across different opponents, systematically separate from the "
         "baseline."
     )
 
@@ -769,6 +712,6 @@ with st.expander(
         "P(\\text{Win} \\mid 100 - x) = 100\\%$. Conditioning on realized "
         "$\\hat{p}_{\\text{match}}$ produces a far steeper transition than "
         "$P(\\text{Match} \\mid p_{\\text{true}})$ because the total-point "
-        "outcome is already fixed — only set-level point clustering can alter "
+        "outcome is already fixed, so only set-level point clustering can alter "
         "the match winner."
     )

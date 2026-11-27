@@ -653,14 +653,14 @@ def build_win_rate_scatter(
                     x=fit.curve_x.tolist(),
                     y=fit.curve_y.tolist(),
                     mode="lines",
-                    name="Empirical logistic S-curve",
+                    name="Fitted S-curve (actual)",
                     line={
                         "color": LOGISTIC_CURVE_COLOR,
                         "width": 2.3,
                         "dash": "dash",
                     },
                     hovertemplate=(
-                        "<b>Empirical logistic S-curve</b><br>"
+                        "<b>Fitted S-curve (actual)</b><br>"
                         f"{x_label}: %{{x:.1f}}%<br>"
                         f"Fitted {y_label}: %{{y:.1f}}%<extra></extra>"
                     ),
@@ -983,16 +983,16 @@ def build_match_point_share_chart(
             x=vis_xs,
             y=vis_ys,
             width=0.86,
-            name="1% bin empirical Win %",
+            name="Actual Win % (1% bins)",
             marker={
                 "color": "rgba(56, 189, 248, 0.32)",
                 "line": {"color": "#38BDF8", "width": 1.0},
             },
             customdata=customdata,
             hovertemplate=(
-                "<b>Match Point Share: %{customdata[0]:.1f}%&ndash;"
+                "<b>Match Point Share: %{customdata[0]:.1f}%-"
                 "%{customdata[1]:.1f}%</b><br>"
-                "Empirical Win %: %{y:.1f}% "
+                "Actual Win %: %{y:.1f}% "
                 "(%{customdata[2]:,} / %{customdata[3]:,} sides)<br>"
                 "Binomial expected: %{customdata[4]:.1f}% "
                 "(%{customdata[5]:+.1f} pp)<extra></extra>"
@@ -1000,13 +1000,13 @@ def build_match_point_share_chart(
         )
     )
 
-    # 2. Connected empirical trend line across 1% bins
+    # 2. Connected actual trend line across 1% bins
     fig.add_trace(
         go.Scatter(
             x=vis_xs,
             y=vis_ys,
             mode="lines+markers",
-            name="Empirical trend line",
+            name="Actual Win % trend",
             line={"color": "#F59E0B", "width": 2.2},
             marker={"color": "#F59E0B", "size": 5},
             hoverinfo="skip",
@@ -1060,14 +1060,14 @@ def build_match_point_share_chart(
                     x=curve_x.tolist(),
                     y=log_curve_y.tolist(),
                     mode="lines",
-                    name="Empirical logistic S-curve",
+                    name="Fitted S-curve (actual)",
                     line={
                         "color": LOGISTIC_CURVE_COLOR,
                         "width": 2.4,
                         "dash": "dash",
                     },
                     hovertemplate=(
-                        "<b>Empirical logistic S-curve</b><br>"
+                        "<b>Fitted S-curve (actual)</b><br>"
                         "Point Share: %{x:.1f}%<br>"
                         "Fitted Match Win %: %{y:.1f}%<extra></extra>"
                     ),
