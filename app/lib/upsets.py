@@ -429,7 +429,7 @@ def build_calibration_chart(
     actual = buckets["actual_win_pct"].to_list()
     counts = buckets["matches"].to_list()
     deltas = buckets["delta_pp"].to_list()
-    marker_color = GENDER_COLORS.get(gender_label, "#38BDF8")
+    marker_color = GENDER_COLORS.get(gender_label, GENDER_COLORS["Men"])
 
     sizes = [min(18.0, max(6.0, 6.0 + math.sqrt(c) * 0.65)) for c in counts]
     customdata = [

@@ -17,6 +17,7 @@ import polars as pl
 from numpy.typing import NDArray
 
 from .charts import (
+    ACCENT_ORANGE,
     BINOMIAL_CURVE_COLOR,
     HIGHLIGHT_MARKER_COLOR,
     LOGISTIC_CURVE_COLOR,
@@ -985,8 +986,8 @@ def build_match_point_share_chart(
             width=0.86,
             name="Actual Win % (1% bins)",
             marker={
-                "color": "rgba(56, 189, 248, 0.32)",
-                "line": {"color": "#38BDF8", "width": 1.0},
+                "color": "rgba(91, 141, 184, 0.28)",
+                "line": {"color": "rgba(91, 141, 184, 0.7)", "width": 1.0},
             },
             customdata=customdata,
             hovertemplate=(
@@ -1007,8 +1008,8 @@ def build_match_point_share_chart(
             y=vis_ys,
             mode="lines+markers",
             name="Actual Win % trend",
-            line={"color": "#F59E0B", "width": 2.2},
-            marker={"color": "#F59E0B", "size": 5},
+            line={"color": ACCENT_ORANGE, "width": 2.2},
+            marker={"color": ACCENT_ORANGE, "size": 5},
             hoverinfo="skip",
         )
     )

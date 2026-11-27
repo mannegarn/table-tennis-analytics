@@ -1,4 +1,4 @@
-# Table Tennis Analytics Platform
+# PingPongStats
 
 Table tennis skill ratings and match analytics.
 

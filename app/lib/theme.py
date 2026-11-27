@@ -17,7 +17,7 @@ CONTACT_EMAIL = "marcusannegarn@gmail.com"
 
 APP_CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap');
 
 :root {
     --tt-orange: #F59E0B;
@@ -35,6 +35,14 @@ html {
 .stApp code,
 .stApp pre {
     font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Headings: hierarchy from size, not heavy weight */
+.stApp h1,
+.stApp h2,
+.stApp h3,
+.stApp h4 {
+    font-weight: 600 !important;
 }
 
 /* Ensure main app body and header follow the active theme background */
@@ -59,7 +67,7 @@ html {
 div[data-testid="stSegmentedControl"] button {
     min-height: 46px !important;
     font-size: 1.0rem !important;
-    font-weight: 700 !important;
+    font-weight: 500 !important;
 }
 
 /* Sidebar brand mark & wordmark */
@@ -74,7 +82,7 @@ div[data-testid="stSegmentedControl"] button {
 
 .tt-brand-name {
     font-size: 1.02rem;
-    font-weight: 800;
+    font-weight: 600;
     letter-spacing: -0.01em;
     color: var(--text-color);
     line-height: 1.1;
@@ -96,7 +104,7 @@ div[data-testid="stSegmentedControl"] button {
     padding: 0.32rem 0.85rem;
     border-radius: 999px;
     font-size: 0.85rem;
-    font-weight: 700;
+    font-weight: 500;
     letter-spacing: 0.02em;
     margin: 0.35rem 0 0.75rem;
     background-color: var(--secondary-background-color);
@@ -145,7 +153,7 @@ div[data-testid="stMetricLabel"] [data-testid="stMarkdownContainer"] p {
 }
 
 div[data-testid="stMetricValue"] {
-    font-weight: 700;
+    font-weight: 500;
     font-size: clamp(1.3rem, 2.1vw, 1.95rem);
     line-height: 1.15;
     font-variant-numeric: tabular-nums;
@@ -214,7 +222,7 @@ div[data-testid="stWidgetLabel"] p {
 .tt-discovery-stat {
     color: var(--tt-orange);
     font-size: clamp(1.32rem, 2vw, 1.72rem);
-    font-weight: 700;
+    font-weight: 500;
     line-height: 1.15;
     margin-bottom: 0.3rem;
 }
@@ -251,7 +259,7 @@ div[data-testid="stWidgetLabel"] p {
 .tt-pipeline-num {
     color: var(--primary-color);
     font-size: 0.74rem;
-    font-weight: 700;
+    font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     margin-bottom: 0.25rem;
@@ -311,7 +319,7 @@ div[data-testid="stWidgetLabel"] p {
 .tt-placeholder-tag {
     color: var(--primary-color);
     font-size: 0.72rem;
-    font-weight: 700;
+    font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.07em;
     margin-bottom: 0.25rem;
@@ -403,7 +411,7 @@ div[data-testid="stLinkButton"] a:hover {
     color: var(--text-color);
     opacity: 0.65;
     font-size: 0.72rem;
-    font-weight: 700;
+    font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     margin: 0.1rem 0 0.35rem 0.2rem;
@@ -436,7 +444,7 @@ section[data-testid="stSidebar"] details {
 }
 
 section[data-testid="stSidebar"] details summary {
-    font-weight: 700;
+    font-weight: 500;
     color: var(--primary-color);
 }
 
@@ -454,7 +462,7 @@ div[data-testid="stDataFrame"] {
 .tt-card-label {
     color: var(--primary-color);
     font-size: 0.75rem;
-    font-weight: 700;
+    font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     margin-bottom: 0.25rem;
@@ -571,7 +579,7 @@ div[data-testid="stDataFrame"] {
     min-width: 2.1rem;
     text-align: center;
     font-size: 1.85rem;
-    font-weight: 800;
+    font-weight: 600;
     line-height: 1;
     color: var(--text-color);
     opacity: 0.85;
@@ -601,7 +609,7 @@ div[data-testid="stDataFrame"] {
 
 .tt-top5-name {
     color: var(--text-color);
-    font-weight: 700;
+    font-weight: 600;
     font-size: 1.02rem;
     line-height: 1.25;
     white-space: nowrap;
@@ -640,7 +648,7 @@ div[data-testid="stDataFrame"] {
 
 .tt-top5-stat-val {
     color: var(--text-color);
-    font-weight: 800;
+    font-weight: 600;
     font-size: 1.08rem;
     line-height: 1.15;
     font-variant-numeric: tabular-nums;
@@ -659,7 +667,7 @@ div[data-testid="stDataFrame"] {
     color: var(--text-color);
     opacity: 0.62;
     font-size: 0.68rem;
-    font-weight: 700;
+    font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     margin-top: 0.1rem;
@@ -742,7 +750,7 @@ div[data-testid="stDataFrame"] {
     min-width: 1.75rem;
     text-align: center;
     font-size: 1.45rem;
-    font-weight: 800;
+    font-weight: 600;
     line-height: 1;
     color: var(--text-color);
     opacity: 0.85;
@@ -787,7 +795,7 @@ div[data-testid="stDataFrame"] {
 
 .tt-uw-name {
     color: var(--text-color);
-    font-weight: 700;
+    font-weight: 600;
     font-size: 0.98rem;
     line-height: 1.25;
     white-space: nowrap;
@@ -826,7 +834,7 @@ div[data-testid="stDataFrame"] {
 
 .tt-uw-prob-val {
     color: var(--tt-orange);
-    font-weight: 800;
+    font-weight: 600;
     font-size: 1.12rem;
     line-height: 1.1;
     font-variant-numeric: tabular-nums;
@@ -836,7 +844,7 @@ div[data-testid="stDataFrame"] {
     color: var(--text-color);
     opacity: 0.62;
     font-size: 0.66rem;
-    font-weight: 700;
+    font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     margin-top: 0.12rem;

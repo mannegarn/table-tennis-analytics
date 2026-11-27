@@ -1,4 +1,4 @@
-"""Table Tennis Analytics: App Entrypoint, Router & Landing Page (Home).
+"""PingPongStats: App Entrypoint, Router & Landing Page (Home).
 
 Uses ``st.navigation(..., position="hidden")`` paired with a custom grouped
 left sidebar separating Overview pages (Home, About, Data Overview) from the
@@ -26,7 +26,7 @@ from lib.theme import (
 
 # Page configuration must be the first Streamlit call in the router entrypoint.
 st.set_page_config(
-    page_title="Table Tennis Analytics",
+    page_title="PingPongStats",
     page_icon=":material/sports_tennis:",
     layout="wide",
     initial_sidebar_state="auto",
@@ -174,7 +174,7 @@ def _render_home(
     about_page: Any,
 ) -> None:
     """Render the clean Home landing page with Top 5 snapshots."""
-    st.title("Table Tennis Analytics")
+    st.title("PingPongStats")
     st.subheader(
         "Glicko-2 player ratings, biggest upsets, win rates, and point-by-point "
         "stats from pro singles table tennis."

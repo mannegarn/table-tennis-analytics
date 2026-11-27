@@ -270,13 +270,13 @@ st.markdown(
         <strong>How to read these charts:</strong>
         <ul>
             <li>
-                <strong>Green curve (theory):</strong> Expected win rate if
+                <strong>Grey curve (theory):</strong> Expected win rate if
                 every point or set were an independent coin flip at a player's
                 average rate. Players <em>above</em> the line win more than
                 expected; players <em>below</em> win less.
             </li>
             <li>
-                <strong>Dashed purple curve (fitted S-curve toggle):</strong>
+                <strong>Dashed blue curve (fitted S-curve toggle):</strong>
                 Smooth curve fitted to the real data, showing where pro results
                 flatten (Plots 1-3) or steepen (Plot 4) compared to theory.
             </li>
@@ -615,7 +615,7 @@ with st.expander(
     expanded=False,
 ):
     st.markdown(
-        "Each theoretical green curve assumes independent, identically "
+        "Each theoretical grey curve assumes independent, identically "
         "distributed (i.i.d.) trials with constant win probability. Below is "
         "how the two building blocks (Plot 3 and Plot 2) combine to produce "
         "Plot 1, followed by the optional 2-parameter logistic S-curve."
@@ -677,7 +677,7 @@ with st.expander(
 
     st.markdown("#### The 2-Parameter Logistic S-Curve & Why Real Data Flattens")
     st.markdown(
-        "When toggled on, the dashed purple curve fits a smooth 2-parameter "
+        "When toggled on, the dashed blue curve fits a smooth 2-parameter "
         "logistic function directly to the filtered players:"
     )
     st.latex(

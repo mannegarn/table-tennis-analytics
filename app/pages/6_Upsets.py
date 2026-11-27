@@ -382,7 +382,7 @@ def _render_page() -> None:
             </p>
             <ul>
                 <li>
-                    <strong>On the dashed green line:</strong> Glicko-2 matched reality
+                    <strong>On the dashed grey line:</strong> Glicko-2 matched reality
                     (e.g., 75% favorites won ~75% of the time).
                 </li>
                 <li>

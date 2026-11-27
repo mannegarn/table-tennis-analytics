@@ -8,17 +8,22 @@ from typing import Any
 import plotly.graph_objects as go  # type: ignore[import-untyped]
 import streamlit as st
 
-# Consistent palette across all charts
+# Consistent palette across all charts: ball orange is the accent, table blue
+# is the quiet second series, and theory / reference lines stay neutral grey.
+ACCENT_ORANGE = "#F59E0B"
+TABLE_BLUE = "#5B8DB8"
+NEUTRAL_GREY = "#8E8E93"
+
 GENDER_COLORS: dict[str, str] = {
-    "Men": "#38BDF8",
-    "Women": "#F472B6",
-    "Other / Mixed": "#94A3B8",
+    "Men": TABLE_BLUE,
+    "Women": ACCENT_ORANGE,
+    "Other / Mixed": NEUTRAL_GREY,
 }
 
 FORMAT_COLORS: dict[str, str] = {
-    "Best of 5": "#34D399",
-    "Best of 7": "#A78BFA",
-    "Other": "#94A3B8",
+    "Best of 5": NEUTRAL_GREY,
+    "Best of 7": ACCENT_ORANGE,
+    "Other": "#5A5A5F",
 }
 
 
@@ -48,16 +53,16 @@ STYLE_MARKERS: tuple[StyleMarkerSpec, ...] = (
     ),
     StyleMarkerSpec(
         label="Attacker",
-        color="#38BDF8",
+        color=TABLE_BLUE,
         symbol="circle",
         size=7.0,
-        opacity=0.55,
+        opacity=0.5,
         line_width=0.6,
         line_color="rgba(255, 255, 255, 0.35)",
     ),
     StyleMarkerSpec(
         label="Defender",
-        color="#F59E0B",
+        color=ACCENT_ORANGE,
         symbol="diamond",
         size=10.5,
         opacity=0.95,
@@ -66,9 +71,9 @@ STYLE_MARKERS: tuple[StyleMarkerSpec, ...] = (
     ),
 )
 
-BINOMIAL_CURVE_COLOR = "#10B981"
-LOGISTIC_CURVE_COLOR = "#C084FC"
-HIGHLIGHT_MARKER_COLOR = "#F43F5E"
+BINOMIAL_CURVE_COLOR = NEUTRAL_GREY
+LOGISTIC_CURVE_COLOR = "#7FB0D9"
+HIGHLIGHT_MARKER_COLOR = "#E5484D"
 
 MOBILE_PLOTLY_CONFIG: dict[str, Any] = {
     "responsive": True,
@@ -126,12 +131,12 @@ def style_figure(
         hovermode="closest",
     )
     fig.update_xaxes(
-        gridcolor="rgba(128, 128, 128, 0.2)",
-        zerolinecolor="rgba(128, 128, 128, 0.25)",
+        gridcolor="rgba(128, 128, 128, 0.14)",
+        zerolinecolor="rgba(128, 128, 128, 0.22)",
     )
     fig.update_yaxes(
-        gridcolor="rgba(128, 128, 128, 0.2)",
-        zerolinecolor="rgba(128, 128, 128, 0.25)",
+        gridcolor="rgba(128, 128, 128, 0.14)",
+        zerolinecolor="rgba(128, 128, 128, 0.22)",
     )
     return fig
 

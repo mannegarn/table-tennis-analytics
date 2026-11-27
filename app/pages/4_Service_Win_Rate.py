@@ -398,7 +398,7 @@ st.subheader("2. Serve & Receive vs Total Point Win %")
 _render_insight_card(
     [
         (
-            "<strong>Dashed green parity line (<code>y = x</code>):</strong> "
+            "<strong>Dashed grey parity line (<code>y = x</code>):</strong> "
             "Shows where players would sit if serving gave no advantage "
             "(Serve Win % = Receive Win % = Total Point %)."
         ),
