@@ -621,6 +621,183 @@ div[data-testid="stDataFrame"] {
         text-align: center;
     }
 }
+
+/* Unlikely Winners compact Top-10 showcase rows */
+@keyframes ttUwFadeSlide {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.tt-uw-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    animation: ttUwFadeSlide 0.24s ease-out;
+}
+
+.tt-uw-row {
+    display: flex;
+    align-items: center;
+    gap: 0.78rem;
+    background-color: var(--secondary-background-color);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    border-radius: 12px;
+    padding: 0.58rem 0.88rem;
+    transition: border-color 0.15s ease;
+}
+
+.tt-uw-row:hover {
+    border-color: var(--tt-orange);
+}
+
+.tt-uw-rank {
+    min-width: 1.75rem;
+    text-align: center;
+    font-size: 1.45rem;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--text-color);
+    opacity: 0.85;
+    font-variant-numeric: tabular-nums;
+}
+
+.tt-uw-rank-1 {
+    color: var(--tt-orange);
+    opacity: 1;
+}
+
+.tt-uw-avatar {
+    width: 76px;
+    height: 76px;
+    border-radius: 14px;
+    object-fit: cover;
+    object-position: top center;
+    border: 2px solid rgba(167, 139, 250, 0.45);
+    background-color: rgba(124, 58, 237, 0.12);
+    flex-shrink: 0;
+}
+
+.tt-uw-body {
+    min-width: 0;
+    flex: 1;
+}
+
+.tt-uw-winner-line {
+    display: flex;
+    align-items: center;
+    gap: 0.42rem;
+    min-width: 0;
+}
+
+.tt-uw-flag {
+    width: 20px;
+    height: 14px;
+    border-radius: 2px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.tt-uw-name {
+    color: var(--text-color);
+    font-weight: 700;
+    font-size: 0.98rem;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tt-uw-tournament {
+    color: var(--text-color);
+    opacity: 0.92;
+    font-weight: 600;
+    font-size: 0.85rem;
+    line-height: 1.3;
+    margin-top: 0.15rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tt-uw-final {
+    color: var(--text-color);
+    opacity: 0.72;
+    font-size: 0.79rem;
+    line-height: 1.25;
+    margin-top: 0.1rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tt-uw-prob {
+    text-align: right;
+    flex-shrink: 0;
+    padding-left: 0.35rem;
+}
+
+.tt-uw-prob-val {
+    color: var(--tt-orange);
+    font-weight: 800;
+    font-size: 1.12rem;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+}
+
+.tt-uw-prob-lbl {
+    color: var(--text-color);
+    opacity: 0.62;
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 0.12rem;
+}
+
+@media (max-width: 640px) {
+    .tt-uw-row {
+        display: grid;
+        grid-template-columns: auto 62px 1fr;
+        column-gap: 0.65rem;
+        row-gap: 0.45rem;
+        align-items: center;
+        padding: 0.55rem 0.72rem;
+    }
+
+    .tt-uw-rank {
+        min-width: 1.4rem;
+        font-size: 1.25rem;
+    }
+
+    .tt-uw-avatar {
+        width: 62px;
+        height: 62px;
+        border-radius: 12px;
+    }
+
+    .tt-uw-name,
+    .tt-uw-tournament,
+    .tt-uw-final {
+        white-space: normal;
+    }
+
+    .tt-uw-prob {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        border-top: 1px solid rgba(245, 158, 11, 0.22);
+        padding-top: 0.38rem;
+        padding-left: 0;
+        text-align: left;
+    }
+}
 </style>
 """
 

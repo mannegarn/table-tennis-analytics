@@ -146,6 +146,11 @@ def test_streamlit_pages_render_without_error() -> None:
     )
     assert not table_types.exception
 
+    unlikely_winners = AppTest.from_file(
+        app_dir / "pages" / "8_Unlikely_Winners.py"
+    ).run(timeout=30)
+    assert not unlikely_winners.exception
+
 
 def test_compute_home_insights() -> None:
     events = pl.DataFrame(

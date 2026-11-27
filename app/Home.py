@@ -287,6 +287,12 @@ upsets_page = st.Page(
     icon="⚡",
     url_path="upsets",
 )
+unlikely_winners_page = st.Page(
+    "pages/8_Unlikely_Winners.py",
+    title="Unlikely Winners",
+    icon="🏅",
+    url_path="unlikely-winners",
+)
 table_types_page = st.Page(
     "pages/7_Table_Types.py",
     title="Table Types",
@@ -315,6 +321,7 @@ analytics_pages = [
     glicko_ratings_page,
     win_rates_page,
     upsets_page,
+    unlikely_winners_page,
     service_win_rate_page,
     table_types_page,
 ]
