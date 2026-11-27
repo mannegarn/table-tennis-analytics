@@ -142,6 +142,11 @@ if unknown_gender_players > 0:
         f"Note: {unknown_gender_players:,} players in the catalog have an "
         "unspecified gender, so Men + Women is slightly less than Total."
     )
+st.caption(
+    "Men's match counts are higher because open-entry tournaments (especially "
+    "WTT Feeder and Contender events) attract larger men's fields, resulting in "
+    "more qualifying and group-stage matches."
+)
 
 st.divider()
 
