@@ -174,11 +174,16 @@ with c_gh:
         width="stretch",
     )
 with c_em:
-    st.link_button(
-        "Email Marcus",
-        f"mailto:{CONTACT_EMAIL}",
-        icon=":material/mail:",
-        width="stretch",
+    st.markdown(
+        f'<a href="mailto:{CONTACT_EMAIL}" '
+        'style="display: inline-flex; align-items: center; justify-content: center; '
+        "gap: 0.45rem; width: 100%; min-height: 40px; padding: 0.35rem 0.75rem; "
+        "border: 1px solid rgba(245, 158, 11, 0.45); border-radius: 8px; "
+        "background-color: var(--secondary-background-color); "
+        "color: var(--text-color); "
+        'text-decoration: none; font-weight: 500; font-size: 0.95rem;">'
+        f"Email: {CONTACT_EMAIL}</a>",
+        unsafe_allow_html=True,
     )
 
 st.markdown("<div style='height: 0.65rem;'></div>", unsafe_allow_html=True)

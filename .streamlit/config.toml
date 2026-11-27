@@ -11,6 +11,7 @@ primaryColor = "#7C3AED"
 backgroundColor = "#F4F2FC"
 secondaryBackgroundColor = "#FFFFFF"
 textColor = "#1E1B4B"
+dataframeBorderColor = "#CBD5E1"
 
 [theme.light.sidebar]
 backgroundColor = "#E6E0F8"
@@ -21,6 +22,7 @@ primaryColor = "#A78BFA"
 backgroundColor = "#161325"
 secondaryBackgroundColor = "#201B34"
 textColor = "#F3F0FF"
+dataframeBorderColor = "#475569"
 
 [theme.dark.sidebar]
 backgroundColor = "#1D1730"
