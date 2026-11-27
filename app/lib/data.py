@@ -98,7 +98,6 @@ def data_files_exist() -> bool:
         "player_serve_receive_stats.parquet",
         "fct_glicko_match_ratings.parquet",
         "dim_table_brands.parquet",
-        "fct_table_type_glicko_match_ratings.parquet",
     )
     return all((DATA_DIR / name).exists() for name in required)
 
@@ -201,12 +200,6 @@ def load_glicko_match_ratings() -> pl.DataFrame:
 def load_table_brands() -> pl.DataFrame:
     """Load table sponsor to table-group mappings from Parquet."""
     filename = "dim_table_brands.parquet"
-    return _read_parquet_cached(filename, _file_version(DATA_DIR / filename))
-
-
-def load_table_type_glicko_match_ratings() -> pl.DataFrame:
-    """Load per-table-group Glicko-2 match ratings from Parquet."""
-    filename = "fct_table_type_glicko_match_ratings.parquet"
     return _read_parquet_cached(filename, _file_version(DATA_DIR / filename))
 
 

@@ -1,22 +1,34 @@
-"""Unit and UI tests for Asian vs European table-type Glicko-2 comparison."""
+"""Unit and UI tests for Table Types win-rate residuals, upsets, and China H0."""
 
 from __future__ import annotations
 
 from datetime import date
-from typing import Literal
 
 import polars as pl
 import pytest
 from app.lib.table_types import (
-    assign_origin_group,
-    build_origin_avg_elo_chart,
-    build_origin_edge_chart,
-    build_origin_meta_analysis,
-    build_table_type_comparison,
-    build_table_type_event_options,
+    SURFACE_GRIPPY,
+    SURFACE_OTHER,
+    SURFACE_SKIDDY,
+    build_brand_summary_matrix,
+    build_cohort_residuals,
+    build_player_surface_boosts,
+    build_player_tilt_analysis,
+    build_residual_forest_plot,
+    build_tilt_comparison_charts,
+    build_upset_residual_chart,
+    chi_square_2x2_p_value,
+    classify_surface_profile,
+    compute_kpi_summary,
+    compute_paired_chn_contrast,
+    fisher_exact_two_tailed,
+    map_event_tier,
+    prepare_surface_matches,
     student_t_two_tailed_p_value,
     summarize_brand_groups,
+    unpivot_surface_player_matches,
     welch_t_test,
+    wilson_ci_95,
 )
 from streamlit.testing.v1 import AppTest
 
@@ -29,264 +41,327 @@ def _sample_players() -> pl.DataFrame:
         {
             "player_sk": [1, 2, 3, 4],
             "player_name": [
-                "Alice CHEN",
-                "Cara SATO",
-                "Dana KIM",
-                "Bob MULLER",
+                "Wei ZHANG",
+                "Mei LIN",
+                "Lukas WEBER",
+                "Alex MARTIN",
             ],
-            "organization_code": ["CHN", "JPN", "KOR", "GER"],
-            "country_code": ["CHN", "JPN", "KOR", "GER"],
-            "organization_name": ["China", "Japan", "Korea", "Germany"],
-            "country_name": ["China", "Japan", "Korea", "Germany"],
-            "style": ["Attacker", "Defender", "Attacker", "Attacker"],
-            "grip": ["Shakehand", "Shakehand", "Penhold", "Shakehand"],
+            "organization_code": ["CHN", "CHN", "GER", "FRA"],
+            "country_code": ["CHN", "CHN", "GER", "FRA"],
+            "organization_name": ["China", "China", "Germany", "France"],
+            "country_name": ["China", "China", "Germany", "France"],
+            "style": ["Attacker", "Attacker", "Attacker", "Defender"],
+            "grip": ["Shakehand", "Shakehand", "Shakehand", "Shakehand"],
             "hand": ["Left", "Right", "Right", "Right"],
-            "age": [24, 22, 26, 28],
-            "head_shot": [None, None, None, None],
-            "gender": ["F", "F", "F", "M"],
         }
     )
 
 
-def _match_row(
-    *,
-    match_sk: int,
-    event_sk: int,
-    table_group: str,
-    gender_category: str,
-    rating_date: date,
-    p1_sk: int,
-    p2_sk: int,
-    p1_post: float,
-    p2_post: float,
-    p1_score: float,
-) -> dict[str, object]:
-    return {
-        "match_sk": match_sk,
-        "event_sk": event_sk,
-        "table_group": table_group,
-        "gender_category": gender_category,
-        "rating_date": rating_date,
-        "p1_player_sk": p1_sk,
-        "p2_player_sk": p2_sk,
-        "p1_pre_rating": 1500.0,
-        "p1_pre_rd": 200.0,
-        "p1_pre_vol": 0.06,
-        "p1_post_rating": p1_post,
-        "p1_post_rd": 150.0,
-        "p1_post_vol": 0.06,
-        "p2_pre_rating": 1500.0,
-        "p2_pre_rd": 200.0,
-        "p2_pre_vol": 0.06,
-        "p2_post_rating": p2_post,
-        "p2_post_rd": 150.0,
-        "p2_post_vol": 0.06,
-        "p1_expected_win_prob": 0.5,
-        "p1_actual_score": p1_score,
-    }
+def _sample_events() -> pl.DataFrame:
+    return pl.DataFrame(
+        {
+            "event_sk": [10, 11, 12],
+            "event_name": [
+                "Singapore Smash",
+                "WTT Contender Zagreb",
+                "Japan Open",
+            ],
+            "event_type": ["WTT Grand Smash", "WTT Contender", "WTTC"],
+            "table_sponsor": ["DHS", "Tibhar", "Nittaku"],
+        }
+    )
 
 
-def _sample_table_ratings() -> pl.DataFrame:
-    rows = [
-        # Asian women: Alice (1) plays 2 (2W, 1700.25), Cara (2) plays 2 (0W, 1380.0),
-        # Dana (3) plays 2 (1W/1L, 1520.0)
-        _match_row(
-            match_sk=1,
-            event_sk=10,
-            table_group="Asian",
-            gender_category="women",
-            rating_date=date(2025, 1, 10),
-            p1_sk=1,
-            p2_sk=2,
-            p1_post=1620.0,
-            p2_post=1400.0,
-            p1_score=1.0,
-        ),
-        _match_row(
-            match_sk=2,
-            event_sk=10,
-            table_group="Asian",
-            gender_category="women",
-            rating_date=date(2025, 1, 11),
-            p1_sk=1,
-            p2_sk=3,
-            p1_post=1700.25,
-            p2_post=1480.0,
-            p1_score=1.0,
-        ),
-        _match_row(
-            match_sk=3,
-            event_sk=11,
-            table_group="Asian",
-            gender_category="women",
-            rating_date=date(2025, 3, 5),
-            p1_sk=3,
-            p2_sk=2,
-            p1_post=1520.0,
-            p2_post=1380.0,
-            p1_score=1.0,
-        ),
-        # European women:
-        # Before June: Alice (1) vs Cara (2) -> Alice 1580.0 (1W), Cara 1420.0 (0W)
-        # In June: Cara beats Alice -> Cara ends at 1610.0 and Alice at 1590.10,
-        # giving Alice +110.15 -> +110.2 Elo diff and Cara -230.0 Elo diff.
-        _match_row(
-            match_sk=4,
-            event_sk=12,
-            table_group="European",
-            gender_category="women",
-            rating_date=date(2025, 4, 1),
-            p1_sk=1,
-            p2_sk=2,
-            p1_post=1580.0,
-            p2_post=1420.0,
-            p1_score=1.0,
-        ),
-        _match_row(
-            match_sk=5,
-            event_sk=13,
-            table_group="European",
-            gender_category="women",
-            rating_date=date(2025, 6, 15),
-            p1_sk=2,
-            p2_sk=1,
-            p1_post=1610.0,
-            p2_post=1590.1,
-            p1_score=1.0,
-        ),
-        # Dana (3) only has 1 European match -> excluded at min_matches_per_group=2
-        _match_row(
-            match_sk=6,
-            event_sk=13,
-            table_group="European",
-            gender_category="women",
-            rating_date=date(2025, 6, 16),
-            p1_sk=3,
-            p2_sk=4,
-            p1_post=1510.0,
-            p2_post=1490.0,
-            p1_score=1.0,
-        ),
+def _sample_brands() -> pl.DataFrame:
+    return pl.DataFrame(
+        {
+            "table_sponsor": ["DHS", "Tibhar", "Nittaku"],
+            "table_group": ["Asian", "European", "Other"],
+        }
+    )
+
+
+def _sample_ratings() -> pl.DataFrame:
+    rows: list[dict[str, object]] = []
+    match_id = 1
+    # 4 DHS (Grippy) matches:
+    # - 2x CHN (1) beats GER (3) with expected 0.70 (+0.30 residual each)
+    # - 1x CHN (1) beats CHN (2) (zero-sum intra-CHN, excluded when h2h_only=True)
+    # - 1x GER (3) upsets FRA (4) when GER expected 0.30 (<40% underdog wins!)
+    dhs_specs = [
+        (1, 3, 0.70, 1.0, date(2024, 3, 1)),
+        (1, 3, 0.70, 1.0, date(2024, 3, 2)),
+        (1, 2, 0.50, 1.0, date(2024, 3, 3)),
+        (3, 4, 0.30, 1.0, date(2024, 3, 4)),
     ]
+    for p1, p2, exp, act, dt in dhs_specs:
+        rows.append(
+            {
+                "match_sk": match_id,
+                "event_sk": 10,
+                "gender_category": "men",
+                "rating_date": dt,
+                "p1_player_sk": p1,
+                "p2_player_sk": p2,
+                "p1_pre_rating": 1800.0 if exp > 0.5 else 1600.0,
+                "p2_pre_rating": 1650.0 if exp > 0.5 else 1750.0,
+                "p1_expected_win_prob": exp,
+                "p1_actual_score": act,
+            }
+        )
+        match_id += 1
+
+    # 4 Tibhar (Skiddy) matches:
+    # - 2x CHN (1) loses to FRA (4) with expected 0.70 (-0.70 residual for CHN)
+    # - 2x GER (3) beats FRA (4) with expected 0.60 (+0.40 residual for GER)
+    tibhar_specs = [
+        (1, 4, 0.70, 0.0, date(2024, 6, 1)),
+        (1, 4, 0.70, 0.0, date(2024, 6, 2)),
+        (3, 4, 0.60, 1.0, date(2024, 6, 3)),
+        (3, 4, 0.60, 1.0, date(2024, 6, 4)),
+    ]
+    for p1, p2, exp, act, dt in tibhar_specs:
+        rows.append(
+            {
+                "match_sk": match_id,
+                "event_sk": 11,
+                "gender_category": "men",
+                "rating_date": dt,
+                "p1_player_sk": p1,
+                "p2_player_sk": p2,
+                "p1_pre_rating": 1800.0 if exp > 0.5 else 1650.0,
+                "p2_pre_rating": 1650.0 if exp > 0.5 else 1800.0,
+                "p1_expected_win_prob": exp,
+                "p1_actual_score": act,
+            }
+        )
+        match_id += 1
+
     return pl.DataFrame(rows)
 
 
-def test_build_table_type_comparison_diffs_sorting_and_min_matches() -> None:
+def test_taxonomy_and_stat_helpers() -> None:
+    assert map_event_tier("WTT Grand Smash") == "Grand Smash"
+    assert map_event_tier("WTT Feeder") == "Feeder"
+    assert map_event_tier("Olympic Games") == "ITTF Majors / Other"
+    assert map_event_tier(None) == "ITTF Majors / Other"
+
+    assert classify_surface_profile("DHS", "Asian") == SURFACE_GRIPPY
+    assert classify_surface_profile("Tibhar", "European") == SURFACE_SKIDDY
+    assert classify_surface_profile("Nittaku", "Other") == SURFACE_OTHER
+    assert classify_surface_profile("Butterfly", None) == SURFACE_GRIPPY
+
+    lo, hi = wilson_ci_95(5, 10)
+    assert lo < 50.0 < hi
+    assert wilson_ci_95(0, 0) == (0.0, 0.0)
+
+    # Classic Fisher exact test example: [[1, 9], [11, 3]] -> p ≈ 0.002759
+    p_fisher = fisher_exact_two_tailed(1, 9, 11, 3)
+    assert p_fisher is not None
+    assert p_fisher == pytest.approx(0.0027594, abs=1e-4)
+
+    p_chi2 = chi_square_2x2_p_value(20, 5, 5, 20)
+    assert p_chi2 is not None
+    assert p_chi2 < 0.001
+
+
+def test_prepare_and_cohort_h2h_isolation() -> None:
     players = _sample_players()
-    ratings = _sample_table_ratings()
+    events = _sample_events()
+    brands = _sample_brands()
+    ratings = _sample_ratings()
 
-    # With min_matches_per_group=2, Dana (2 Asian, 1 European) is excluded.
-    df = build_table_type_comparison(
+    sm = prepare_surface_matches(
         ratings,
+        events,
         players,
-        gender="women",
-        min_matches_per_group=2,
-    )
-    assert df.height == 2
-    assert df["rank"].to_list() == [1, 2]
-    # Cara: |1380.0 - 1610.0| = 230.0; Alice: |1700.25 - 1590.1| = 110.2
-    assert df["player_sk"].to_list() == [2, 1]
-
-    cara = df.row(0, named=True)
-    assert cara["player_name"] == "Cara SATO"
-    assert cara["continent"] == "Asia"
-    assert cara["stronger_on"] == "European"
-    assert cara["rating_diff"] == pytest.approx(-230.0)
-    assert cara["abs_rating_diff"] == pytest.approx(230.0)
-    assert cara["asian_win_pct"] == pytest.approx(0.0)
-    assert cara["european_win_pct"] == pytest.approx(50.0)
-    assert cara["win_pct_diff"] == pytest.approx(-50.0)
-    assert cara["total_matches"] == 4
-    assert cara["asian_matches"] == 2
-    assert cara["european_matches"] == 2
-
-    alice = df.row(1, named=True)
-    assert alice["continent"] == "Asia"
-    assert alice["stronger_on"] == "Asian"
-    assert alice["rating_diff"] == pytest.approx(110.2)
-    assert alice["asian_win_pct"] == pytest.approx(100.0)
-    assert alice["european_win_pct"] == pytest.approx(50.0)
-    assert alice["win_pct_diff"] == pytest.approx(50.0)
-    assert alice["asian_wins"] == 2
-    assert alice["asian_losses"] == 0
-    assert alice["european_wins"] == 1
-    assert alice["european_losses"] == 1
-
-    # Lowering min_matches_per_group=1 brings Dana in (diff = 1520 - 1510 = +10.0).
-    df_min1 = build_table_type_comparison(
-        ratings,
-        players,
-        gender="women",
-        min_matches_per_group=1,
-    )
-    assert df_min1["player_sk"].to_list() == [2, 1, 3]
-
-
-def test_build_table_type_comparison_as_of_date_and_gender() -> None:
-    players = _sample_players()
-    ratings = _sample_table_ratings()
-
-    # As of May 1 excludes June European matches -> only 1 European match each.
-    df_may = build_table_type_comparison(
-        ratings,
-        players,
-        gender="women",
-        as_of_date=date(2025, 5, 1),
-        min_matches_per_group=1,
-    )
-    assert df_may["player_sk"].to_list() == [1, 2]
-    alice_may = df_may.filter(pl.col("player_sk") == 1).row(0, named=True)
-    assert alice_may["european_rating"] == pytest.approx(1580.0)
-    assert alice_may["european_matches"] == 1
-    assert alice_may["rating_diff"] == pytest.approx(120.2)
-
-    # No men's matches exist in sample -> empty with exact schema.
-    df_men = build_table_type_comparison(
-        ratings,
-        players,
+        brands,
         gender="men",
-        min_matches_per_group=1,
+        min_prior_matches=0,
     )
-    assert df_men.is_empty()
-    assert "rating_diff" in df_men.columns
-    assert "asian_rating" in df_men.columns
+    assert sm.height == 8
+    # 2 CHN-vs-GER on DHS + 2 CHN-vs-FRA on Tibhar = 4 CHN vs Non-CHN matches
+    assert sm.filter(pl.col("is_chn_vs_non_chn")).height == 4
+    assert sm.filter(pl.col("p1_is_chn") & pl.col("p2_is_chn")).height == 1
+
+    pm = unpivot_surface_player_matches(sm, players)
+    assert pm.height == 16
+
+    cohorts_h2h = build_cohort_residuals(
+        pm,
+        grouping="surface",
+        chn_h2h_only=True,
+        min_matches=1,
+    )
+    chn_grippy = cohorts_h2h.filter(
+        (pl.col("group_label") == SURFACE_GRIPPY)
+        & pl.col("cohort").str.starts_with("China")
+    ).row(0, named=True)
+    # Two CHN-vs-GER wins at 0.70 exp -> +30.0 pp residual (intra-CHN excluded)
+    assert chn_grippy["n"] == 2
+    assert chn_grippy["residual_pp"] == pytest.approx(30.0)
+
+    chn_skiddy = cohorts_h2h.filter(
+        (pl.col("group_label") == SURFACE_SKIDDY)
+        & pl.col("cohort").str.starts_with("China")
+    ).row(0, named=True)
+    assert chn_skiddy["n"] == 2
+    assert chn_skiddy["residual_pp"] == pytest.approx(-70.0)
+
+    paired = compute_paired_chn_contrast(
+        pm,
+        min_matches_per_surface=2,
+        chn_h2h_only=True,
+    )
+    assert paired.n_players == 1
+    assert paired.mean_diff_pp == pytest.approx(100.0)
+    assert paired.n_better_on_asian == 1
 
 
-def test_build_table_type_comparison_empty_handling() -> None:
-    empty_ratings = _sample_table_ratings().head(0)
-    df = build_table_type_comparison(
+def test_player_tilt_grouping_upset_matrix_and_boosts() -> None:
+    players = _sample_players()
+    events = _sample_events()
+    brands = _sample_brands()
+    ratings = _sample_ratings()
+
+    sm = prepare_surface_matches(
+        ratings,
+        events,
+        players,
+        brands,
+        min_prior_matches=0,
+    )
+    pm = unpivot_surface_player_matches(sm, players)
+
+    # Players 1 (CHN: +30 vs -70 -> Grippy) and 3 (GER: +15 vs +40 -> Skiddy).
+    # Player 4 has only 1 DHS match, so excluded at min_matches_per_surface=2.
+    tilt = build_player_tilt_analysis(
+        pm,
+        min_matches_per_surface=2,
+        dead_zone_pp=0.0,
+        chn_h2h_only=True,
+    )
+    assert tilt.total_players == 2
+    assert tilt.chn_asian_share_pct == pytest.approx(100.0)
+    assert tilt.non_chn_asian_share_pct == pytest.approx(0.0)
+    assert tilt.fisher_p_value == pytest.approx(1.0)
+
+    matrix = build_brand_summary_matrix(sm, pm, min_matches=1, grouping="brand")
+    dhs = matrix.filter(pl.col("group_name") == "DHS").row(0, named=True)
+    assert dhs["matches"] == 4
+    # Three <40% underdog matches on DHS: 2x (1 vs 3) favored won, 1x (3 vs 4) upset.
+    assert dhs["underdog_40_matches"] == 3
+    assert dhs["upset_rate_pct"] == pytest.approx(100.0 / 3.0)
+    assert dhs["expected_upset_pct"] == pytest.approx(30.0)
+    assert dhs["upset_residual_pp"] == pytest.approx(100.0 / 3.0 - 30.0)
+
+    boosts = build_player_surface_boosts(
+        pm,
+        target_scope="Asian vs European Boost",
+        min_matches=2,
+        chn_h2h_only=True,
+    )
+    assert boosts["player_name"].to_list() == ["Wei ZHANG", "Lukas WEBER"]
+    assert boosts.row(0, named=True)["win_pct_over_expected"] == pytest.approx(100.0)
+
+    dhs_boosts = build_player_surface_boosts(
+        pm,
+        target_scope="DHS",
+        min_matches=2,
+        origin_filter="China (CHN)",
+        search_query="wei",
+        chn_h2h_only=True,
+    )
+    assert dhs_boosts.height == 1
+    assert dhs_boosts.row(0, named=True)["actual_wl"] == "2-0"
+
+    kpis = compute_kpi_summary(sm, pm, min_matches_paired=2)
+    assert kpis.total_matches == 8
+    assert kpis.total_events == 2
+
+    # Charts build without errors
+    fig_forest = build_residual_forest_plot(
+        build_cohort_residuals(pm, grouping="brand", min_matches=1)
+    )
+    fig_share, fig_diff = build_tilt_comparison_charts(tilt)
+    fig_upset = build_upset_residual_chart(matrix)
+    assert len(fig_forest.data) == 2
+    assert len(fig_share.data) == 1
+    assert len(fig_diff.data) == 1
+    assert len(fig_upset.data) == 2
+
+
+def test_empty_inputs_return_empty_schemas() -> None:
+    empty_ratings = _sample_ratings().head(0)
+    empty_sm = prepare_surface_matches(
         empty_ratings,
+        _sample_events(),
         _sample_players(),
-        gender="women",
+        _sample_brands(),
     )
-    assert df.is_empty()
-    assert df.columns[:5] == [
-        "rank",
-        "player_sk",
-        "flag_url",
-        "player_name",
-        "country_name",
-    ]
+    empty_pm = unpivot_surface_player_matches(empty_sm, _sample_players())
+    assert empty_sm.is_empty()
+    assert empty_pm.is_empty()
+    assert build_cohort_residuals(empty_pm).is_empty()
+    assert build_brand_summary_matrix(empty_sm, empty_pm).is_empty()
+    assert build_player_surface_boosts(empty_pm).is_empty()
+    assert compute_kpi_summary(empty_sm, empty_pm).total_matches == 0
+    assert compute_paired_chn_contrast(empty_pm).n_players == 0
+    assert build_player_tilt_analysis(empty_pm).total_players == 0
 
 
-def test_build_table_type_event_options_and_brand_summary() -> None:
-    ratings = _sample_table_ratings()
-    events = pl.DataFrame(
-        {
-            "event_sk": [10, 11, 12, 13],
-            "event_name": [
-                "Doha Open",
-                "Singapore Smash",
-                "Frankfurt Champions",
-                "Ljubljana Star",
-            ],
-        }
-    )
-    options = build_table_type_event_options(ratings, events, gender="women")
-    assert options[0] == ("Latest (16/06/25 — All matches)", None)
-    assert options[1] == ("16/06/25 · Ljubljana Star", date(2025, 6, 16))
-    assert options[-1] == ("11/01/25 · Doha Open", date(2025, 1, 11))
+def test_real_parquet_smoke() -> None:
+    data_dir = default_output_dir()
+    ratings = pl.read_parquet(data_dir / "fct_glicko_match_ratings.parquet")
+    events = pl.read_parquet(data_dir / "dim_events.parquet")
+    players = pl.read_parquet(data_dir / "dim_players.parquet")
+    brands = pl.read_parquet(data_dir / "dim_table_brands.parquet")
 
+    sm = prepare_surface_matches(ratings, events, players, brands, min_prior_matches=5)
+    pm = unpivot_surface_player_matches(sm, players)
+    assert sm.height > 10_000
+
+    kpis = compute_kpi_summary(sm, pm, min_matches_paired=5)
+    assert kpis.chn_h2h_asian_resid_pp is not None
+    assert kpis.chn_h2h_euro_resid_pp is not None
+    assert kpis.chn_h2h_gap_pp is not None
+    assert kpis.chn_h2h_gap_pp > 0.0
+    assert kpis.upset_resid_gap_pp is not None
+    assert kpis.upset_resid_gap_pp > 0.0
+
+    tilt = build_player_tilt_analysis(pm, min_matches_per_surface=10)
+    assert tilt.total_players > 100
+    assert tilt.fisher_p_value is not None
+
+
+def test_table_types_page_apptest(monkeypatch: pytest.MonkeyPatch) -> None:
+    app_dir = project_root() / "app"
+    monkeypatch.syspath_prepend(str(app_dir))
+    page_path = app_dir / "pages" / "7_Table_Types.py"
+    at = AppTest.from_file(page_path).run(timeout=30)
+    assert not at.exception
+    assert len(at.date_input) == 0
+    assert len(at.metric) == 4
+    assert len(at.dataframe) >= 3
+    assert any("Men's Singles" in s.value for s in at.subheader)
+
+    # Switch grouping to "By Table Brand" and switch tour to "Women's Singles"
+    at.radio(key="ttv2_grouping_choice").set_value("By Table Brand").run(timeout=30)
+    assert not at.exception
+    at.segmented_control(key="ttv2_gender_choice").set_value(  # gitleaks:allow
+        "Women's Singles"
+    ).run(timeout=30)
+    assert not at.exception
+    assert any("Women's Singles" in s.value for s in at.subheader)
+
+    # Switch player boost target to DHS and search
+    at.selectbox(key="ttv2_player_target_scope").set_value("DHS").run(timeout=30)
+    assert not at.exception
+    at.text_input(key="ttv2_player_search").set_value("Sun").run(timeout=30)
+    assert not at.exception
+
+
+def test_summarize_brand_groups() -> None:
     brands = pl.DataFrame(
         {
             "table_sponsor": [
@@ -300,8 +375,7 @@ def test_build_table_type_event_options_and_brand_summary() -> None:
             "table_group": ["Asian", "Asian", "Asian", "European", "Other", "Other"],
         }
     )
-    grouped = summarize_brand_groups(brands)
-    assert grouped == {
+    assert summarize_brand_groups(brands) == {
         "Asian": ["Butterfly", "DHS"],
         "European": ["Tibhar"],
         "Other": ["Xiom"],
@@ -311,74 +385,6 @@ def test_build_table_type_event_options_and_brand_summary() -> None:
         "European": [],
         "Other": [],
     }
-
-
-def test_table_types_smoke_on_real_parquet() -> None:
-    data_dir = default_output_dir()
-    table_ratings = pl.read_parquet(
-        data_dir / "fct_table_type_glicko_match_ratings.parquet"
-    )
-    table_brands = pl.read_parquet(data_dir / "dim_table_brands.parquet")
-    players = pl.read_parquet(data_dir / "dim_players.parquet")
-
-    grouped = summarize_brand_groups(table_brands)
-    assert set(grouped.keys()) == {"Asian", "European", "Other"}
-    assert len(grouped["Asian"]) > 0
-    assert len(grouped["European"]) > 0
-
-    genders: tuple[Literal["men", "women"], ...] = ("men", "women")
-    for gender in genders:
-        comp = build_table_type_comparison(
-            table_ratings,
-            players,
-            gender=gender,
-            min_matches_per_group=5,
-        )
-        assert comp.height > 10
-        assert comp["rank"].to_list()[:3] == [1, 2, 3]
-        assert comp["abs_rating_diff"].is_sorted(descending=True)
-        assert (comp["asian_matches"] >= 5).all()
-        assert (comp["european_matches"] >= 5).all()
-
-
-def test_table_types_page_apptest() -> None:
-    page_path = project_root() / "app" / "pages" / "7_Table_Types.py"
-    at = AppTest.from_file(page_path).run(timeout=30)
-    assert not at.exception
-    assert len(at.dataframe) == 2
-
-    default_cols = list(at.dataframe[0].value.columns)
-    assert "stronger_on" in default_cols
-    assert "rating_diff" in default_cols
-    assert "win_pct_diff" in default_cols
-    assert "total_matches" in default_cols
-    assert "asian_rating" not in default_cols
-    assert "european_rating" not in default_cols
-
-    meta_cols = list(at.dataframe[1].value.columns)
-    assert "origin_group" in meta_cols
-    assert "significance_label" in meta_cols
-    assert len(at.dataframe[1].value) == 3
-
-    at.multiselect(key="table_types_continent_men").set_value(["Europe"]).run(
-        timeout=30
-    )
-    assert not at.exception
-    assert len(at.dataframe) == 2
-    assert len(at.dataframe[0].value) > 0
-
-    at.toggle(key="table_types_show_full_details").set_value(True).run(timeout=30)
-    assert not at.exception
-    detail_cols = list(at.dataframe[0].value.columns)
-    for col in ("asian_rating", "european_rating", "asian_win_pct", "european_win_pct"):
-        assert col in detail_cols
-
-    at.segmented_control(key="table_types_pool_choice").set_value(
-        "Women's Singles"
-    ).run(timeout=30)
-    assert not at.exception
-    assert len(at.dataframe) == 2
-    assert len(at.dataframe[0].value) > 0
 
 
 def test_student_t_and_welch_t_test() -> None:
@@ -400,83 +406,3 @@ def test_student_t_and_welch_t_test() -> None:
     assert same_p == pytest.approx(1.0)
 
     assert welch_t_test([1.0], [2.0, 3.0]) == (None, None, None)
-
-
-def test_origin_meta_analysis_and_charts() -> None:
-    sample = pl.DataFrame(
-        {
-            "org": ["CHN", "CHN", "CHN", "JPN", "KOR", "GER", "SWE", "BRA"],
-            "continent": [
-                "Asia",
-                "Asia",
-                "Asia",
-                "Asia",
-                "Asia",
-                "Europe",
-                "Europe",
-                "Americas",
-            ],
-            "asian_rating": [
-                2100.0,
-                2050.0,
-                2000.0,
-                1850.0,
-                1820.0,
-                1650.0,
-                1640.0,
-                1660.0,
-            ],
-            "european_rating": [
-                1950.0,
-                1920.0,
-                1890.0,
-                1840.0,
-                1810.0,
-                1730.0,
-                1720.0,
-                1740.0,
-            ],
-            "rating_diff": [150.0, 130.0, 110.0, 10.0, 10.0, -80.0, -80.0, -80.0],
-            "win_pct_diff": [12.0, 10.0, 8.0, 1.0, 0.0, -6.0, -5.0, -7.0],
-        }
-    )
-    grouped = assign_origin_group(sample)
-    assert grouped["origin_group"].to_list() == [
-        "Chinese",
-        "Chinese",
-        "Chinese",
-        "Non-Chinese Asian",
-        "Non-Chinese Asian",
-        "Rest of World",
-        "Rest of World",
-        "Rest of World",
-    ]
-
-    meta = build_origin_meta_analysis(sample)
-    assert meta["origin_group"].to_list() == [
-        "Chinese",
-        "Non-Chinese Asian",
-        "Rest of World",
-    ]
-    assert meta["players"].to_list() == [3, 2, 3]
-    chn = meta.filter(pl.col("origin_group") == "Chinese").row(0, named=True)
-    assert chn["mean_rating_diff"] == pytest.approx(130.0)
-    assert chn["rel_elo_vs_row"] == pytest.approx(210.0)
-    assert chn["welch_p_vs_row"] is not None
-    assert chn["welch_p_vs_row"] < 0.05
-
-    row_entry = meta.filter(pl.col("origin_group") == "Rest of World").row(
-        0, named=True
-    )
-    assert row_entry["significance_label"] == "Baseline"
-    assert row_entry["welch_p_vs_row"] is None
-
-    avg_fig = build_origin_avg_elo_chart(meta)
-    edge_fig = build_origin_edge_chart(meta)
-    assert len(avg_fig.data) == 2
-    assert len(edge_fig.data) == 1
-
-    empty_meta = build_origin_meta_analysis(sample.head(0))
-    assert empty_meta.is_empty()
-    assert len(build_origin_avg_elo_chart(empty_meta).data) == 0
-    assert len(build_origin_edge_chart(empty_meta).data) == 0
