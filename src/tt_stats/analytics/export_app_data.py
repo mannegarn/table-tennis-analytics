@@ -111,6 +111,7 @@ EXPORT_QUERIES: tuple[ExportQuery, ...] = (
         select
             match_sk,
             event_sk,
+            is_team_rubber,
             p1_player_sk,
             p2_player_sk,
             winner_player_sk,

@@ -50,6 +50,7 @@ def test_exported_dim_players_parquet_has_no_dob_and_only_senior_players() -> No
 
     assert "dob" not in players.columns
     assert "age" in players.columns
+    assert "is_team_rubber" in matches.columns
     assert players.height > 0
 
     active_player_sks = (
@@ -108,6 +109,7 @@ def test_exported_glicko_match_ratings_parquet_exists_and_has_expected_columns()
 
 def test_table_type_export_queries_defined() -> None:
     queries_by_file = {q.filename: q.sql.lower() for q in EXPORT_QUERIES}
+    assert "is_team_rubber" in queries_by_file["fct_senior_singles_matches.parquet"]
     assert "dim_table_brands.parquet" in queries_by_file
     assert "analytics.dim_table_brands" in queries_by_file["dim_table_brands.parquet"]
     assert "fct_table_type_glicko_match_ratings.parquet" in queries_by_file
